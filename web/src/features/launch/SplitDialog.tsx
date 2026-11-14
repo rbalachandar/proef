@@ -5,7 +5,7 @@ import { api, unwrap } from '../../api/v1'
 import { useQueryClient } from '@tanstack/react-query'
 import { Button } from '../../ui/Button'
 import { Dialog, DialogContent } from '../../ui/Dialog'
-import { Select } from '../../ui/Field'
+import { Input, Select } from '../../ui/Field'
 import { useToast } from '../../app/toast'
 import { AUTONOMY } from './LaunchCampaignDialog'
 
@@ -65,7 +65,18 @@ export function SplitDialog({ open, onOpenChange, slug }: { open: boolean; onOpe
                   <input type="checkbox" className="mt-1" checked={s.keep} onChange={(e) => setSubs(subs.map((x, j) => (j === i ? { ...x, keep: e.target.checked } : x)))} />
                   <span className="min-w-0 text-sm">
                     <span className="font-medium">{s.objective}</span>
-                    <span className="num mt-0.5 block text-xs text-muted">{s.metric && s.gate != null ? `judged on ${s.metric} ${s.direction === 'min' ? '≤' : '≥'} ${s.gate}` : 'no separate gate: uses the program’s'}</span>
+                    {s.metric && s.gate != null ? (
+                      <span className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted">
+                        judged on <code className="num">{s.metric}</code>
+                        <Select aria-label="direction" className="!h-7 !w-16 !py-0 text-xs" value={s.direction}
+                          onChange={(e) => setSubs(subs.map((x, j) => (j === i ? { ...x, direction: e.target.value as 'min' | 'max' } : x)))}>
+                          <option value="min">≤</option><option value="max">≥</option>
+                        </Select>
+                        <Input aria-label={`gate for ${s.objective}`} type="number" step="any" className="!h-7 !w-24 !py-0 text-xs num" value={s.gate}
+                          onChange={(e) => setSubs(subs.map((x, j) => (j === i ? { ...x, gate: e.target.value === '' ? null : Number(e.target.value) } : x)))} />
+                        <span className="text-faint">the model suggested this; you set it. It is registered before any data.</span>
+                      </span>
+                    ) : <span className="num mt-0.5 block text-xs text-muted">no separate gate: uses the program’s</span>}
                     {s.rationale && <span className="block text-xs text-faint">{s.rationale}</span>}
                   </span>
                 </label>
@@ -85,7 +96,7 @@ export function SplitDialog({ open, onOpenChange, slug }: { open: boolean; onOpe
         {err && <p role="alert" className="mb-2 text-xs text-bad">{err}</p>}
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button variant="primary" disabled={busy || !kept.length} onClick={go}>{busy ? 'Starting…' : `Start research on ${kept.length || ''} sub-problem${kept.length === 1 ? '' : 's'}`}</Button>
+          <Button variant="primary" disabled={busy || !kept.length || kept.some((s) => s.metric && s.gate == null)} onClick={go}>{busy ? 'Starting…' : `Start research on ${kept.length || ''} sub-problem${kept.length === 1 ? '' : 's'}`}</Button>
         </div>
       </DialogContent>
     </Dialog>

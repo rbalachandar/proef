@@ -354,7 +354,7 @@ instrument the campaign refuses rather than falling back to simulation
 
 `make api` serves the web workbench (React + FastAPI), all local, no accounts, no cloud:
 
-- **Today:** what needs you, and each program's progress against its pre-registered gate.
+- **Today:** what is awaiting your decision, and each program's progress against its pre-registered gate.
 - **Decisions:** approve or decline gated lab submissions, and review abstentions (follow up, accept as inconclusive, or drop). Every decision is sealed in the ledger under your name.
 - **Campaign cockpit:** every estimate drawn with its 95% interval against the gate, why each batch was chosen (and what was refused), who did what (agents and people, with full traces), and an independent reviewer. A candidate whose interval straddles the gate is shown as **abstained**, never as a coin-flip verdict.
 - **Evidence behind a verdict:** the recorded dose–response curves re-read from the run files, the plate's QC, and how the number was derived.

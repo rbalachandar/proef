@@ -30,20 +30,20 @@ export default function TodayPage() {
       </div>
 
       <Card className="mb-6">
-        <CardHeader title="Needs you" />
+        <CardHeader title="Awaiting your decision" />
         {clear ? (
           <p className="flex items-center gap-2 px-4 py-4 text-sm text-muted"><CheckCircle2 size={16} className="text-ok" /> All clear — nothing is waiting on a decision.</p>
         ) : (
           <ul className="divide-y divide-line">
             {!!a.pending_approvals && (
               <li><Link to="/inbox" className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-sunken">
-                <Inbox size={16} className="text-warn" /><span><b>{a.pending_approvals}</b> lab submission{a.pending_approvals > 1 ? 's' : ''} awaiting your approval</span>
+                <Inbox size={16} className="text-warn" /><span><b>Approve:</b> {a.pending_approvals} request{a.pending_approvals > 1 ? 's' : ''} waiting (research plans and lab submissions)</span>
               </Link></li>
             )}
             {a.abstentions.map((n) => (
               <li key={n.campaign_id}><Link to="/inbox" className="flex items-start gap-3 px-4 py-3 text-sm hover:bg-sunken">
                 <TriangleAlert size={16} className="mt-0.5 shrink-0 text-abstain" />
-                <span><b>{n.candidates.join(', ')}</b> abstained in “{n.campaign_title}” — the data can’t say which side of the gate they’re on. Decide: follow up, accept, or drop.</span>
+                <span><b>Decide:</b> {n.candidates.length} abstained in “{n.campaign_title}” ({n.candidates.join(', ')}). The data can’t say which side of the gate they’re on: follow up, accept, or drop.</span>
               </Link></li>
             ))}
           </ul>

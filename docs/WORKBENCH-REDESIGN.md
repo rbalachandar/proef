@@ -156,6 +156,15 @@ Restored, in order:
 3. **Wording** — "autonomy" means only how much runs without approval. The ways to run are *Start research*, *I have
    candidates* and *I'll run the plate myself*.
 
-Still open: decomposition of an objective into sub-problems in the workbench (`proef campaign plan` exists in the
-engine/CLI); re-planning after each round from the results; one approval that covers a whole approved plan's lab
-submissions (today each submission is still approved separately in *Ask me first*).
+4. **One approval covers the plan** — an approved plan also approves its own lab submissions (sealed as `covered_by_plan`;
+   the safety gate still binds; removed hypotheses are never covered). Your own candidate list still asks per submission.
+5. **Re-plan after each round** (opt-in) — the model proposes the next hypotheses from the results (refuted ideas are not
+   repeated); the person approves them through the same plan gate (`plan_decision` with a `stage`). Replay reports such
+   runs as not reproducible, because that step needs the model.
+6. **Split into sub-problems** — a model proposes how to split the objective (`POST /programs/{slug}/decompose`, a proposal
+   only); the person keeps the real ones; each becomes its own research run on its own gate, and the runs share the
+   program's lab-run and hypothesis limits (`share`).
+
+Still open: a recursive problem tree with a roll-up verdict in the workbench (flat, one level, today; the engine's
+`run_tree` does the roll-up on the CLI); the model designing protocols (doses, replicates, controls); replay of campaigns
+recorded before rounds were captured replays as one round.

@@ -451,7 +451,26 @@ class ProgramCreate(BaseModel):
     unit: str = "µM"
 
 
+class SubProblem(BaseModel):
+    """One independently testable question a model split the objective into."""
+    objective: str = Field(..., min_length=3, max_length=200)
+    metric: str | None = None
+    direction: Literal["min", "max"] = "min"
+    gate: float | None = None
+    unit: str | None = None
+    priority: float = 1.0
+    rationale: str = ""
+
+
+class Decomposition(BaseModel):
+    objective: str
+    sub_problems: list[SubProblem]
+    model: str
+
+
 class CampaignCreate(BaseModel):
+    sub_problem: SubProblem | None = Field(None, description="judged against this sub-problem's own gate instead of the program's")
+    share: int = Field(1, ge=1, le=8, description="how many sub-problems split the program's lab-run and hypothesis limits")
     objective: str | None = None
     candidates: list[str] = []
     mode: Literal["agent", "hand"] = Field(
@@ -459,6 +478,7 @@ class CampaignCreate(BaseModel):
     autonomy: Literal["observe", "gate", "act"] = "gate"
     k: int | None = Field(None, ge=1, le=12, description="per round; defaults to, and is capped by, the program's limit")
     rounds: int | None = Field(None, ge=1, le=8, description="defaults to 2, and is capped by the program's limit")
+    replan: bool = Field(False, description="after each round the model proposes the next hypotheses from the results; you approve them")
 
 
 class HaltState(BaseModel):

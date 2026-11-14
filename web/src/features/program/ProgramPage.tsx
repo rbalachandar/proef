@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { ArrowRight, CheckCircle2, ChevronLeft, CircleDashed, Compass, Plus, Sparkles } from 'lucide-react'
+import { ArrowRight, CheckCircle2, ChevronLeft, CircleDashed, Compass, Plus, Sparkles, Split } from 'lucide-react'
 import { useProgram } from '../../api/hooks'
 import { limitsLine } from '../launch/limits'
 import { Button } from '../../ui/Button'
@@ -14,6 +14,7 @@ import { sig } from '../campaign/format'
 import { goalLine } from './goal'
 import { LaunchCampaignDialog, type How } from '../launch/LaunchCampaignDialog'
 import { NewProgramDialog } from '../launch/NewProgramDialog'
+import { SplitDialog } from '../launch/SplitDialog'
 
 export default function ProgramPage() {
   const { slug = '' } = useParams()
@@ -23,6 +24,7 @@ export default function ProgramPage() {
   const [how, setHow] = useState<How>('research')
   const [follow, setFollow] = useState<string[] | null>(null)
   const [np, setNp] = useState(false)
+  const [split, setSplit] = useState(false)
   if (isLoading) return <div className="mx-auto max-w-6xl space-y-4 p-6"><Skeleton className="h-10 w-1/2" /><Skeleton className="h-24" /><Skeleton className="h-64" /></div>
   if (error || !p) return <div className="mx-auto max-w-3xl p-10"><EmptyState title="Program not found" hint={(error as Error | null)?.message} /></div>
 
@@ -45,8 +47,10 @@ export default function ProgramPage() {
         {p.modality && <Tag>{p.modality}</Tag>}
         <div className="ml-auto flex gap-2">
           <Button size="sm" onClick={() => { setHow('list'); setLaunch(true) }}><Plus size={14} /> I have candidates</Button>
+          <Button size="sm" onClick={() => setSplit(true)} title="A model proposes how to split the objective into separately testable sub-problems"><Split size={14} /> Split into sub-problems</Button>
           <Button variant="primary" size="sm" onClick={() => { setHow('research'); setLaunch(true) }}><Sparkles size={14} /> Start research</Button>
         </div>
+        {split && <SplitDialog open onOpenChange={setSplit} slug={p.slug} />}
         <LaunchCampaignDialog open={launch} onOpenChange={setLaunch} slug={p.slug} initialHow={how} />
       </div>
       {p.objective && <p className="mb-2 max-w-3xl text-sm text-muted">{p.objective}</p>}

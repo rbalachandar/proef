@@ -16,7 +16,7 @@ hypotheses**. The **New campaign** dialog offers three ways, chosen per campaign
 | CLI | `proef campaign auto examples/campaign_llm.json` | `proef campaign auto examples/campaign.json` | n/a |
 
 "Autonomy" is a separate setting that applies to the first two: how much happens without a person saying yes.
-**Ask me first** (you approve the plan, then each lab submission), **Preview only** (plan and explain, submit nothing),
+**Ask me first** (you approve the model's plan, which also covers its lab submissions; with your own candidate list each submission asks), **Preview only** (plan and explain, submit nothing),
 or **Run on its own** within the safety gate (no approvals, so no plan review).
 
 ## The plan review

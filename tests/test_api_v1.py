@@ -501,3 +501,43 @@ def test_a_running_campaign_shows_what_it_is_waiting_for_on_its_own_page(client,
     assert [a["id"] for a in d["awaiting_approvals"]] == [aid] and d["awaiting_approvals"][0]["plan"]["n_hypotheses"] == 1
     from proef.api.v1.campaigns import problem_id_for
     assert problem_id_for("x", {"agent": {"problem_id": "prob-real"}}) == "prob-real"     # a recorded id wins
+
+
+def test_splitting_a_program_into_sub_problems_with_their_own_gate_and_a_shared_budget(client, monkeypatch):
+    import json
+    import uuid
+
+    from proef.core.contracts import ToolResult
+    launched = []
+    monkeypatch.setattr("proef.api.v1.programs.spawn_campaign",
+                        lambda doc, name: launched.append(doc) or f"cmp-sub-{len(launched)}")
+    name = f"Split Test {uuid.uuid4().hex[:6]}"
+    slug = name.lower().replace(" ", "-")
+    client.post("/api/v1/programs", json={"name": name, "objective": "a drug-like inhibitor",
+                                          "limits": {"max_lab_runs": 12, "max_hypotheses": 8}})
+    # no model: an honest refusal, not a guess
+    monkeypatch.delenv("PROEF_LLM_MODEL", raising=False)
+    monkeypatch.delenv("PROEF_LLM_TOKEN", raising=False)
+    assert client.post(f"/api/v1/programs/{slug}/decompose").json()["detail"]["type"] == "model-not-configured"
+
+    class M:
+        def generate(self, inv, prompt, **kw):
+            doc = {"sub_problems": [
+                {"objective": "Potent against the target", "metric": "ic50_um", "direction": "min", "gate": 2, "rationale": "r"},
+                {"objective": "Soluble enough to dose", "metric": "solubility_uM", "direction": "max", "gate": 50}]}
+            return ToolResult(envelope=inv.envelope.model_copy(), invocation_id=inv.invocation_id,
+                              status="succeeded", output={"text": json.dumps(doc)}, model_version="m")
+    monkeypatch.setattr("proef.adapters.models.from_env.model_from_env", lambda: M())
+    monkeypatch.setattr("proef.adapters.models.from_env.model_status",
+                        lambda: {"configured": True, "api": "openai", "model": "m"})
+    d = client.post(f"/api/v1/programs/{slug}/decompose").json()
+    assert [s["objective"] for s in d["sub_problems"]] == ["Potent against the target", "Soluble enough to dose"]
+    assert launched == [], "a proposal only: nothing runs until the person starts it"
+
+    sp = d["sub_problems"][1]
+    assert client.post(f"/api/v1/programs/{slug}/campaigns", json={
+        "sub_problem": sp, "share": 2, "candidates": []}).status_code == 201
+    doc = launched[0]
+    assert doc["objective"] == "Soluble enough to dose" and doc["metric"] == "solubility_uM"
+    assert (doc["direction"], doc["gate_value"]) == ("max", 50.0)
+    assert doc["budget"] == {"max_total_runs": 6, "max_hypotheses_total": 4}, "two sub-problems share the program's limits"

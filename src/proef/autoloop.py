@@ -69,6 +69,8 @@ class CampaignConfig:
                                               # the hypothesis prompt (P: skills)
     max_families: int = 3
     max_variants_per_family: int = 3
+    replan: bool = False                   # after each round the model proposes the next hypotheses from the results
+    plan_covers_submissions: bool = True   # an approved plan also approves its own lab submissions
     plan_approver: Callable[[dict, str], Any] | None = None   # gate autonomy + model-proposed hypotheses:
                                                               # (plan, problem_id) -> PlanDecision
     score_fn: Callable[[Any], float] | None = None   # portfolio filter scoring
@@ -675,12 +677,14 @@ def _collect_round(monitor, agent, selected, adaptive, cfg, terminal) -> None:
             break
 
 
-def _plan_gate(cfg, tracker, portfolio, store, actor, say):
+def _plan_gate(cfg, tracker, portfolio, store, actor, say, label=None):
     """Pause for the person's decision on the proposed plan. Returns (portfolio to run, declined?).
     Every outcome is recorded: approval, removals (with a reason) and decline."""
     from proef.plan import build_plan
     pid = cfg.problem.problem_id or "unnamed"
     plan = build_plan(portfolio, getattr(tracker, "family_info", {}), getattr(tracker, "family_scores", {}))
+    if label:
+        plan["label"] = label
     decision = cfg.plan_approver(plan, pid)
     env = Envelope(experiment_branch_id=f"problem/{pid}")
     removed = [h for h in portfolio if h.hypothesis_id in decision.excluded]
@@ -689,7 +693,7 @@ def _plan_gate(cfg, tracker, portfolio, store, actor, say):
     store.append(record_for(env, EventType.gate_decision, actor, decision={
         "kind": "plan_decision", "approved": approved, "decided_by": decision.by, "note": decision.note,
         "n_proposed": len(portfolio), "n_kept": len(kept) if approved else 0,
-        "removed": [h.hypothesis_id for h in removed],
+        "removed": [h.hypothesis_id for h in removed], "stage": label or "initial",
         "reason": None if approved else ("every hypothesis was removed" if decision.approved else "the plan was declined")}))
     if removed and decision.approved:
         from proef.core.hypothesis import PortfolioDecision
@@ -771,6 +775,8 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
     # 0b. a model-proposed plan is shown to a person BEFORE anything is submitted
     if cfg.plan_approver is not None and cfg.hypothesis_source == "agent":
         portfolio, declined = _plan_gate(cfg, tracker, portfolio, store, actor, say)
+        if not declined and cfg.plan_covers_submissions and isinstance(gateway, _GatedGateway):
+            gateway.covered = {h.candidate for h in portfolio}
         if declined:
             return CampaignReport(problem_id=problem.problem_id or "", selected=[], verdicts={}, rounds_run=0)
 
@@ -870,6 +876,8 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
             protocol = _design_protocol(h, cfg, problem, adaptive, screen_conc)
             if not _make_candidate(h, protocol, cfg, store, say, synth_cache):
                 continue
+            if isinstance(gateway, _GatedGateway):
+                gateway.current = h.candidate
             run_id, rejection = gateway.submit(protocol)
             if rejection:
                 say(f"submission for {h.candidate} rejected: {rejection}")
@@ -895,6 +903,12 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
                         "picked": sorted(verdicts_r),
                         "verdicts": verdicts_r})
         tested.extend(selected)
+        if cfg.replan and cfg.hypothesis_source == "agent" and round_no < max(1, cfg.rounds):
+            new = _replan(cfg, tracker, problem, store, actor, flywheel, tested, round_no, say)
+            remaining.extend(new)
+            _install_score_for_new(new, tracker)
+            if cfg.plan_approver is not None and cfg.plan_covers_submissions and isinstance(gateway, _GatedGateway):
+                gateway.covered |= {h.candidate for h in new}
 
     verdicts = {h.candidate: h.status for h in tested}
     _review_pass(cfg, store, problem, say)
@@ -909,6 +923,49 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
                           recommendations=[m for m in messages
                                            if "recommendation" in m],
                           rounds_run=len(history), history=history)
+
+
+def _install_score_for_new(new, tracker) -> None:
+    """New hypotheses are ranked by the family confidence the model gave them."""
+    scores = getattr(tracker, "family_scores", {}) or {}
+    for h in new:
+        scores.setdefault(h.family or "", 0.5)
+
+
+def _replan(cfg, tracker, problem, store, actor, flywheel, tested, round_no, say):
+    """After a round, the model proposes what to try next FROM the results; a person approves it
+    (the same plan gate) before anything is added. Returns the approved new hypotheses."""
+    from proef.hypothesis_agent import propose_families_with_agent
+    budget = cfg.budget or ResourceBudget()
+    room = budget.max_hypotheses_total - len(tracker.hypotheses)
+    if room <= 0:
+        say("re-plan skipped: the hypothesis limit is reached")
+        return []
+    findings = "\n".join(
+        f"- {h.candidate}: {h.status}"
+        + (f", observed {h.observed_value:g}" if h.observed_value is not None else "")
+        + f" — {h.statement}" for h in tested)
+    before = set(tracker.hypotheses)
+    try:
+        new, _ = propose_families_with_agent(
+            tracker, cfg.problem, cfg.model, candidates=cfg.candidates,
+            max_families=cfg.max_families, max_variants_per_family=cfg.max_variants_per_family,
+            max_total_hypotheses=room,
+            existing_keys={(h.candidate, h.statement) for h in tracker.hypotheses.values()},
+            skill_guidance=cfg.skill_guidance, flywheel=flywheel, notify=say, findings=findings)
+    except Exception as exc:  # noqa: BLE001 - a failed re-plan must not abort the campaign
+        say(f"re-plan failed ({type(exc).__name__}): continuing with the existing plan")
+        return []
+    new = [h for h in new if h.hypothesis_id not in before]
+    if not new:
+        say("re-plan: the model had nothing new to add")
+        return []
+    say(f"re-plan after round {round_no}: the model proposes {len(new)} more hypotheses")
+    if cfg.plan_approver is not None:
+        new, declined = _plan_gate(cfg, tracker, new, store, actor, say, label=f"after round {round_no}")
+        if declined:
+            return []
+    return new
 
 
 def _acquisition_select(remaining, k, crit, tracker, say, round_no, seed=0,
@@ -1048,10 +1105,18 @@ class _GatedGateway:
                               approver=(lambda t: True) if governance else None)
         self._approver = approver
         self._say = say
+        self.covered: set[str] = set()   # candidates a person already approved in the plan review
+        self.current: str | None = None  # candidate whose protocol is being submitted
 
     def submit(self, protocol: ProtocolSubmission):
         title = getattr(protocol, "title", str(protocol))
-        if not self._approver(title):
+        if self.current in self.covered:
+            # one human decision (the plan) covers its own submissions; the safety engine still runs
+            self._gw.store.append(record_for(
+                protocol.envelope, EventType.gate_decision, self._gw.actor,
+                decision={"kind": "covered_by_plan", "title": title, "candidate": self.current,
+                          "reason": "within the plan a person approved"}))
+        elif not self._approver(title):
             self._say(f"operator declined: '{title}' — submission cancelled")
             self._gw.store.append(record_for(
                 protocol.envelope, EventType.gate_decision, self._gw.actor,

@@ -296,11 +296,18 @@ def launch_campaign(slug: str, body: S.CampaignCreate, request: Request) -> S.Ca
            # a campaign may ask for less than the program allows, never more
            "k": min(body.k or lim.breadth, lim.breadth),
            "rounds": min(body.rounds or min(2, lim.max_rounds), lim.max_rounds),
+           "replan": bool(body.replan and not [c for c in body.candidates if c.strip()]),
            "max_families": lim.max_families, "max_variants_per_family": lim.max_variants_per_family,
-           "budget": {"max_total_runs": lim.max_lab_runs, "max_hypotheses_total": lim.max_hypotheses},
+           "budget": {"max_total_runs": max(2, lim.max_lab_runs // body.share),
+                      "max_hypotheses_total": max(1, lim.max_hypotheses // body.share)},
            "candidates": ",".join(c.strip() for c in body.candidates if c.strip())}
     if body.objective:
         doc["objective"] = body.objective
+    if body.sub_problem is not None:
+        sp = body.sub_problem
+        doc["objective"] = sp.objective
+        if sp.metric and sp.gate is not None:
+            doc.update(custom=True, metric=sp.metric, direction=sp.direction, gate_value=sp.gate, unit=sp.unit or "")
     cid = spawn_campaign(doc, p["name"])
     if cid is None:
         raise HTTPException(500, S.Problem(
@@ -309,6 +316,34 @@ def launch_campaign(slug: str, body: S.CampaignCreate, request: Request) -> S.Ca
         id=cid, title=doc.get("objective") or p["name"], status="running",
         autonomy=body.autonomy,
         program=S.ProgramRef(slug=slug, name=p["name"]))
+
+
+@router.post("/programs/{slug}/decompose", response_model=S.Decomposition)
+def decompose_program(slug: str) -> S.Decomposition:
+    """A model proposes how to split the program's objective into separately testable sub-problems.
+    A proposal only: nothing is recorded or run until the person starts research on the ones they keep."""
+    p = next((x for x in program_cfg.list_programs() if x["slug"] == slug), None)
+    if p is None:
+        raise HTTPException(404, S.Problem(type="program-not-found", title="Program not found", detail=slug).model_dump())
+    from proef.adapters.models.from_env import model_from_env, model_status
+    if not model_status()["configured"]:
+        raise HTTPException(409, S.Problem(
+            type="model-not-configured", title="No model is configured",
+            detail="Splitting an objective needs a model. See docs/MODELS.md.").model_dump())
+    from proef.problem_tree import TreeLimits, decompose_with_agent
+    doc = p.get("program") or {}
+    objective = doc.get("objective") or p["name"]
+    gate = _gate(doc)
+    try:
+        tree = decompose_with_agent(model_from_env(), objective,
+                                    context=f"program gate: {gate.label}", limits=TreeLimits(max_children=4, max_depth=1))
+    except Exception as exc:  # noqa: BLE001 - the model's reply is untrusted
+        raise HTTPException(502, S.Problem(type="decomposition-failed", title="The model's split could not be read",
+                                           detail=f"{type(exc).__name__}: {exc}"[:300]).model_dump()) from exc
+    subs = [S.SubProblem(objective=n.objective or "sub-problem", metric=n.metric, direction=n.direction, gate=n.gate,
+                         priority=n.priority or 1.0, rationale=n.rationale or "")
+            for n in tree.children(tree.root.id) if (n.objective or "").strip()]
+    return S.Decomposition(objective=objective, sub_problems=subs, model=model_status()["model"])
 
 
 @router.get("/today", response_model=S.Today)

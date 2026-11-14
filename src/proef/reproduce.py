@@ -29,6 +29,7 @@ def reproduce(branch: str, db_path: str = "proef.db",
     id_to_cand: dict[str, str] = {}
     removed_ids: set[str] = set()
     plan_declined = False
+    replanned = False
     first_score: dict[str, float] = {}          # hypothesis id -> the score it was first selected on
     for r in recs:
         d = r.decision or {}
@@ -64,6 +65,9 @@ def reproduce(branch: str, db_path: str = "proef.db",
                     first_score.setdefault(dec.get("hypothesis_id"), float(dec["score"]))
         elif et == "gate_decision" and d.get("kind") == "plan_decision":
             # the person's review of a model's plan decides WHAT was run: replay the same plan
+            if d.get("stage", "initial") != "initial":
+                replanned = True
+                continue
             plan_declined = plan_declined or not d.get("approved")
             removed_ids |= set(d.get("removed") or [])
         elif et in ("hypothesis_validated", "hypothesis_invalidated",
@@ -74,6 +78,9 @@ def reproduce(branch: str, db_path: str = "proef.db",
             if cand and d.get("verdict"):
                 recorded[cand] = d          # last one wins (final state)
 
+    if replanned:
+        return {"status": "not-reproducible",
+                "reason": "the model re-planned after a round; that step needs the model and is not replayed"}
     if plan_declined:
         return {"status": "not-reproducible", "reason": "the research plan was declined: nothing was run"}
     for hid in removed_ids:

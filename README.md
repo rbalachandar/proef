@@ -342,7 +342,7 @@ instrument the campaign refuses rather than falling back to simulation
 | autonomy | agent behavior |
 |---|---|
 | `observe` | reads, fits, recommends — submits nothing |
-| `gate` | proposes everything; each lab submission waits for your Approve click in the workbench |
+| `gate` | proposes everything and waits for your Approve click: the plan (model-proposed hypotheses) or each lab submission (your own candidate list) |
 | `act` | autonomous within the SafetyEngine, including confirmation assays |
 
 - **Round breadth** is schedulable: `"k": [4, 2, 1]` screens wide first, then narrows as the flywheel discounts failed families.
@@ -371,11 +371,14 @@ instrument the campaign refuses rather than falling back to simulation
    a "refuted if…" clause, the model's own confidence, and a citation that is checked (a fabricated DOI is flagged).
 3. **Review the plan.** Nothing reaches the lab until you decide. Remove any hypothesis, or decline the plan. Your decision,
    what you removed and your note are sealed in the ledger under your name.
-4. **The agent runs it.** It runs the experiments (each lab submission can still wait for your approval), reads the
+4. **The agent runs it.** Your plan approval covers its own lab submissions (recorded as `covered_by_plan`; the safety gate still
+   applies). It runs the experiments, reads the
    plates, and judges every result against the gate by a fixed rule: an interval that straddles the gate **abstains**.
    Promising results are confirmed with an orthogonal assay.
 5. **You decide what is left.** Follow up on an abstention, accept it, or drop it. "What next" suggests the next step,
-   and the model proposes again within the limits.
+   and, with **Re-plan after each round** on, the model proposes the next hypotheses from the results. You approve those
+   the same way. To start from several questions instead of one, **Split into sub-problems** lets the model propose a split and
+   you keep the real ones: each runs on its own gate and they share the program's limits.
 
 | Start research: the plan you review before anything runs | The finished campaign: what the model wrote, what you removed, what the rule decided |
 |---|---|

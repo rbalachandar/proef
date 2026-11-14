@@ -1268,6 +1268,12 @@
       ],
       "title": "Objective"
      },
+     "replan": {
+      "default": false,
+      "description": "after each round the model proposes the next hypotheses from the results; you approve them",
+      "title": "Replan",
+      "type": "boolean"
+     },
      "rounds": {
       "anyOf": [
        {
@@ -1281,6 +1287,25 @@
       ],
       "description": "defaults to 2, and is capped by the program's limit",
       "title": "Rounds"
+     },
+     "share": {
+      "default": 1,
+      "description": "how many sub-problems split the program's lab-run and hypothesis limits",
+      "maximum": 8.0,
+      "minimum": 1.0,
+      "title": "Share",
+      "type": "integer"
+     },
+     "sub_problem": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/SubProblem"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "judged against this sub-problem's own gate instead of the program's"
      }
     },
     "title": "CampaignCreate",
@@ -1818,6 +1843,32 @@
      "approve"
     ],
     "title": "DecisionIn",
+    "type": "object"
+   },
+   "Decomposition": {
+    "properties": {
+     "model": {
+      "title": "Model",
+      "type": "string"
+     },
+     "objective": {
+      "title": "Objective",
+      "type": "string"
+     },
+     "sub_problems": {
+      "items": {
+       "$ref": "#/components/schemas/SubProblem"
+      },
+      "title": "Sub Problems",
+      "type": "array"
+     }
+    },
+    "required": [
+     "objective",
+     "sub_problems",
+     "model"
+    ],
+    "title": "Decomposition",
     "type": "object"
    },
    "EvalSummary": {
@@ -3873,6 +3924,74 @@
     "title": "Sop",
     "type": "object"
    },
+   "SubProblem": {
+    "description": "One independently testable question a model split the objective into.",
+    "properties": {
+     "direction": {
+      "default": "min",
+      "enum": [
+       "min",
+       "max"
+      ],
+      "title": "Direction",
+      "type": "string"
+     },
+     "gate": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Gate"
+     },
+     "metric": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Metric"
+     },
+     "objective": {
+      "maxLength": 200,
+      "minLength": 3,
+      "title": "Objective",
+      "type": "string"
+     },
+     "priority": {
+      "default": 1.0,
+      "title": "Priority",
+      "type": "number"
+     },
+     "rationale": {
+      "default": "",
+      "title": "Rationale",
+      "type": "string"
+     },
+     "unit": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Unit"
+     }
+    },
+    "required": [
+     "objective"
+    ],
+    "title": "SubProblem",
+    "type": "object"
+   },
    "SystemStatus": {
     "description": "What the top bar and trust strip show on every page.",
     "properties": {
@@ -5642,6 +5761,49 @@
      }
     },
     "summary": "Launch Campaign",
+    "tags": [
+     "programs"
+    ]
+   }
+  },
+  "/api/v1/programs/{slug}/decompose": {
+   "post": {
+    "description": "A model proposes how to split the program's objective into separately testable sub-problems.\nA proposal only: nothing is recorded or run until the person starts research on the ones they keep.",
+    "operationId": "decompose_program_api_v1_programs__slug__decompose_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "slug",
+      "required": true,
+      "schema": {
+       "title": "Slug",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Decomposition"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Decompose Program",
     "tags": [
      "programs"
     ]

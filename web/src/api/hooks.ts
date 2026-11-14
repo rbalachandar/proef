@@ -133,6 +133,9 @@ export function useLaunchCampaign(slug: string) {
   })
 }
 
+export const useDecompose = (slug: string) =>
+  useMutation({ mutationFn: () => unwrap(api.POST('/api/v1/programs/{slug}/decompose', { params: { path: { slug } } })) })
+
 export const useLedger = () =>
   useQuery({ queryKey: ['ledger'], queryFn: () => unwrap(api.GET('/api/v1/evidence/ledger')) })
 

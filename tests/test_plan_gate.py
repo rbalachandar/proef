@@ -195,3 +195,55 @@ def test_replay_runs_the_loop_the_way_it_was_recorded(tmp_path):
     assert env["rounds"] == 2 and env["autonomy"] == "gate"
     res = reproduce(f"problem/{report.problem_id}", db_path=str(tmp_path / "prov.db"))
     assert res["status"] == "match", res
+
+
+def _gate_cfg(tmp_path, model, plan_approver, **kw):
+    return CampaignConfig(
+        problem=ProblemStatement(objective="find IC50<=20", constraints=[
+            Constraint(name="potency", description="IC50 <= 20 uM", kind="hard", limit=20.0, unit="uM")]),
+        hypothesis_source="agent", model=model, autonomy="gate", seed=1,
+        inbox=str(tmp_path / "inbox"), poll_secs=0.05, flywheel=Flywheel(":memory:"),
+        plan_approver=plan_approver, **{"k": 3, "rounds": 1, **kw})
+
+
+def test_an_approved_plan_also_approves_its_own_submissions(tmp_path):
+    asked = []
+    store = SqliteProvenanceStore(str(tmp_path / "prov.db"))
+    cfg = _gate_cfg(tmp_path, Scripted(), lambda plan, pid: PlanDecision(approved=True, by="ana"))
+    report = run_campaign(cfg, SimulatorLab(seed=3), store,
+                          approver=lambda t: asked.append(t) or True, notify=lambda m: None)
+    recs = store.branch_records(f"problem/{report.problem_id}")
+    assert asked == [], "the plan approval covers the submissions; nobody is asked again"
+    assert _kinds(recs).count("covered_by_plan") == len(report.selected) > 0
+
+
+def test_with_coverage_off_every_submission_still_asks(tmp_path):
+    asked = []
+    store = SqliteProvenanceStore(str(tmp_path / "prov.db"))
+    cfg = _gate_cfg(tmp_path, Scripted(), lambda plan, pid: PlanDecision(approved=True, by="ana"),
+                    plan_covers_submissions=False)
+    run_campaign(cfg, SimulatorLab(seed=3), store, approver=lambda t: asked.append(t) or True, notify=lambda m: None)
+    assert asked
+
+
+class Replanner(Scripted):
+    def generate(self, inv, prompt, **kw):
+        if "RESULTS SO FAR" not in prompt:
+            return super().generate(inv, prompt, **kw)
+        doc = {"families": [{"family": "followup", "parent_statement": "Analogs of what held up",
+                             "kind": "mechanistic", "mechanism": "same site", "refutation_condition": "IC50 > 20",
+                             "confidence": 0.6, "variants": [
+            {"statement": "N1 binds", "candidate": "N1", "assay_type": "binding", "predicted": "<=20",
+             "predicted_value": 20.0, "rationale": "r"}]}]}
+        return ToolResult(envelope=inv.envelope.model_copy(), invocation_id=inv.invocation_id,
+                          status="succeeded", output={"text": json.dumps(doc)}, model_version="s-1")
+
+
+def test_replanning_proposes_from_results_and_asks_again(tmp_path):
+    plans = []
+    store = SqliteProvenanceStore(str(tmp_path / "prov.db"))
+    cfg = _gate_cfg(tmp_path, Replanner(), lambda plan, pid: plans.append(plan) or PlanDecision(approved=True, by="ana"),
+                    k=1, rounds=3, replan=True)
+    report = run_campaign(cfg, SimulatorLab(seed=3), store, approver=lambda t: True, notify=lambda m: None)
+    assert len(plans) >= 2 and plans[1].get("label") == "after round 1"
+    assert "N1" in report.selected + [c for p in plans[1:] for f in p["families"] for v in f["variants"] for c in [v.get("candidate")]]

@@ -11,7 +11,7 @@ import { useToast } from '../../app/toast'
 export type How = 'research' | 'list' | 'hand'
 
 /** "Autonomy" is only about approvals: how much happens without a person saying yes. It applies to both research and a candidate list. */
-const AUTONOMY = {
+export const AUTONOMY = {
   gate: 'Ask me first',
   observe: 'Preview only — plan and explain, submit nothing',
   act: 'Run on its own, within the safety gate — no approvals',
@@ -34,6 +34,7 @@ export function LaunchCampaignDialog({ open, onOpenChange, slug, title = 'New ca
   const [cands, setCands] = useState((defaults?.candidates ?? []).join('\n'))
   const [autonomy, setAutonomy] = useState<keyof typeof AUTONOMY>('gate')
   const [rounds, setRounds] = useState(2)
+  const [replan, setReplan] = useState(true)
   const cappedRounds = Math.min(rounds, maxRounds)
   useEffect(() => { if (open) { setHow(start()); setObjective(defaults?.objective ?? ''); setCands((defaults?.candidates ?? []).join('\n')) } }, [open, model?.configured])  // eslint-disable-line
 
@@ -42,7 +43,7 @@ export function LaunchCampaignDialog({ open, onOpenChange, slug, title = 'New ca
   const blocked = (needsList && !list.length) || (how === 'research' && !model?.configured)
   const submit = () => launch.mutate(
     { objective: objective || null, candidates: how === 'research' ? [] : list, mode: how === 'hand' ? 'hand' : 'agent', autonomy,
-      rounds: cappedRounds, ...(how === 'list' ? { k: Math.max(1, Math.min(list.length, 4)) } : {}) },
+      rounds: cappedRounds, share: 1, replan: how === 'research' && cappedRounds > 1 && replan, ...(how === 'list' ? { k: Math.max(1, Math.min(list.length, 4)) } : {}) },
     {
       onSuccess: async (c) => {
         await onLaunched?.(c.id)
@@ -75,13 +76,19 @@ export function LaunchCampaignDialog({ open, onOpenChange, slug, title = 'New ca
         )}
         {how !== 'hand' && (
           <div className="grid grid-cols-[1fr_90px] gap-3">
-            <Field label="Approvals" hint={how === 'research' && autonomy === 'gate' ? 'You approve the plan, then each lab submission.' : autonomy === 'act' ? 'Nothing waits for you; the safety gate still applies.' : undefined}>
+            <Field label="Approvals" hint={how === 'research' && autonomy === 'gate' ? 'You approve the plan; its lab submissions then go ahead without asking again.' : autonomy === 'act' ? 'Nothing waits for you; the safety gate still applies.' : undefined}>
               <Select value={autonomy} onChange={(e) => setAutonomy(e.target.value as keyof typeof AUTONOMY)}>
                 {Object.entries(AUTONOMY).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </Select>
             </Field>
             <Field label="Rounds" hint={`up to ${maxRounds}`}><Input type="number" min={1} max={maxRounds} value={cappedRounds} onChange={(e) => setRounds(Number(e.target.value))} /></Field>
           </div>
+        )}
+        {how === 'research' && cappedRounds > 1 && (
+          <label className="mb-3 flex items-start gap-2 text-xs text-muted">
+            <input type="checkbox" className="mt-0.5" checked={replan} onChange={(e) => setReplan(e.target.checked)} />
+            <span><b className="text-ink">Re-plan after each round.</b> The model proposes what to try next from the results{autonomy === 'gate' ? '; you approve it first' : ''}.</span>
+          </label>
         )}
         {how === 'research' && autonomy === 'act' && (
           <p className="mb-3 rounded-md bg-warn-soft px-3 py-2 text-xs text-warn">With no approvals there is no plan review: the model’s hypotheses are tested straight away.</p>

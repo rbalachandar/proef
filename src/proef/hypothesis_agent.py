@@ -87,6 +87,7 @@ def propose_families_with_agent(
     branch_id: str | None = None,
     score_fn: Callable[[dict[str, Any]], float] | None = None,
     notify: Callable[[str], None] | None = None,
+    findings: str | None = None,
 ) -> tuple[list[Hypothesis], dict[str, float]]:
     """max_total_hypotheses: hard cap on hypotheses this generation may add.
     existing_keys: (candidate, statement) pairs already tried — duplicates the
@@ -121,6 +122,9 @@ def propose_families_with_agent(
         max_families=max_families,
         max_variants_per_family=max_variants_per_family,
     ) + ("\n\n" + guidance_block if guidance_block else "")
+    if findings:
+        prompt += ("\n\nRESULTS SO FAR (re-plan from these: do not repeat a refuted idea, "
+                   "build on what held up, and pick candidates not yet tested)\n" + findings)
     negatives_injected: list[str] = []
     if flywheel is not None:
         negs = flywheel.prompt_context()

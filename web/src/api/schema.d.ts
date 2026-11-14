@@ -594,6 +594,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/programs/{slug}/decompose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Decompose Program
+         * @description A model proposes how to split the program's objective into separately testable sub-problems.
+         *     A proposal only: nothing is recorded or run until the person starts research on the ones they keep.
+         */
+        post: operations["decompose_program_api_v1_programs__slug__decompose_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/system/status": {
         parameters: {
             query?: never;
@@ -1119,10 +1140,24 @@ export interface components {
             /** Objective */
             objective?: string | null;
             /**
+             * Replan
+             * @description after each round the model proposes the next hypotheses from the results; you approve them
+             * @default false
+             */
+            replan: boolean;
+            /**
              * Rounds
              * @description defaults to 2, and is capped by the program's limit
              */
             rounds?: number | null;
+            /**
+             * Share
+             * @description how many sub-problems split the program's lab-run and hypothesis limits
+             * @default 1
+             */
+            share: number;
+            /** @description judged against this sub-problem's own gate instead of the program's */
+            sub_problem?: components["schemas"]["SubProblem"] | null;
         };
         /** CampaignDetail */
         CampaignDetail: {
@@ -1299,6 +1334,15 @@ export interface components {
              * @default
              */
             note: string;
+        };
+        /** Decomposition */
+        Decomposition: {
+            /** Model */
+            model: string;
+            /** Objective */
+            objective: string;
+            /** Sub Problems */
+            sub_problems: components["schemas"]["SubProblem"][];
         };
         /** EvalSummary */
         EvalSummary: {
@@ -2197,6 +2241,36 @@ export interface components {
             id: string;
             /** Objective */
             objective: string;
+        };
+        /**
+         * SubProblem
+         * @description One independently testable question a model split the objective into.
+         */
+        SubProblem: {
+            /**
+             * Direction
+             * @default min
+             * @enum {string}
+             */
+            direction: "min" | "max";
+            /** Gate */
+            gate?: number | null;
+            /** Metric */
+            metric?: string | null;
+            /** Objective */
+            objective: string;
+            /**
+             * Priority
+             * @default 1
+             */
+            priority: number;
+            /**
+             * Rationale
+             * @default
+             */
+            rationale: string;
+            /** Unit */
+            unit?: string | null;
         };
         /**
          * SystemStatus
@@ -3307,6 +3381,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CampaignSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    decompose_program_api_v1_programs__slug__decompose_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Decomposition"];
                 };
             };
             /** @description Validation Error */

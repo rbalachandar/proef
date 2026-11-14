@@ -1397,6 +1397,16 @@
       ],
       "title": "Objective"
      },
+     "plan_review": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/PlanReview"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "problem_id": {
       "anyOf": [
        {
@@ -3006,6 +3016,62 @@
      "id"
     ],
     "title": "PlanFamily",
+    "type": "object"
+   },
+   "PlanReview": {
+    "description": "The person's decision on the model's research plan, as sealed in the ledger.",
+    "properties": {
+     "approved": {
+      "title": "Approved",
+      "type": "boolean"
+     },
+     "by": {
+      "title": "By",
+      "type": "string"
+     },
+     "kept": {
+      "title": "Kept",
+      "type": "integer"
+     },
+     "note": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Note"
+     },
+     "proposed": {
+      "title": "Proposed",
+      "type": "integer"
+     },
+     "removed": {
+      "default": 0,
+      "title": "Removed",
+      "type": "integer"
+     },
+     "ts": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Ts"
+     }
+    },
+    "required": [
+     "approved",
+     "by",
+     "proposed",
+     "kept"
+    ],
+    "title": "PlanReview",
     "type": "object"
    },
    "PlanVariant": {

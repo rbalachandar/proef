@@ -1190,6 +1190,7 @@ export interface components {
             llm?: components["schemas"]["LlmUse"] | null;
             /** Objective */
             objective?: string | null;
+            plan_review?: components["schemas"]["PlanReview"] | null;
             /** Problem Id */
             problem_id?: string | null;
             program?: components["schemas"]["ProgramRef"] | null;
@@ -1835,6 +1836,29 @@ export interface components {
              * @default []
              */
             variants: components["schemas"]["PlanVariant"][];
+        };
+        /**
+         * PlanReview
+         * @description The person's decision on the model's research plan, as sealed in the ledger.
+         */
+        PlanReview: {
+            /** Approved */
+            approved: boolean;
+            /** By */
+            by: string;
+            /** Kept */
+            kept: number;
+            /** Note */
+            note?: string | null;
+            /** Proposed */
+            proposed: number;
+            /**
+             * Removed
+             * @default 0
+             */
+            removed: number;
+            /** Ts */
+            ts?: number | null;
         };
         /** PlanVariant */
         PlanVariant: {

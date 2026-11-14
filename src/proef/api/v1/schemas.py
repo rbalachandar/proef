@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 State = Literal["confirmed", "validated", "abstained", "refuted", "refused",
                 "in_lab", "selected", "not_selected", "proposed"]
@@ -194,8 +194,20 @@ class LlmUse(BaseModel):
     reviewed: bool = Field(False, description="an LLM reviewer also read the verdicts")
 
 
+class PlanReview(BaseModel):
+    """The person's decision on the model's research plan, as sealed in the ledger."""
+    approved: bool
+    by: str
+    proposed: int
+    kept: int
+    removed: int = 0
+    note: str | None = None
+    ts: float | None = None
+
+
 class CampaignDetail(CampaignSummary):
     llm: LlmUse | None = None
+    plan_review: PlanReview | None = None
     awaiting_approvals: list[ApprovalRef] = []
     objective: str | None = None
     branch: str | None = None
@@ -449,6 +461,12 @@ class ProgramCreate(BaseModel):
     direction: Literal["min", "max"] = "min"
     gate_value: float = 20.0
     unit: str = "µM"
+
+    @field_validator("unit", "name", "metric", "modality", mode="before")
+    @classmethod
+    def _tidy(cls, v):
+        """A unit typed as 'mS/cm.' must not carry the sentence's full stop into every gate label."""
+        return v.strip().rstrip(".").strip() if isinstance(v, str) else v
 
 
 class SubProblem(BaseModel):

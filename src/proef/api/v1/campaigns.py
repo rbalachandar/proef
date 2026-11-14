@@ -90,6 +90,9 @@ def summarize(rec) -> tuple[str, str, str | None]:
                 "hypothesis_invalidated": "REFUTED",
                 "hypothesis_inconclusive": "ABSTAINED"}[et]
         obs = d.get("observed")
+        if d.get("family_id") and not cand:
+            # a family's claim, derived from its variants' verdicts
+            return ("verdict", f"Family “{d['family_id']}”: {word} — {d.get('reason') or 'derived from its variants'}", None)
         return ("verdict", f"{cand or '?'}: {word}"
                 + (f" — observed {obs}" if obs is not None else ""), cand)
     if et == "gate_decision" and d.get("kind") == "human_approval":
@@ -483,6 +486,18 @@ def list_campaigns(program: str | None = Query(None),
     return out
 
 
+def plan_review_of(recs) -> S.PlanReview | None:
+    """The first (initial) plan decision on the chain, if a person reviewed a model's plan."""
+    for r in recs:
+        d = r.decision or {}
+        if d.get("kind") == "plan_decision" and d.get("stage", "initial") == "initial":
+            return S.PlanReview(approved=bool(d.get("approved")), by=str(d.get("decided_by") or "someone"),
+                                proposed=int(d.get("n_proposed") or 0), kept=int(d.get("n_kept") or 0),
+                                removed=len(d.get("removed") or []), note=d.get("note") or None,
+                                ts=r.ts.timestamp() if getattr(r, "ts", None) else None)
+    return None
+
+
 def llm_use(recs) -> S.LlmUse | None:
     """Which models took part, from what was RECORDED (never from current config)."""
     models, proposed, reviewed = [], 0, False
@@ -514,6 +529,7 @@ def get_campaign(eid: str) -> S.CampaignDetail:
     pid = problem_id_for(eid, detail)
     return S.CampaignDetail(
         llm=llm_use(recs),
+        plan_review=plan_review_of(recs),
         awaiting_approvals=pending_approvals(pid),
         id=eid, title=row.get("question") or eid,
         status=_status(detail.get("status") or row_status(row), recs),

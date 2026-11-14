@@ -151,6 +151,9 @@ def test_the_cockpit_reads_a_plan_reviewed_campaign_correctly(tmp_path, monkeypa
     assert gone and "removed from the plan by kim" in gone[0]["reason"]
     assert any("kim approved the research plan: 2 of 3 hypotheses go ahead (1 removed)" in t for t in act), act
     assert any("Plan review: 1 hypothesis removed before testing" in t for t in act), act
+    assert d["plan_review"] == {"approved": True, "by": "kim", "proposed": 3, "kept": 2, "removed": 1,
+                                "note": None, "ts": d["plan_review"]["ts"]}
+    assert not any(t.startswith("?:") for t in act), "a family verdict must be named, never '?'"
 
 
 def test_family_claims_are_not_counted_as_hypotheses_awaiting_an_experiment():

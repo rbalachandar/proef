@@ -541,3 +541,13 @@ def test_splitting_a_program_into_sub_problems_with_their_own_gate_and_a_shared_
     assert doc["objective"] == "Soluble enough to dose" and doc["metric"] == "solubility_uM"
     assert (doc["direction"], doc["gate_value"]) == ("max", 50.0)
     assert doc["budget"] == {"max_total_runs": 6, "max_hypotheses_total": 4}, "two sub-problems share the program's limits"
+
+
+def test_a_unit_typed_with_a_full_stop_is_stored_clean(client):
+    import uuid
+    name = f"Unit Test {uuid.uuid4().hex[:6]}"
+    r = client.post("/api/v1/programs", json={"name": name, "unit": " mS/cm. ", "metric": "ionic_conductivity_mS_cm",
+                                              "direction": "max", "gate_value": 1})
+    assert r.status_code == 201 and r.json()["gate"]["unit"] == "mS/cm"
+    assert not r.json()["gate"]["label"].endswith(".")
+

@@ -46,6 +46,13 @@ function CampaignView({ id }: { id: string }) {
               LLM · {d.llm.models.join(', ')}{d.llm.proposed_hypotheses ? ` wrote ${d.llm.proposed_hypotheses} hypotheses` : ''}{d.llm.reviewed ? `${d.llm.proposed_hypotheses ? ' · ' : ' '}reviewed` : ''}
             </Tag>
           : <Tag className="!text-xs" title="No language model took part: hypotheses, tests and verdicts were all deterministic.">no LLM</Tag>}
+        {d.plan_review && (
+          <Tag tone={d.plan_review.approved ? 'ok' : 'warn'} className="!text-xs"
+            title={`Sealed in the ledger${d.plan_review.note ? `: “${d.plan_review.note}”` : ''}. Open Evidence to see the record.`}>
+            Plan {d.plan_review.approved ? 'approved' : 'declined'} by {d.plan_review.by}
+            {d.plan_review.approved ? ` · ${d.plan_review.kept} of ${d.plan_review.proposed}${d.plan_review.removed ? `, ${d.plan_review.removed} removed` : ''}` : ''}
+          </Tag>
+        )}
         <Button size="sm" className="ml-auto" onClick={() => setSubmitting(true)}><Upload size={13} />Submit results</Button>
         <span className="num flex items-center gap-4 text-xs text-muted">
           <span>{d.budget.runs_used}{d.budget.runs_max ? ` / ${d.budget.runs_max}` : ''} lab runs</span>

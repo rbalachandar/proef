@@ -17,7 +17,8 @@ const GROUPS = [
 ] as const
 
 /** Humans, models and plain code are different kinds of actor and read differently in a record. */
-const kindOf = (a: { kind: string; model_version?: string | null }) => (a.kind === 'human' ? 'human' : a.model_version || a.kind === 'agent' ? 'model' : 'code')
+const kindOf = (a: { kind: string; role?: string; model_version?: string | null }) =>
+  a.kind === 'human' ? 'human' : a.model_version || a.kind === 'agent' || /\b(LLM|language model)\b/i.test(a.role ?? '') ? 'model' : 'code'
 
 /** The campaign's record: who did what, and a filterable log of everything sealed in the ledger. */
 export function RecordTab({ id }: { id: string }) {

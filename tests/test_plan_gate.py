@@ -346,3 +346,55 @@ def test_the_activity_feed_carries_the_ledger_event_type_and_a_hash_prefix(tmp_p
     chain = {r.record_hash[:7] for r in recs}
     assert {i["hash"] for i in items} <= chain, "every hash shown is a real record of this campaign's chain"
     assert "gate_decision" in {i["event"] for i in items}
+
+
+def test_a_model_cannot_move_the_gate_by_predicting_a_number(tmp_path):
+    """Found while recording the demo: a variant's predicted value became the criterion recorded on it when proposed, so a
+    model that predicted 1 uM put a gate of 1 uM on the record (and on the cockpit) instead of the program's 20 uM."""
+    class Bold(Scripted):
+        def generate(self, inv, prompt, **kw):
+            doc = json.loads(json.dumps(PLAN_JSON))
+            for f in doc["families"]:
+                for v in f["variants"]:
+                    v["predicted_value"] = 1.0                      # the model is optimistic
+            return ToolResult(envelope=inv.envelope.model_copy(), invocation_id=inv.invocation_id, status="succeeded",
+                              output={"text": json.dumps(doc)}, model_version="s-1")
+    store = SqliteProvenanceStore(str(tmp_path / "prov.db"))
+    cfg = _gate_cfg(tmp_path, Bold(), lambda plan, pid: PlanDecision(approved=True, by="ana"))
+    report = run_campaign(cfg, SimulatorLab(seed=3), store, approver=lambda t: True, notify=lambda m: None)
+    proposed = [(r.decision or {}).get("criteria") for r in store.branch_records(f"problem/{report.problem_id}")
+                if r.event_type.value == "hypothesis_proposed" and (r.decision or {}).get("criteria")]
+    assert len(proposed) == 3
+    assert {c["threshold"] for c in proposed} == {20.0}, f"recorded criteria: {[c['threshold'] for c in proposed]}"
+
+
+def test_a_label_the_model_echoes_into_a_candidate_name_is_stripped():
+    from proef.hypothesis_agent import clean_candidate
+    assert [clean_candidate(x) for x in ("proposed: erlotinib", "proposed_osimertinib", "Candidate - H1", "EG-01", None)] \
+        == ["erlotinib", "osimertinib", "H1", "EG-01", ""]
+
+
+def test_each_round_explains_its_own_selection_even_after_a_plan_removal(tmp_path, monkeypatch):
+    """Found in the recorded demo: a plan removal writes its own 'filtered' record, and the cockpit matched the n-th such
+    record to round n, so every round showed the PREVIOUS round's reasoning."""
+    from fastapi.testclient import TestClient
+
+    from proef.api.app import app
+    from proef.wizard_store import WizardStore
+
+    def approver(plan, pid):
+        h2 = next(v["hypothesis_id"] for f in plan["families"] for v in f["variants"] if v["candidate"] == "H2")
+        return PlanDecision(approved=True, excluded={h2}, by="kim")
+    store = SqliteProvenanceStore(str(tmp_path / "prov.db"))
+    cfg = _gate_cfg(tmp_path, Scripted(), approver, k=1, rounds=2)
+    report = run_campaign(cfg, SimulatorLab(seed=3), store, approver=lambda t: True, notify=lambda m: None)
+    eid = "why-rounds-1"
+    WizardStore().register_agent(eid, "find IC50<=20", log="", autonomy="gate")
+    WizardStore().link_problem(eid, report.problem_id)
+    monkeypatch.setattr("proef.views.ids.PROVENANCE_DB", str(tmp_path / "prov.db"))
+    with TestClient(app) as c:
+        rounds = c.get(f"/api/v1/campaigns/{eid}").json()["rounds"]
+    assert len(rounds) == 2
+    for r in rounds:
+        assert {p["candidate"] for p in r["why"]["picks"]} == set(r["candidates"]), \
+            f"round {r['n']} tested {r['candidates']} but its explanation says it picked {[p['candidate'] for p in r['why']['picks']]}"

@@ -56,7 +56,7 @@ export function SplitDialog({ open, onOpenChange, slug }: { open: boolean; onOpe
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent title="Split into sub-problems" description="Keep the ones that are real, separate questions. Each leaf is judged against its own gate. Results roll up."
-        className="!w-[min(680px,94vw)] !top-[5%]">
+        className="!w-[min(680px,94vw)]">
         {!model?.configured && <p role="alert" className="rounded-md bg-warn-soft px-3 py-2 text-xs text-warn"><b>No model is configured.</b> Splitting needs one (see docs/MODELS.md).</p>}
         {decompose.isPending && <p className="py-6 text-center text-sm text-muted">{model?.model} is reading the objective…</p>}
         {decompose.isError && <p role="alert" className="mb-2 text-xs text-bad">{(decompose.error as Error).message}</p>}

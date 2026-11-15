@@ -28,7 +28,7 @@ export function SubmitResultsDialog({ id, open, onOpenChange }: { id: string; op
   const blocked = !p || !!p.failure || p.already_submitted || p.matches.length === 0
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent title="Submit measured results" className="!w-[min(640px,94vw)] !top-[8%]"
+      <DialogContent title="Submit measured results" className="!w-[min(640px,94vw)]"
         description="Export the plate, or a table of measurements (sample, value, one row per reading), as CSV. It is judged against the gate this campaign registered before it ran, for hypotheses that are still open.">
         {done ? (
           <div>

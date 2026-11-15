@@ -13,7 +13,7 @@ export function DialogContent({ title, description, children, className }: {
     <D.Portal>
       <D.Overlay className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px]" />
       <D.Content className={cn(
-        'fixed left-1/2 top-[18%] z-50 w-[min(520px,92vw)] -translate-x-1/2 rounded-xl border ' +
+        'fixed left-1/2 top-1/2 z-50 max-h-[92vh] w-[min(520px,92vw)] -translate-x-1/2 -translate-y-1/2 overflow-y-auto border ' +
           'border-line-strong bg-surface p-5 shadow-2xl', className)}>
         <D.Title className="text-base font-semibold">{title}</D.Title>
         {description && <D.Description className="mt-1 text-sm text-muted">{description}</D.Description>}

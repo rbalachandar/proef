@@ -196,9 +196,12 @@ def _id2cand(recs) -> dict[str, str]:
 
 def _why_rounds(recs, detail_rounds) -> list[S.Round]:
     id2c = _id2cand(recs)
+    # one record per round's selection. A plan REMOVAL also writes a 'filtered' record (kind plan_review); counting it
+    # would shift every round's explanation by one
     portfolio = [r.decision for r in recs
                  if r.event_type.value == "hypotheses_filtered"
-                 and (r.decision or {}).get("decisions") is not None]
+                 and (r.decision or {}).get("decisions") is not None
+                 and (r.decision or {}).get("kind") != "plan_review"]
     out = []
     for rd in detail_rounds:
         n = rd["round"]

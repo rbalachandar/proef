@@ -7,6 +7,7 @@ const ACTORS = [
   { id: 'campaign', kind: 'service', role: 'Selects, tests and judges', events: 5, model_version: null },
   { id: 'gpt-6-luna', kind: 'agent', role: 'Wrote the hypotheses', events: 2, model_version: 'gpt-6-luna' },
   { id: 'local-user', kind: 'human', role: 'Approvals and review decisions', events: 1, model_version: null },
+  { id: 'llm-reviewer', kind: 'service', role: 'Advisory LLM reviewer: can only add flags', events: 1, model_version: null },
 ]
 const LOG = [
   { ts: 3, kind: 'review', text: 'local-user approved the research plan', actor: 'local-user', event: 'gate_decision', hash: 'a3f91c0' },
@@ -26,7 +27,7 @@ describe('the record tab', () => {
     expect(screen.getAllByRole('row')).toHaveLength(4)            // header + 3 records
     expect(screen.getByText('#a3f91c0')).toBeInTheDocument()
     const kinds = Object.fromEntries(ACTORS.map((a) => [a.id, within(screen.getByRole('button', { name: new RegExp(`^${a.id}`) })).getByText(/^(human|model|code)$/).textContent]))
-    expect(kinds).toEqual({ campaign: 'code', 'gpt-6-luna': 'model', 'local-user': 'human' })
+    expect(kinds).toEqual({ campaign: 'code', 'gpt-6-luna': 'model', 'local-user': 'human', 'llm-reviewer': 'model' })
   })
 
   it('filters the log to one actor', async () => {

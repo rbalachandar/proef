@@ -58,7 +58,7 @@ export function LaunchCampaignDialog({ open, onOpenChange, slug, title = 'New ca
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent title={title} description="Everything is judged against the program's pre-registered gate." className="!w-[min(600px,94vw)] !top-[6%]">
+      <DialogContent title={title} description="Everything is judged against the program's pre-registered gate." className="!w-[min(600px,94vw)]">
         <div role="radiogroup" aria-label="How should this run?" className="mb-3 grid gap-2">
           <Choice on={how === 'research'} disabled={!model?.configured} icon={Sparkles} onSelect={() => setHow('research')}
             title="Start research" sub={model?.configured ? `${model.model} proposes hypotheses, the plan is reviewed, then the agent runs it.` : 'A model proposes the hypotheses. Needs a configured model (see docs/MODELS.md).'} />

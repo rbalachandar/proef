@@ -16,6 +16,7 @@ max_variants_per_family) — autonomy inside guardrails, as everywhere else.
 from __future__ import annotations
 
 import json
+import re
 from typing import Any, Callable
 
 from proef.core.contracts import ToolInvocation
@@ -64,7 +65,7 @@ Reply ONLY with JSON:
     "variables": ["what you tune across variants"],
     "variants": [
       {{"statement": "falsifiable variant prediction",
-        "candidate": "sample id",
+        "candidate": "the compound or sample name only, e.g. erlotinib, with no prefix such as 'proposed'",
         "assay_type": "binding",
         "predicted": "human-readable prediction",
         "predicted_value": 20.0,
@@ -190,23 +191,19 @@ def propose_families_with_agent(
         for v in fam.get("variants", [])[:max_variants_per_family]:
             _assay = str(coerce_assay_type(
                 v.get("assay_type", "binding")).value)
+            # THE GATE IS THE PROGRAM'S, never the model's. A variant's predicted value is a PREDICTION (kept on the
+            # hypothesis, shown in the plan, used by acquisition); it must not become the pre-registered criterion,
+            # or a model could move the gate by predicting a number. Every variant is judged against the gate a person fixed.
             if _gate is None:
                 _spec_criteria = None
             elif _assay == "ic50_um" or _assay in (
                     "binding", "enzymatic", "cytotoxicity", "counterscreen"):
-                # dose-response assay: the fit produces ic50_um, lower is
-                # better — keep the classic convention
-                _spec_criteria = {"metric": "ic50_um", "direction": "min",
-                                  "threshold": float(
-                                      v.get("predicted_value")
-                                      or _gate["threshold"])}
+                # dose-response assay: the fit produces ic50_um, lower is better
+                _spec_criteria = {"metric": "ic50_um", "direction": "min", "threshold": float(_gate["threshold"])}
             else:
                 # property assay: read in the program's metric/direction
-                _spec_criteria = {"metric": _gate["metric"],
-                                  "direction": _gate["direction"],
-                                  "threshold": float(
-                                      v.get("predicted_value")
-                                      or _gate["threshold"])}
+                _spec_criteria = {"metric": _gate["metric"], "direction": _gate["direction"],
+                                  "threshold": float(_gate["threshold"])}
             spec = {
                 "predicted_by": {"source": "llm",
                                  "model": str(getattr(model, "model_version",
@@ -214,7 +211,7 @@ def propose_families_with_agent(
                                               or getattr(model, "name",
                                                          "llm"))},
                 "statement": v.get("statement", ""),
-                "candidate": v.get("candidate", ""),
+                "candidate": clean_candidate(v.get("candidate", "")),
                 "assay_type": _assay,
                 "criteria": _spec_criteria,
                 "predicted": v.get("predicted", v.get("statement", "")),
@@ -282,6 +279,18 @@ def propose_families_with_agent(
     tracker.family_info = family_info        # the plan shown to the person is built from these
     tracker.family_scores = family_scores
     return variants, family_scores
+
+
+_LABEL_PREFIX = re.compile(r"^\s*(?:proposed|candidate|compound|sample|hypothesis)\s*[:_\-]\s*", re.I)
+
+
+def clean_candidate(raw: Any) -> str:
+    """A model sometimes echoes a label into the name ("proposed: erlotinib", "proposed_osimertinib"). A candidate id is
+    the compound or sample name only, because it is what the lab sample, the plate and the verdict are keyed on."""
+    name = str(raw or "")
+    for _ in range(2):
+        name = _LABEL_PREFIX.sub("", name)
+    return name.strip()
 
 
 def _extract_json(raw: str) -> dict[str, Any]:

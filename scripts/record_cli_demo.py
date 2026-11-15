@@ -18,7 +18,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "assets" / "demo" / "proef-demo.gif"
-SPEED = "1.5"
+SPEED = "2.25"   # 1.5x faster than the previous 1.5x cut
 COLS = 118
 
 RESET, DIM, BOLD = "\x1b[0m", "\x1b[2m", "\x1b[1m"
@@ -51,11 +51,11 @@ def wrap(line: str) -> list[str]:
 def delay(line: str) -> float:
     """How long a reader lingers on a line."""
     if line.lstrip().startswith("*"):
-        return 2.6                       # the three narrated moments are the point
+        return 3.0                       # the three narrated moments are the point: slowed in raw time so they stay readable
     if "orthogonal confirmation for" in line or "CAMPAIGN COMPLETE" in line:
         return 1.1
     if line.startswith("verdicts:"):
-        return 2.2
+        return 2.4
     if not line.strip():
         return 0.5
     return 0.32
@@ -80,7 +80,7 @@ def main() -> None:
     for line in lines:
         for k, piece in enumerate(wrap(line)):
             emit(paint(piece.replace("[demo] ", f"{DIM}[demo]{RESET} ")) + "\r\n", delay(line) if k == 0 else 0.05)
-    emit("", 3.0)                                    # hold the final frame
+    emit("", 0.5)                                    # hold the final frame
     rows = sum(len(wrap(l)) for l in lines) + 3
     cast = work / "demo.cast"
     with cast.open("w") as fh:
@@ -88,7 +88,7 @@ def main() -> None:
         for e in events:
             fh.write(json.dumps(e) + "\n")
     subprocess.run(["agg", str(cast), str(OUT), "--speed", SPEED, "--theme", "dracula", "--font-size", "15",
-                    "--last-frame-duration", "3"], check=True)
+                    "--last-frame-duration", "2"], check=True)
     print("wrote", OUT, f"{OUT.stat().st_size / 1e6:.2f} MB")
 
 

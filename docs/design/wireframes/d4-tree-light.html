@@ -1,0 +1,35 @@
+<!doctype html><html lang="en" data-force="light"><head><meta charset="utf-8"><title>proef: D4, research tree</title><link rel="stylesheet" href="d-theme.css">
+<style>
+.ctx{grid-template-columns:1.3fr 1.5fr 1fr 1fr}
+.layout{display:grid;grid-template-columns:1fr 300px;gap:14px}
+.tree{padding:6px 0}
+.n{display:grid;grid-template-columns:22px 1fr 150px 120px;gap:10px;align-items:center;padding:9px 14px;border-bottom:1px solid var(--ln);position:relative}
+.n:last-child{border-bottom:0}.n .t{font:13px/1.35 var(--sans)}.n .g{font:11.5px var(--mono);color:var(--mu)}.n .g b{color:var(--tx);font-weight:500}
+.n .r{font:11.5px var(--mono);color:var(--mu);text-align:right}.n .r a{color:var(--bl)}
+.d1{padding-left:44px}.d2{padding-left:74px}.d1:before,.d2:before{content:"";position:absolute;left:24px;top:0;bottom:0;width:1px;background:var(--ln2)}.d2:after{content:"";position:absolute;left:54px;top:0;bottom:0;width:1px;background:var(--ln2)}
+.d1 .tick,.d2 .tick{position:absolute;top:50%;height:1px;background:var(--ln2)}.d1 .tick{left:24px;width:14px}.d2 .tick{left:54px;width:14px}
+.root{background:var(--rowsel,var(--p2));box-shadow:inset 3px 0 0 var(--tx)}.root .t{font:600 14px/1.35 var(--sans)}
+.bud{display:grid;grid-template-columns:2fr 1fr 1fr;gap:3px;margin:10px 0 8px}.bud .t{height:14px;background:var(--ln);position:relative}.bud .t i{position:absolute;left:0;top:0;bottom:0;background:var(--bl)}
+.bud .c{font:10.5px var(--mono);color:var(--mu);margin-top:5px;line-height:1.35}.bud .c b{color:var(--tx);font-weight:500;display:block}
+.side2 .box{border:1px solid var(--ln);background:var(--p);padding:12px 14px;margin-bottom:12px}.side2 .box p{margin:6px 0 0;color:var(--mu);font-size:12.5px}
+.rule{font:12px var(--mono);color:var(--mu);line-height:1.8}.rule b{color:var(--tx);font-weight:500}
+.lim{display:grid;grid-template-columns:1fr auto;font:12px var(--mono);color:var(--mu);row-gap:4px}.lim b{color:var(--tx);font-weight:500}
+</style></head><body>
+<div class="gbar"><div class="logo">proef<i>.</i></div><div class="search"><span>Search or jump to</span><span>⌘K</span></div><div class="chain"><span class="led"></span><b>chain verified</b><span>· not anchored</span></div><div class="halt">Halt</div><div class="user">local-user</div></div>
+<div class="app wide"><nav class="rail"><a>today</a><a>inbox <em>3</em></a><a class="on">programs</a><a>campaigns</a><a>analyze</a><a>evidence</a><a>lab</a></nav>
+<section class="center"><div class="crumb">programs / lithium metal</div>
+<h1>Lithium metal</h1>
+<div class="ctx"><div><div class="k">Objective</div><div class="v">solid electrolyte</div><div class="s">stable against lithium metal</div></div><div><div class="k">Limits</div><div class="v">12 runs · 3 rounds</div><div class="s">split depth 2 · up to 8 sub-problems</div></div><div><div class="k">Trees</div><div class="v">1 started</div><div class="s">by local-user, 14 Nov</div></div><div><div class="k">Roll-up</div><div class="v" data-mk="partial">partly met</div><div class="s">1 of 3 leaves decided</div></div></div>
+<div class="tabs"><span>overview</span><span class="on">research tree</span><span>campaigns</span><span>limits</span></div>
+<div class="layout"><div class="panel"><div class="h"><span>Research tree</span><span>a parent is achieved only when its required children are</span></div><div class="tree">
+<div class="n root"><span data-mk="partial"></span><div class="t">Find a lithium solid electrolyte with room-temperature ionic conductivity of at least 1 mS/cm that stays stable against lithium metal.</div><div class="g">objective</div><div class="r">12 runs shared</div></div>
+<div class="n d1"><i class="tick"></i><span data-mk="partial"></span><div class="t">Bulk ionic conductivity at 25 °C</div><div class="g"><b>conductivity ≥ 1</b> mS/cm</div><div class="r">6 runs · <a>campaign</a></div></div>
+<div class="n d1"><i class="tick"></i><span data-mk="lab"></span><div class="t">Stable against lithium metal</div><div class="g">split into 2 leaves</div><div class="r">6 runs</div></div>
+<div class="n d2"><i class="tick"></i><span data-mk="lab"></span><div class="t">Interfacial resistance stays low in a symmetric cell</div><div class="g"><b>growth ≤ 20</b> %</div><div class="r">3 runs · <a>campaign</a></div></div>
+<div class="n d2"><i class="tick"></i><span data-mk="open"></span><div class="t">Short-free cycling</div><div class="g"><b>hours ≥ 1000</b></div><div class="r">3 runs · queued</div></div>
+</div>
+<div style="display:flex;gap:18px;font:11px var(--mono);color:var(--mu);padding:9px 14px;border-top:1px solid var(--ln);flex-wrap:wrap"><span data-mk="achieved">achieved</span><span data-mk="partial">partly met</span><span data-mk="failed">not met</span><span data-mk="inconclusive">undecided</span><span data-mk="lab">in the lab</span><span data-mk="open">not started</span></div></div>
+<div class="side2"><div class="box"><div class="k">Budget flows down</div><div class="bud"><div><div class="t"><i style="width:100%"></i></div><div class="c"><b>6 of 6</b>bulk</div></div><div><div class="t"><i style="width:0"></i></div><div class="c"><b>0 of 3</b>interface</div></div><div><div class="t"><i style="width:0"></i></div><div class="c"><b>0 of 3</b>cycling</div></div></div><p>12 runs split by priority, filled as they are used. A leaf never spends more than its slice.</p></div>
+<div class="box"><div class="k">Roll-up rule</div><div class="rule" style="margin-top:6px"><b>achieved</b> all required children are<br><b>not met</b> any required child is<br><b>undecided</b> abstentions are not failures</div></div>
+<div class="box"><div class="k">Limits in use</div><div class="lim" style="margin-top:6px"><span>depth</span><b>2 of 2</b><span>sub-problems</span><b>4 of 8</b><span>lab runs</span><b>12 of 12</b></div></div></div></div>
+</section></div><script src="plot.js"></script><script src="d-common.js"></script></body></html>

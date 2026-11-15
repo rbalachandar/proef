@@ -1,0 +1,56 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>proef: Option B, composition</title>
+<style>
+:root{--bg:#fff;--ink:#0d1224;--mute:#555b6e;--faint:#8b90a0;--line:#0d1224;--hair:rgba(13,18,36,.14);--blue:#2b4fc4;--red:#c8321e;--amber:#b8860b;--orange:#ff8a1f;
+--sans:"Helvetica Neue",Helvetica,Arial,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,monospace}
+*{box-sizing:border-box}body{margin:0;background:#fff;color:var(--ink);font:14px/1.45 var(--sans);-webkit-font-smoothing:antialiased}
+.top{display:grid;grid-template-columns:200px 1fr auto;border-bottom:2px solid var(--line);align-items:stretch}
+.top>*{padding:14px 22px}.logo{font:700 24px var(--sans);letter-spacing:-.03em;border-right:2px solid var(--line)}.logo i{color:var(--orange);font-style:normal}
+.tabs{display:flex;gap:26px;align-items:center;font-size:13px;color:var(--mute)}.tabs .on{color:var(--ink);font-weight:700;border-bottom:3px solid var(--ink);padding-bottom:2px}
+.decide{background:var(--orange);color:#0d1224;font-weight:700;display:flex;align-items:center;gap:10px;padding:14px 26px}.decide b{font:700 22px var(--sans)}
+.wrap{padding:0}
+.head{display:grid;grid-template-columns:200px 1fr;border-bottom:2px solid var(--line)}
+.head .l{border-right:2px solid var(--line);padding:22px;font:11px var(--mono);color:var(--mute);text-transform:uppercase;letter-spacing:.07em}
+.head .r{padding:22px 26px}.head h1{font:700 30px/1.12 var(--sans);letter-spacing:-.025em;margin:0;max-width:24em}
+.sub{display:flex;gap:30px;margin-top:14px;font:12px var(--mono);color:var(--mute)}.sub b{color:var(--ink);font-weight:600}
+/* the verdict composition: a Mondrian of the outcome, widths proportional to counts */
+.comp{display:grid;grid-template-columns:200px 1fr;border-bottom:2px solid var(--line)}
+.comp .l{border-right:2px solid var(--line);padding:22px;font:11px var(--mono);color:var(--mute);text-transform:uppercase;letter-spacing:.07em}
+.bar{display:grid;grid-template-columns:3fr 1fr 1fr 2fr;height:150px}
+.bar>div{padding:14px 16px;display:flex;flex-direction:column;justify-content:space-between;border-right:2px solid var(--line)}.bar>div:last-child{border-right:0}
+.bar .n{font:700 64px/0.9 var(--sans);letter-spacing:-.04em}.bar .t{font:11px var(--mono);text-transform:uppercase;letter-spacing:.07em;display:flex;align-items:center;gap:7px}
+.b0{background:#fff}.b1{background:var(--blue);color:#fff}.b2{background:var(--red);color:#fff}.b3{background:#f3c64a;color:#0d1224}
+.sh{display:inline-block;width:10px;height:10px;background:#fff}.dm{transform:rotate(45deg);width:9px;height:9px;border:2.5px solid #0d1224;background:transparent}.rd{border-radius:50%}
+.fig{display:grid;grid-template-columns:200px 1fr;border-bottom:2px solid var(--line)}
+.fig .l{border-right:2px solid var(--line);padding:22px;font:11px var(--mono);color:var(--mute);text-transform:uppercase;letter-spacing:.07em}
+.tbl{display:grid;grid-template-columns:260px 1fr 190px}
+.tbl .h{font:11px var(--mono);text-transform:uppercase;letter-spacing:.07em;color:var(--mute);padding:12px 22px;border-bottom:1px solid var(--line)}
+.names>div,.nums>div{height:52px;display:flex;flex-direction:column;justify-content:center;padding:0 22px;border-bottom:1px solid var(--hair)}
+.names b{font:600 14px var(--sans)}.names span{font:11px var(--mono);color:var(--faint)}
+.nums>div{align-items:flex-end;font:13px var(--mono)}.nums span{color:var(--faint);font-size:11px}
+.states{padding:10px 22px 18px;font:12px var(--mono);color:var(--mute);display:flex;gap:22px;border-top:1px solid var(--hair)}
+.low{display:grid;grid-template-columns:200px 1fr 1fr;border-bottom:2px solid var(--line)}
+.low>div{padding:22px}.low>div+div{border-left:2px solid var(--line)}.low .l{font:11px var(--mono);color:var(--mute);text-transform:uppercase;letter-spacing:.07em}
+.low h3{margin:0 0 8px;font:700 18px var(--sans);letter-spacing:-.015em}.low p{margin:3px 0;color:var(--mute);font-size:13px}.low code{font:12px var(--mono);color:var(--ink)}
+.chain{display:flex;gap:2px;margin-top:10px}.chain i{width:5px;height:16px;background:var(--ink)}.chain i.o{background:var(--orange)}.chain i.k{background:var(--blue)}
+</style></head><body>
+<div class="top"><div class="logo">proef<i>.</i></div><div class="tabs"><span>Today</span><span>Inbox</span><span class="on">Campaigns</span><span>Analyze</span><span>Evidence</span><span>Lab</span></div><div class="decide"><b>3</b> awaiting decision</div></div>
+<div class="head"><div class="l">Campaign<br>Lithium metal</div><div class="r"><h1>Find a lithium solid electrolyte with room-temperature ionic conductivity of at least 1 mS/cm that stays stable against lithium metal.</h1>
+<div class="sub"><span>gate <b>≥ 1 mS/cm</b></span><span>plan <b>approved 8 of 8</b></span><span>runs <b>6 / 12</b></span><span>lab <b>simulated</b></span></div></div></div>
+<div class="comp"><div class="l">Outcome</div><div class="bar">
+<div class="b0"><span class="t">Tested</span><span class="n">6</span></div>
+<div class="b1"><span class="t"><span class="sh rd"></span>Validated</span><span class="n">1</span></div>
+<div class="b2"><span class="t"><span class="sh"></span>Refuted</span><span class="n">1</span></div>
+<div class="b3"><span class="t"><span class="sh dm"></span>Abstained</span><span class="n">3</span></div></div></div>
+<div class="fig"><div class="l">Figure<br><br><span style="text-transform:none;letter-spacing:0;font:12px var(--mono)">95% interval<br>against the gate,<br>log scale</span></div>
+<div><div class="tbl"><div class="h">Candidate</div><div class="h">Conductivity, mS/cm</div><div class="h" style="text-align:right">Mean, interval</div>
+<div class="names" id="names" style="margin-top:0"></div><div id="plot" style="margin-top:0"></div><div class="nums" id="nums"></div></div>
+<div class="states"><span>● validated: whole interval clears the gate</span><span>■ refuted: whole interval misses it</span><span>◇ abstained: interval crosses it</span></div></div></div>
+<div class="low"><div class="l">Record</div>
+<div><h3>Round 1 and 2</h3><p><code>LLZO-Ta06-dense</code> <code>LPSCl-disordered</code> <code>Li3N-textured-fast</code></p><p><code>LLZO-Nb05-dense</code> <code>LPSCl-ClRich</code> <code>Li3N-textured-dense</code></p><p>One pick per family. 6 of 8 tested.</p></div>
+<div><h3>Ledger</h3><p>57 records, chain verified. Plan approved by local-user.</p><div class="chain" id="chain"></div></div></div>
+<script src="plot.js"></script><script>
+const names=document.getElementById('names'),nums=document.getElementById('nums')
+DATA.forEach(d=>{names.insertAdjacentHTML('beforeend',`<div><b>${d.id}</b><span>${d.fam}</span></div>`);nums.insertAdjacentHTML('beforeend',`<div>${d.est==null?'queued':fmt(d.est)}<span>${d.lo==null?'round 3':fmt(d.lo)+' to '+fmt(d.hi)}</span></div>`)})
+gatePlot(document.getElementById('plot'),{width:Math.round(1280-200-260-190),rowH:52,top:0,full:true,labels:'none',pad:0,line:'rgba(13,18,36,.14)',goodFill:'rgba(43,79,196,.08)'})
+const ch=document.getElementById('chain');for(let i=0;i<57;i++){ch.insertAdjacentHTML('beforeend',`<i class="${[0,56].includes(i)?'o':i%9==3?'k':''}"></i>`)}
+</script></body></html>

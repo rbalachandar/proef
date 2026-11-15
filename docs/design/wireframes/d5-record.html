@@ -1,0 +1,43 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>proef: D5, record and actors</title><link rel="stylesheet" href="d-theme.css">
+<style>
+.ctx{grid-template-columns:1fr 1fr 1fr 1.2fr}
+.lay{display:grid;grid-template-columns:290px 1fr;gap:14px}
+.act{display:block;padding:10px 14px;border-bottom:1px solid var(--ln);position:relative}.act:last-child{border:0}
+.act.on{background:var(--rowsel,var(--p2));box-shadow:inset 3px 0 0 var(--tx)}
+.act .n{display:flex;justify-content:space-between;font:13px var(--mono)}.act .n span{color:var(--mu)}
+.act .r{font:11.5px var(--sans);color:var(--mu);margin:1px 0 5px}
+.act .b{height:3px;background:var(--ln)}.act .b i{display:block;height:100%;background:var(--tx);opacity:.75}
+.kind{font:10px var(--mono);text-transform:uppercase;letter-spacing:.08em;border:1px solid var(--ln2);color:var(--mu);padding:0 5px;margin-left:8px}.kind.hm{background:var(--tx);color:var(--bg);border-color:var(--tx)}
+.tb{width:100%;border-collapse:collapse;font:12px var(--mono)}.tb th{font:10.5px var(--mono);color:var(--fa);text-transform:uppercase;letter-spacing:.09em;text-align:left;padding:8px 14px;border-bottom:1px solid var(--ln);font-weight:500}
+.tb td{padding:7px 14px;border-bottom:1px solid var(--ln);vertical-align:top}.tb tr:last-child td{border:0}.tb .t{color:var(--fa);white-space:nowrap}.tb .w{white-space:nowrap}.tb .hu .w{color:var(--bl)}.tb .e{font:12.5px var(--sans);color:var(--tx)}.tb .e small{display:block;color:var(--mu);font:11.5px var(--sans)}.tb .hs{color:var(--fa);text-align:right;white-space:nowrap}
+.filters{display:flex;gap:8px;padding:9px 14px;border-bottom:1px solid var(--ln);font:11.5px var(--mono);color:var(--mu);align-items:center}.chip{border:1px solid var(--ln2);padding:2px 9px}.chip.on{background:var(--tx);color:var(--bg);border-color:var(--tx)}
+.vr{display:flex;align-items:center;gap:10px}.vr .btn{margin:0}
+</style></head><body>
+<div class="gbar"><div class="logo">proef<i>.</i></div><div class="search"><span>Search or jump to</span><span>⌘K</span></div><div class="chain"><span class="led"></span><b>chain verified</b><span>· not anchored</span></div><div class="halt">Halt</div><div class="user">local-user</div></div>
+<div class="app wide"><nav class="rail"><a>today</a><a>inbox <em>3</em></a><a class="on">campaigns</a><a>analyze</a><a>evidence</a><a>lab</a></nav>
+<section class="center"><div class="crumb">campaigns / lithium metal / cmp-1794679189</div>
+<h1>Find a lithium solid electrolyte with room-temperature ionic conductivity of at least 1 mS/cm.</h1>
+<div class="ctx"><div><div class="k">Records</div><div class="v">57</div><div class="s">this campaign's branch</div></div><div><div class="k">Actors</div><div class="v">7</div><div class="s">1 human · 2 models · 4 code</div></div><div><div class="k">Chain</div><div class="v vr">verified <button class="btn" style="font-size:10.5px;padding:2px 8px">verify now</button></div><div class="s">recomputed on demand</div></div><div><div class="k">Export</div><div class="v">report · notebook · CSV</div><div class="s">the full record, with hashes</div></div></div>
+<div class="tabs"><span>overview</span><span>rounds</span><span class="on">record</span></div>
+<div class="lay">
+<div class="panel"><div class="h"><span>Who did what</span><span>7</span></div>
+<a class="act on"><div class="n">all actors <span>57</span></div><div class="r">every record in this campaign</div></a>
+<a class="act"><div class="n"><span style="color:var(--tx)">campaign<span class="kind">code</span></span><span>48</span></div><div class="r">Selects, tests and judges</div><div class="b"><i style="width:84%"></i></div></a>
+<a class="act"><div class="n"><span style="color:var(--tx)">gpt-6-luna<span class="kind">model</span></span><span>3</span></div><div class="r">Wrote the hypotheses</div><div class="b"><i style="width:6%"></i></div></a>
+<a class="act"><div class="n"><span style="color:var(--tx)">critic<span class="kind">model</span></span><span>1</span></div><div class="r">Reviewed the plan. Advisory only</div><div class="b"><i style="width:2%"></i></div></a>
+<a class="act"><div class="n"><span style="color:var(--tx)">local-user<span class="kind hm">human</span></span><span>2</span></div><div class="r">Approvals and review decisions</div><div class="b"><i style="width:4%"></i></div></a>
+<a class="act"><div class="n"><span style="color:var(--tx)">synthesis<span class="kind">code</span></span><span>6</span></div><div class="r">Simulated Make step, batch QC</div><div class="b"><i style="width:11%"></i></div></a>
+<a class="act"><div class="n"><span style="color:var(--tx)">reviewer<span class="kind">code</span></span><span>1</span></div><div class="r">Rule-based audit of every verdict</div><div class="b"><i style="width:2%"></i></div></a></div>
+<div class="panel"><div class="h"><span>Record</span><span>newest first</span></div>
+<div class="filters"><span>show</span><span class="chip on">everything</span><span class="chip">decisions</span><span class="chip">verdicts</span><span class="chip">lab runs</span><span class="chip">reviews</span></div>
+<table class="tb"><tr><th>Time</th><th>Actor</th><th>Event</th><th style="text-align:right">Hash</th></tr>
+<tr><td class="t">10:48</td><td class="w">campaign</td><td class="e">Round 2 complete: 3 judged</td><td class="hs">#e2d870</td></tr>
+<tr><td class="t">10:48</td><td class="w">campaign</td><td class="e">Family “textured-lithium-nitride”: abstained<small>2 abstentions block family-level confirmation</small></td><td class="hs">#4c0a91</td></tr>
+<tr><td class="t">10:48</td><td class="w">campaign</td><td class="e"><span data-mk="abstained"></span>LLZO-Nb05-dense abstained, observed 0.57</td><td class="hs">#be3320</td></tr>
+<tr><td class="t">10:46</td><td class="w">campaign</td><td class="e">Round 1 complete: 3 judged</td><td class="hs">#51be07</td></tr>
+<tr><td class="t">10:46</td><td class="w">synthesis</td><td class="e">Synthesised LLZO-Ta06-dense: yield 80.1%, purity 95.3%</td><td class="hs">#b7e19d</td></tr>
+<tr class="hu"><td class="t">10:44</td><td class="w">local-user</td><td class="e">Approved the research plan: 8 of 8 hypotheses go ahead</td><td class="hs">#a3f91c</td></tr>
+<tr><td class="t">10:42</td><td class="w">critic</td><td class="e">2 notes on the plan, advisory</td><td class="hs">#9c41e0</td></tr>
+<tr><td class="t">10:41</td><td class="w">gpt-6-luna</td><td class="e">Proposed 8 hypotheses in 3 families</td><td class="hs">#17b2f4</td></tr></table></div>
+</div></section></div>
+<script src="plot.js"></script><script src="d-common.js"></script></body></html>

@@ -1,0 +1,31 @@
+<!doctype html><html lang="en" data-force="light"><head><meta charset="utf-8"><title>proef: D2, campaign</title><link rel="stylesheet" href="d-theme.css">
+<style>
+.ctx{grid-template-columns:1.25fr 1.2fr 1.25fr .85fr 1.1fr}
+.ticks{display:flex;gap:2px;margin-top:6px}.ticks i{width:100%;height:5px;background:var(--ln2)}.ticks i.f{background:var(--tx)}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid var(--ln);margin-bottom:12px;background:var(--p)}.kpis>div{padding:10px 14px}.kpis>div+div{border-left:1px solid var(--ln)}
+.kpis .n{font:500 28px/1 var(--mono);letter-spacing:-.03em}.kpis .l{font:10.5px var(--mono);color:var(--mu);text-transform:uppercase;letter-spacing:.09em;margin-top:6px}
+.fig{display:grid;grid-template-columns:1fr 150px}.nums>div{height:44px;display:flex;flex-direction:column;justify-content:center;align-items:flex-end;padding:0 14px;border-bottom:1px solid var(--ln);font:12px var(--mono)}.nums span{color:var(--fa);font-size:10.5px}
+.legend{display:flex;gap:18px;font:11px var(--mono);color:var(--mu);padding:8px 14px;border-top:1px solid var(--ln)}
+.log{margin-top:12px;font:12px/1.75 var(--mono);color:var(--mu)}.log .r{display:grid;grid-template-columns:50px 80px 1fr 60px;gap:10px;border-bottom:1px solid var(--ln);padding:0 14px}.log .r:last-child{border:0}.log b{color:var(--tx);font-weight:500}.log .hu b{color:var(--bl)}.log .hs{color:var(--fa);text-align:right}
+.note{font:11.5px/1.6 var(--sans);color:var(--fa);margin-top:14px}
+</style></head><body>
+<div class="gbar"><div class="logo">proef<i>.</i></div><div class="search"><span>Search or jump to</span><span>⌘K</span></div><div class="chain"><span class="led"></span><b>chain verified</b><span>· not anchored</span></div><div class="halt">Halt</div><div class="user">local-user</div></div>
+<div class="app"><nav class="rail"><a>today</a><a>inbox <em>3</em></a><a class="on">campaigns</a><a>analyze</a><a>evidence</a><a>lab</a></nav>
+<section class="center"><div class="crumb">campaigns / lithium metal / cmp-1794679189</div>
+<h1>Find a lithium solid electrolyte with room-temperature ionic conductivity of at least 1 mS/cm that stays stable against lithium metal.</h1>
+<div class="ctx"><div><div class="k">Gate, pre-registered</div><div class="v">conductivity ≥ 1</div><div class="s">mS/cm, fixed before data</div></div><div><div class="k">Hypotheses</div><div class="v">gpt-6-luna wrote 8</div><div class="s">critic: 2 notes</div></div><div><div class="k">Plan</div><div class="v">approved, 8 of 8</div><div class="s">local-user · 14 Nov 10:44</div></div><div><div class="k">Lab</div><div class="v">simulated</div><div class="s">synthetic output</div></div><div><div class="k">Runs</div><div class="v">6 of 12</div><div class="ticks"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i></i><i></i><i></i><i></i><i></i><i></i></div></div></div>
+<div class="tabs"><span class="on">overview</span><span>rounds</span><span>record</span></div>
+<div class="kpis"><div><div class="n">8</div><div class="l">proposed</div></div><div><div class="n">6</div><div class="l">tested</div></div><div><div class="n" style="color:var(--bl)">1</div><div class="l" data-mk="validated">validated</div></div><div><div class="n" style="color:var(--rd)">1</div><div class="l" data-mk="refuted">refuted</div></div><div><div class="n" style="color:var(--gy)">3</div><div class="l" data-mk="abstained">abstained</div></div></div>
+<div class="panel"><div class="h"><span>Estimate and 95% interval vs gate</span><span>n=3 each · log</span></div><div class="fig"><div id="plot"></div><div class="nums" id="nums" style="padding-top:8px"></div></div>
+<div class="legend"><span data-mk="validated">whole interval clears the gate</span><span data-mk="refuted">whole interval misses it</span><span data-mk="abstained">interval crosses it: no claim</span></div></div>
+<div class="panel log"><div class="h">Record <span>57 records · verified</span></div>
+<div class="r"><span>10:48</span><b>agent</b><span>round 2 complete: 3 judged</span><span class="hs">#e2d870</span></div><div class="r"><span>10:46</span><b>agent</b><span>round 1 complete: 3 judged</span><span class="hs">#51be07</span></div><div class="r hu"><span>10:44</span><b>local-user</b><span>approved plan, 8 of 8 hypotheses</span><span class="hs">#a3f91c</span></div><div class="r"><span>10:42</span><b>critic</b><span>2 notes on the plan</span><span class="hs">#9c41e0</span></div><div class="r"><span>10:41</span><b>gpt-6-luna</b><span>proposed 8 hypotheses in 3 families</span><span class="hs">#17b2f4</span></div></div></section>
+<aside class="side"><h2><span>Awaiting decision</span><span style="color:var(--tx)">3</span></h2>
+<div class="q"><div class="n">Li3N-textured-dense</div><div class="w"><b>4.43</b> [0.31, 8.55]. Too wide to say.</div><button class="btn go">follow up</button><button class="btn">accept</button><button class="btn">drop</button></div>
+<div class="q"><div class="n">Li3N-textured-fast</div><div class="w"><b>1.60</b> [0.62, 2.58]</div><button class="btn go">follow up</button><button class="btn">accept</button><button class="btn">drop</button></div>
+<div class="q"><div class="n">LLZO-Nb05-dense</div><div class="w"><b>0.57</b> [0.12, 1.02]. Likely below the gate.</div><button class="btn go">follow up</button><button class="btn">accept</button><button class="btn">drop</button></div>
+<div class="note">Each decision is recorded in the ledger with the decider's name.</div></aside></div>
+<script src="plot.js"></script><script src="d-common.js"></script><script>
+const nums=document.getElementById('nums');DATA.forEach(d=>nums.insertAdjacentHTML('beforeend',`<div>${d.est==null?'queued':fmt(d.est)}<span>${d.lo==null?'round 3':fmt(d.lo)+' to '+fmt(d.hi)}</span></div>`))
+gatePlot(document.getElementById('plot'),{width:560,left:176,labels:'inline',rowH:44,top:8,...PLOT,font:'ui-monospace,Menlo,monospace'})
+</script></body></html>

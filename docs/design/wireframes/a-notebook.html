@@ -1,0 +1,75 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>proef: Option A, notebook</title>
+<style>
+:root{--paper:#f7f5ef;--bg:#f7f5ef;--ink:#151a2c;--mute:#5b6172;--faint:#8a8f9c;--rule:rgba(31,58,138,.22);--blue:#2b4fc4;--red:#c8321e;--amber:#b8860b;--orange:#ff8a1f;
+--serif:"Iowan Old Style","Charter","Georgia",serif;--sans:-apple-system,"Helvetica Neue",Arial,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,monospace}
+*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:14px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+.shell{display:grid;grid-template-columns:188px 1fr 44px;min-height:100vh}
+nav{border-right:1px solid var(--rule);padding:22px 18px;position:relative}
+.logo{font:600 22px var(--serif);letter-spacing:-.01em;margin-bottom:34px}.logo i{color:var(--orange);font-style:normal}
+nav a{display:flex;justify-content:space-between;padding:7px 0;color:var(--mute);text-decoration:none;font-size:13.5px;border-bottom:1px solid transparent}
+nav a.on{color:var(--ink);font-weight:600;border-bottom:1px solid var(--ink)}
+nav a b{color:var(--orange);font-weight:700}
+nav .foot{position:absolute;bottom:18px;left:18px;right:18px;font:11px var(--mono);color:var(--faint);line-height:1.6}
+main{padding:30px 44px 80px 0;max-width:1000px}
+.row{display:grid;grid-template-columns:64px 1fr;border-top:1px solid var(--rule)}
+.row>.n{font:12px var(--mono);color:var(--faint);padding:20px 0 0 18px}
+.row>.b{padding:18px 0 26px}
+.eyebrow{font:11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--mute)}
+h1{font:500 31px/1.22 var(--serif);letter-spacing:-.012em;margin:10px 0 18px;max-width:30em}
+h2{font:500 21px var(--serif);margin:0 0 4px;letter-spacing:-.005em}h2 i{color:var(--orange);font-style:normal}
+.meta{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--rule);border-bottom:1px solid var(--rule)}
+.meta div{padding:10px 14px 11px 0}.meta div+div{padding-left:14px;border-left:1px solid var(--rule)}
+.meta dt{font:11px var(--mono);color:var(--faint);text-transform:uppercase;letter-spacing:.06em}.meta dd{margin:2px 0 0;font-size:13.5px}
+.tally{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid var(--rule)}
+.tally>div{padding:12px 16px 12px}.tally>div+div{border-left:1px solid var(--rule)}
+.tally .v{font:500 38px/1 var(--serif);letter-spacing:-.02em}.tally .l{font:11px var(--mono);color:var(--mute);text-transform:uppercase;letter-spacing:.06em;margin-top:6px;display:flex;gap:6px;align-items:center}
+.sh{display:inline-block;width:9px;height:9px}.ci{border-radius:50%;background:var(--blue)}.sq{background:var(--red)}.di{width:8px;height:8px;border:2px solid var(--amber);transform:rotate(45deg)}
+figure{margin:14px 0 0}figcaption{font:12.5px/1.5 var(--serif);color:var(--mute);margin-top:10px;max-width:44em}figcaption b{font-style:normal;color:var(--ink);font-weight:600}
+.dec{border-top:1px solid var(--rule)}.dec li{display:grid;grid-template-columns:230px 1fr auto;gap:16px;align-items:center;padding:12px 0;border-bottom:1px solid var(--rule);list-style:none}
+.dec ul{margin:10px 0 0;padding:0}.dec .name{font:13px var(--mono)}.dec .why{color:var(--mute);font-size:13px}
+.btn{font:12.5px var(--sans);padding:6px 11px;border:1px solid var(--ink);background:none;color:var(--ink);margin-left:6px}.btn.go{background:var(--ink);color:#fff}
+.orange-dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--orange);margin-right:8px;vertical-align:1px}
+.rounds{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--rule)}.rounds>div{padding:14px 16px}.rounds>div+div{border-left:1px solid var(--rule)}
+.rounds h3{margin:0 0 6px;font:500 16px var(--serif)}.rounds p{margin:4px 0;font-size:13px;color:var(--mute)}.rounds code{font:12px var(--mono);color:var(--ink)}
+/* the spine: the ledger as a margin */
+.spine{position:relative;border-left:1px solid var(--rule);padding:30px 0}
+.spine .line{position:absolute;left:21px;top:30px;bottom:30px;width:2px;background:var(--ink)}
+.spine .t{position:absolute;left:15px;width:14px;height:1px;background:var(--ink)}
+.spine .t.k{width:20px;left:12px;height:2px;background:var(--blue)}.spine .t.o{background:var(--orange);height:3px;width:22px;left:11px}
+.spine .cap{position:absolute;bottom:90px;left:-4px;transform:rotate(-90deg);transform-origin:left bottom;font:10.5px var(--mono);color:var(--mute);white-space:nowrap;margin-left:34px}
+</style></head><body>
+<div class="shell">
+<nav><div class="logo">proef<i>.</i></div>
+<a>Today</a><a>Inbox <b>3</b></a><a class="on">Campaigns</a><a>Analyze</a><a>Evidence</a><a>Lab</a>
+<div class="foot">chain verified<br>57 records<br>anchor: none</div></nav>
+<main>
+<div class="row" style="border-top:0"><div class="n"></div><div class="b" style="padding-top:6px">
+<div class="eyebrow">Campaign · Lithium metal · cmp-1794679189</div>
+<h1>Find a lithium solid electrolyte with room-temperature ionic conductivity of at least 1 mS/cm that stays stable against lithium metal.</h1>
+<dl class="meta"><div><dt>Gate (pre-registered)</dt><dd>conductivity ≥ 1 mS/cm</dd></div><div><dt>Hypotheses</dt><dd>gpt-6-luna wrote 8</dd></div><div><dt>Plan</dt><dd>approved by local-user, 8 of 8</dd></div><div><dt>Lab runs</dt><dd>6 of 12 · simulated</dd></div></dl>
+</div></div>
+
+<div class="row"><div class="n">1</div><div class="b"><h2>Where it stands.</h2>
+<div class="tally" style="margin-top:12px"><div><div class="v">8</div><div class="l">proposed</div></div><div><div class="v">6</div><div class="l">tested</div></div>
+<div><div class="v" style="color:var(--blue)">1</div><div class="l"><span class="sh ci"></span>validated</div></div>
+<div><div class="v" style="color:var(--red)">1</div><div class="l"><span class="sh sq"></span>refuted</div></div>
+<div><div class="v" style="color:var(--amber)">3</div><div class="l"><span class="sh di"></span>abstained</div></div></div>
+<figure><div id="fig"></div>
+<figcaption><b>Fig. 1.</b> Mean and 95% interval of each candidate against the gate fixed before any data (conductivity ≥ 1 mS/cm), three replicates each. An interval that crosses the gate is an abstention: the data cannot say which side the true value is on.</figcaption></figure></div></div>
+
+<div class="row dec"><div class="n">2</div><div class="b"><h2><span class="orange-dot"></span>Awaiting decision<i>.</i></h2>
+<div style="color:var(--mute);font-size:13px">Three abstentions. Each decision is recorded in the ledger with the decider's name.</div>
+<ul><li><span class="name">Li3N-textured-dense</span><span class="why">4.43, interval 0.31 to 8.55. Too wide to say.</span><span><button class="btn go">Follow up</button><button class="btn">Accept</button><button class="btn">Drop</button></span></li>
+<li><span class="name">Li3N-textured-fast</span><span class="why">1.60, interval 0.62 to 2.58.</span><span><button class="btn go">Follow up</button><button class="btn">Accept</button><button class="btn">Drop</button></span></li>
+<li><span class="name">LLZO-Nb05-dense</span><span class="why">0.57, interval 0.12 to 1.02. Likely below the gate.</span><span><button class="btn go">Follow up</button><button class="btn">Accept</button><button class="btn">Drop</button></span></li></ul></div></div>
+
+<div class="row"><div class="n">3</div><div class="b"><h2>Rounds.</h2>
+<div class="rounds" style="margin-top:12px"><div><h3>Round 1</h3><p><code>LLZO-Ta06-dense</code> <code>LPSCl-disordered</code> <code>Li3N-textured-fast</code></p><p>One pick per family. Chosen on the model's confidence, 3 of 8.</p></div>
+<div><h3>Round 2</h3><p><code>LLZO-Nb05-dense</code> <code>LPSCl-ClRich</code> <code>Li3N-textured-dense</code></p><p>Not chosen: <code>LPSClBr-mixed</code> (family already covered).</p></div></div></div></div>
+</main>
+<aside class="spine"><div class="line"></div>
+<div class="t o" style="top:64px"></div><div class="t" style="top:96px"></div><div class="t" style="top:118px"></div><div class="t k" style="top:150px"></div><div class="t" style="top:172px"></div><div class="t" style="top:194px"></div><div class="t" style="top:226px"></div><div class="t k" style="top:258px"></div><div class="t" style="top:280px"></div><div class="t" style="top:312px"></div><div class="t" style="top:334px"></div><div class="t k" style="top:366px"></div><div class="t" style="top:398px"></div><div class="t" style="top:420px"></div><div class="t" style="top:452px"></div><div class="t k" style="top:484px"></div><div class="t" style="top:506px"></div><div class="t" style="top:538px"></div><div class="t" style="top:560px"></div><div class="t o" style="top:592px"></div>
+<div class="cap">ledger · 57 records · verified</div></aside>
+</div>
+<script src="plot.js"></script><script>gatePlot(document.getElementById('fig'),{width:820,left:180,labels:'inline',rowH:46,top:6,font:'ui-monospace,Menlo,monospace'})</script>
+</body></html>

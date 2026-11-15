@@ -8,8 +8,8 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done
 
 > **Nov 14, 2026 — research flow realigned** (see `docs/WORKBENCH-REDESIGN.md` §9): program limits, *Start research* with a
 > plan-review gate (approve / remove / decline), replay of plan-reviewed campaigns, one approval covering the plan's
-> submissions, opt-in re-planning after each round, and a model-proposed split into sub-problems. Open: a recursive problem
-> tree with roll-up in the workbench, and the model designing protocols.
+> submissions, opt-in re-planning after each round, a recursive research tree with roll-up (depth and size capped), a critic agent, model-designed dose ladders, and a Lab driver check.
+> Open: configuring a real device from the workbench, replicates and controls chosen by the model.
 
 ## P0 — Critical review, Oct 2026 (docs/REVIEW-2026-10.md — fix log there)
 Campaign epistemology was sound; the verdict-READING layers betrayed it.

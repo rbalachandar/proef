@@ -1,0 +1,48 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>proef: Option D, mission control</title>
+<style>
+:root{--bg:#090c12;--p:#0e131c;--p2:#121926;--ln:#1d2535;--ln2:#2a3550;--tx:#e8ecf4;--mu:#8f9ab0;--fa:#5d6882;--bl:#5b8def;--rd:#e8604c;--gy:#aeb6c8;
+--sans:-apple-system,"Helvetica Neue",Arial,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,monospace}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--tx);font:13px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+.status{display:flex;gap:0;border-bottom:1px solid var(--ln);font:11.5px var(--mono);color:var(--mu);background:var(--p)}
+.status>div{padding:9px 16px;border-right:1px solid var(--ln);display:flex;gap:8px;align-items:center}.status b{color:var(--tx);font-weight:500}
+.led{width:7px;height:7px;border-radius:50%;background:var(--bl);box-shadow:0 0 0 3px rgba(91,141,239,.18)}
+.app{display:grid;grid-template-columns:168px 1fr 340px;min-height:calc(100vh - 36px)}
+.rail{border-right:1px solid var(--ln);padding:16px 0}.logo{font:700 20px var(--sans);letter-spacing:-.03em;padding:0 16px 20px}.logo i{color:var(--bl);font-style:normal}
+.rail a{display:flex;justify-content:space-between;padding:7px 16px;font:12.5px var(--mono);color:var(--mu);border-left:2px solid transparent}.rail a.on{color:var(--tx);background:var(--p2);border-left-color:var(--tx)}.rail a em{font-style:normal;background:var(--tx);color:var(--bg);padding:0 6px;font-weight:700}
+.center{padding:20px 24px;min-width:0}
+.crumb{font:11px var(--mono);color:var(--fa);text-transform:uppercase;letter-spacing:.1em}
+h1{font:600 22px/1.3 var(--sans);margin:8px 0 14px;letter-spacing:-.01em;max-width:34em}
+.kpis{display:grid;grid-template-columns:repeat(5,1fr);border:1px solid var(--ln);margin-bottom:16px}.kpis>div{padding:11px 14px}.kpis>div+div{border-left:1px solid var(--ln)}
+.kpis .n{font:500 30px/1 var(--mono);letter-spacing:-.03em}.kpis .l{font:10.5px var(--mono);color:var(--mu);text-transform:uppercase;letter-spacing:.09em;margin-top:6px}
+.panel{border:1px solid var(--ln);background:var(--p)}.panel .h{display:flex;justify-content:space-between;padding:9px 14px;border-bottom:1px solid var(--ln);font:11px var(--mono);color:var(--mu);text-transform:uppercase;letter-spacing:.09em}
+.panel .b{padding:6px 14px 10px}
+.log{margin-top:16px;font:12px/1.75 var(--mono);color:var(--mu)}.log div{display:grid;grid-template-columns:62px 90px 1fr;gap:10px;border-bottom:1px solid var(--ln);padding:0 14px}.log b{color:var(--tx);font-weight:500}.log .hu b{color:var(--bl)}
+.side{border-left:1px solid var(--ln);padding:20px 18px;background:var(--p)}
+.side h2{font:11px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--mu);margin:0 0 10px;font-weight:500}
+.q{border:1px solid var(--ln2);background:var(--p2);padding:12px;margin-bottom:10px}.q .n{font:13px var(--mono);margin-bottom:3px}.q .w{color:var(--mu);font-size:12px;margin-bottom:9px}
+.btn{font:11.5px var(--mono);padding:5px 10px;border:1px solid var(--ln2);background:none;color:var(--tx);margin-right:6px}.btn.go{background:var(--tx);color:var(--bg);border-color:var(--tx);font-weight:700}
+.gate{border:1px solid var(--ln2);padding:12px;margin-bottom:18px;font:12px var(--mono)}.gate .k{color:var(--fa);font-size:10.5px;text-transform:uppercase;letter-spacing:.1em}.gate .v{font-size:15px;margin:2px 0 8px}
+.legend{display:flex;gap:18px;font:11px var(--mono);color:var(--mu);padding:8px 14px;border-top:1px solid var(--ln)}
+</style></head><body>
+<div class="status"><div><span class="led"></span><b>chain verified</b> 57 records</div><div>model <b>gpt-6-luna</b></div><div>lab <b>simulated</b></div><div>runs <b>6/12</b></div><div>plan <b>approved 8/8</b></div><div style="margin-left:auto;border-right:0">anchor <b>none</b></div></div>
+<div class="app">
+<nav class="rail"><div class="logo">proef<i>.</i></div><a>today</a><a>inbox <em>3</em></a><a class="on">campaigns</a><a>analyze</a><a>evidence</a><a>lab</a></nav>
+<section class="center"><div class="crumb">campaign / lithium metal / cmp-1794679189</div>
+<h1>Find a lithium solid electrolyte with room-temperature ionic conductivity of at least 1 mS/cm that stays stable against lithium metal.</h1>
+<div class="kpis"><div><div class="n">8</div><div class="l">proposed</div></div><div><div class="n">6</div><div class="l">tested</div></div><div><div class="n" style="color:var(--bl)">1</div><div class="l">● validated</div></div><div><div class="n" style="color:var(--rd)">1</div><div class="l">■ refuted</div></div><div><div class="n" style="color:var(--gy)">3</div><div class="l">◇ abstained</div></div></div>
+<div class="panel"><div class="h"><span>Estimate and 95% interval vs gate</span><span>n=3 each · log</span></div><div class="b"><div id="plot"></div></div>
+<div class="legend"><span>● whole interval clears the gate</span><span>■ whole interval misses it</span><span>◇ interval crosses it: no claim</span></div></div>
+<div class="panel log"><div class="h" style="padding:9px 0;margin:0 -14px;padding-left:14px">Record <span style="padding-right:14px">live</span></div>
+<div><span>10:48</span><b>agent</b><span>round 2 complete: 3 judged</span></div><div><span>10:46</span><b>agent</b><span>round 1 complete: 3 judged</span></div><div class="hu"><span>10:44</span><b>local-user</b><span>approved plan, 8 of 8 hypotheses</span></div><div><span>10:42</span><b>critic</b><span>2 notes on the plan</span></div><div><span>10:41</span><b>gpt-6-luna</b><span>proposed 8 hypotheses in 3 families</span></div></div>
+</section>
+<aside class="side"><div class="gate"><div class="k">gate · pre-registered</div><div class="v">conductivity ≥ 1 mS/cm</div><div class="k">budget</div><div class="v" style="margin:2px 0 0">6 of 12 runs</div></div>
+<h2>Awaiting decision · 3</h2>
+<div class="q"><div class="n">Li3N-textured-dense</div><div class="w">4.43 [0.31, 8.55]</div><button class="btn go">follow up</button><button class="btn">accept</button><button class="btn">drop</button></div>
+<div class="q"><div class="n">Li3N-textured-fast</div><div class="w">1.60 [0.62, 2.58]</div><button class="btn go">follow up</button><button class="btn">accept</button><button class="btn">drop</button></div>
+<div class="q"><div class="n">LLZO-Nb05-dense</div><div class="w">0.57 [0.12, 1.02]</div><button class="btn go">follow up</button><button class="btn">accept</button><button class="btn">drop</button></div></aside>
+</div>
+<script src="plot.js"></script><script>
+Object.assign(C,{validated:'#5b8def',refuted:'#e8604c',abstained:'#aeb6c8',proposed:'#5d6882'})
+gatePlot(document.getElementById('plot'),{width:690,left:176,labels:'inline',rowH:44,top:8,ink:'#e8ecf4',line:'rgba(255,255,255,.07)',goodFill:'rgba(91,141,239,.10)',markerFill:'#0e131c',mute:'#8f9ab0',faint:'#5d6882',font:'ui-monospace,Menlo,monospace'})
+document.querySelectorAll('#plot text').forEach(t=>{if(t.getAttribute('fill')==='#e8ecf4')t.setAttribute('fill','#e8ecf4')})
+</script></body></html>

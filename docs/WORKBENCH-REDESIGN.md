@@ -13,9 +13,9 @@ A bench or computational scientist running real campaigns. Five jobs:
 |---|---|---|
 | Trust the data | "Is this plate any good, and what does it say?" | **Analyze** |
 | Decide what's next | "What do we test next, and why?" | **Campaign** (why-this-plate) |
-| Respond | "What needs me right now?" | **Inbox** |
+| Respond | "What needs me right now?" | **Decisions** |
 | Defend | "Can I stand behind this result?" | **Evidence** |
-| Steer | "Are we winning against the gate?" | **Today** |
+| Steer | "Are we winning against the gate?" | **Programs** |
 
 Principles: uncertainty is the main visual idea (every estimate is drawn with
 its interval against the gate); abstention is a first-class, dignified state,
@@ -25,8 +25,8 @@ a "why" one click away); nothing happens without a record.
 ## 2. Information architecture
 
 ```
-Today ─ program cards (progress vs gate, needs-you count, changes since last visit)
-Inbox ─ approvals · abstentions to review · QC failures · refusals   (decide inline)
+Programs ─ program cards (progress vs gate, needs-you count, changes since last visit)
+Decisions ─ approvals · abstentions to review · QC failures · refusals   (decide inline)
 Campaigns ─ list ─ Campaign cockpit (see §3)
 Analyze ─ drop file → detect → confirm → results → "make it a verdict" → export
 Evidence ─ provenance chain · Verify · anchor status · report export
@@ -34,7 +34,7 @@ Lab ─ instruments & fence · simulated/real badges · halt switch
 ```
 
 Global chrome: left rail (the six sections), top bar with the **Halt** button,
-a trust strip ("chain verified ✓ · anchored 2 d ago · eval 0.947"), ⌘K command
+a ledger indicator ("● ledger verified", red and loud if it fails; record count and anchor state in its tooltip and on Evidence), ⌘K command
 palette, light/dark theme.
 
 ## 3. Campaign cockpit (first flow)
@@ -154,17 +154,43 @@ Restored, in order:
    *Ask me first* the campaign pauses and shows the plan (mechanism, refuted-if, confidence, citation status, every
    variant). The person removes hypotheses, declines, or approves; removals are recorded with a reason and never tested.
 3. **Wording** — "autonomy" means only how much runs without approval. The ways to run are *Start research*, *I have
-   candidates* and *I'll run the plate myself*.
+   candidates* and *Manual plate run*.
 
 4. **One approval covers the plan** — an approved plan also approves its own lab submissions (sealed as `covered_by_plan`;
    the safety gate still binds; removed hypotheses are never covered). Your own candidate list still asks per submission.
 5. **Re-plan after each round** (opt-in) — the model proposes the next hypotheses from the results (refuted ideas are not
    repeated); the person approves them through the same plan gate (`plan_decision` with a `stage`). Replay reports such
    runs as not reproducible, because that step needs the model.
-6. **Split into sub-problems** — a model proposes how to split the objective (`POST /programs/{slug}/decompose`, a proposal
-   only); the person keeps the real ones; each becomes its own research run on its own gate, and the runs share the
-   program's lab-run and hypothesis limits (`share`).
+6. **Research trees** — a model proposes a recursive split (`POST /programs/{slug}/decompose`, a proposal only); the person
+   keeps the real sub-problems and edits each gate; `POST /programs/{slug}/trees` re-validates the tree against the program's
+   **Split depth** and **Sub-problems** limits (the engine's `ProblemTree` guardrails), seals the decision (`research_tree`),
+   allocates the lab-run budget down the tree by priority, and runs one campaign per leaf. `GET …/trees` rolls the leaves up
+   each time (a parent is achieved only when its required children are; abstention is undecided, not failure).
+7. **A critic agent** — a second model reads the plan before the person and raises advisory concerns (`plan_critique`); it
+   can use its own model (`PROEF_LLM_CRITIC_*`). It cannot change, remove or approve anything.
+8. **Model-designed dose ladders** — each variant may carry a validated, bounded ladder (3 to 8 doses, 0.001 to 1000 µM) shown in
+   the plan and sent to the lab; unusable designs fall back to the default. Replicates remain the lab's property.
+9. **Lab "Check driver"** — starts a driver in simulation mode and reads its handshake, recorded as an action; it never touches
+   a physical device and never marks an instrument hardware-validated.
 
-Still open: a recursive problem tree with a roll-up verdict in the workbench (flat, one level, today; the engine's
-`run_tree` does the roll-up on the CLI); the model designing protocols (doses, replicates, controls); replay of campaigns
-recorded before rounds were captured replays as one round.
+10. **Analyze handles measurements, not only plates** — a second analysis profile (`measurements`) for tables of values per
+   sample (properties that are not dose series). Per sample: n, mean, sd and a 95% interval of the mean (the repo-wide
+   `fitting.replicate_ci`: Student-t below 10 readings, a deterministic bootstrap from 10; none below 3), then the same call
+   rule as everywhere (a straddling interval abstains). No plate means no Z′, stated on the page and in the report. The profile
+   is chosen from the file's columns, or by the person. Campaign **Submit results** reads the same tables; a plain table is
+   never fed to the plate reader (which took a replicate column for well coordinates), a property verdict now uses all of a
+   sample's replicates rather than the first row, and a property reading with no interval is inconclusive, not decisive.
+
+Still open: configuring a real device's address from the workbench; the model choosing replicates and controls; replay of
+campaigns recorded before rounds were captured replays as one round.
+
+Naming (Nov 15, 2026): the home page is **Programs** (it is the list of programs against their gates, not a date) and the queue is **Decisions** (everything in it is something a person must decide). Routes `/` and `/inbox` are unchanged.
+
+Pause (Nov 15, 2026): a routine, scoped control beside the global Halt. **Halt** (top bar) is the emergency stop: global,
+always reachable, and it REFUSES submissions. **Pause** is per program or per campaign and HOLDS them: the lab gateway
+waits and releases the submission on resume, so a campaign never loses rounds to a pause; running plates finish. A
+program pause holds every campaign of that program (the campaign process knows its program), a campaign pause only that
+campaign, and Halt overrides both. Pausing and resuming are sealed in the ledger as human decisions (`pause`, `resume`, and
+`paused_hold` / `pause_released` at the gateway). API: `POST /programs/{slug}/pause`, `POST /campaigns/{id}/pause`,
+`GET /pauses`.
+

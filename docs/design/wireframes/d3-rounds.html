@@ -1,0 +1,37 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>proef: D3, rounds</title><link rel="stylesheet" href="d-theme.css">
+<style>
+.ctx{grid-template-columns:1.2fr 1.2fr 1fr}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:0;margin-bottom:14px;position:relative}
+.step{border:1px solid var(--ln);background:var(--p);padding:11px 14px;position:relative;margin-right:-1px}.step.on{border-color:var(--tx);z-index:1;box-shadow:inset 0 2px 0 var(--tx)}
+.step .k{font:10px var(--mono);color:var(--fa);text-transform:uppercase;letter-spacing:.1em}.step .t{font:500 15px var(--sans);margin:3px 0 6px}.step .m{font:11.5px var(--mono);color:var(--mu);display:flex;gap:10px;align-items:center}
+.step.q{border-style:dashed;background:transparent}.step .hu{color:var(--bl)}
+.why{display:grid;grid-template-columns:1fr}
+.tb{width:100%;border-collapse:collapse;font:12px var(--mono)}.tb th{font:10.5px var(--mono);color:var(--fa);text-transform:uppercase;letter-spacing:.09em;text-align:left;padding:8px 14px;border-bottom:1px solid var(--ln);font-weight:500}
+.tb td{padding:10px 14px;border-bottom:1px solid var(--ln);vertical-align:top}.tb tr:last-child td{border:0}.tb .nm{font:13px var(--mono)}.tb .dim{color:var(--mu)}.tb .pick td:first-child{box-shadow:inset 3px 0 0 var(--tx)}
+.score{display:flex;align-items:center;gap:8px}.score i{display:block;height:5px;background:var(--tx);opacity:.85}.score span{color:var(--mu)}
+.pill{font:10.5px var(--mono);text-transform:uppercase;letter-spacing:.08em;padding:2px 7px;border:1px solid var(--ln2);color:var(--mu)}.pill.p{background:var(--tx);color:var(--bg);border-color:var(--tx);font-weight:700}
+.pol{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--ln)}.pol>div{padding:9px 14px}.pol>div+div{border-left:1px solid var(--ln)}.pol .v{font:12.5px var(--mono);margin-top:3px}
+.replan{margin-top:14px}.replan .b{padding:12px 14px;display:grid;grid-template-columns:1fr auto;gap:14px;align-items:center;font-size:13px;color:var(--mu)}.replan b{color:var(--tx);font-weight:500}
+</style></head><body>
+<div class="gbar"><div class="logo">proef<i>.</i></div><div class="search"><span>Search or jump to</span><span>⌘K</span></div><div class="chain"><span class="led"></span><b>chain verified</b><span>· not anchored</span></div><div class="halt">Halt</div><div class="user">local-user</div></div>
+<div class="app wide"><nav class="rail"><a>today</a><a>inbox <em>3</em></a><a class="on">campaigns</a><a>analyze</a><a>evidence</a><a>lab</a></nav>
+<section class="center"><div class="crumb">campaigns / lithium metal / cmp-1794679189</div>
+<h1>Find a lithium solid electrolyte with room-temperature ionic conductivity of at least 1 mS/cm.</h1>
+<div class="ctx"><div><div class="k">Rounds</div><div class="v">2 of 3 run</div><div class="s">limit set by the program</div></div><div><div class="k">Selection</div><div class="v">1 per family, 3 per round</div><div class="s">ranked by model confidence</div></div><div><div class="k">Runs</div><div class="v">6 of 12</div><div class="s">6 left</div></div></div>
+<div class="tabs"><span>overview</span><span class="on">rounds</span><span>record</span></div>
+<div class="steps">
+<div class="step"><div class="k">Plan · 10:44</div><div class="t">Approved</div><div class="m hu">local-user · 8 of 8</div></div>
+<div class="step"><div class="k">Round 1 · 10:46</div><div class="t">3 runs</div><div class="m"><span data-mk="refuted">1</span><span data-mk="abstained">2</span></div></div>
+<div class="step on"><div class="k">Round 2 · 10:48</div><div class="t">3 runs</div><div class="m"><span data-mk="validated">1</span><span data-mk="abstained">2</span></div></div>
+<div class="step q"><div class="k">Round 3 · queued</div><div class="t">2 hypotheses left</div><div class="m"><span data-mk="open">waiting for a re-plan decision</span></div></div></div>
+<div class="panel"><div class="h"><span>Round 2: why these three</span><span>seed 1 · policy: portfolio score</span></div>
+<div class="pol"><div><div class="k">Picked</div><div class="v">3 of 5 remaining</div></div><div><div class="k">Cap</div><div class="v">1 per family</div></div><div><div class="k">Score</div><div class="v">confidence + prior</div></div><div><div class="k">Budget after</div><div class="v">6 of 12 runs</div></div></div>
+<table class="tb"><tr><th>Candidate</th><th>Family</th><th>Score</th><th>Decision</th><th>Reason</th></tr>
+<tr class="pick"><td class="nm">LPSCl-ClRich</td><td class="dim">argyrodite</td><td><div class="score"><i style="width:58px"></i><span>0.58</span></div></td><td><span class="pill p">picked</span></td><td class="dim">Highest score in its family. First argyrodite pick this round.</td></tr>
+<tr class="pick"><td class="nm">Li3N-textured-dense</td><td class="dim">nitride</td><td><div class="score"><i style="width:36px"></i><span>0.36</span></div></td><td><span class="pill p">picked</span></td><td class="dim">Only remaining nitride after round 1.</td></tr>
+<tr class="pick"><td class="nm">LLZO-Nb05-dense</td><td class="dim">garnet</td><td><div class="score"><i style="width:72px"></i><span>0.72</span></div></td><td><span class="pill p">picked</span></td><td class="dim">Highest garnet score. Same claim as round 1 with a different dopant.</td></tr>
+<tr><td class="nm">LPSClBr-mixed</td><td class="dim">argyrodite</td><td><div class="score"><i style="width:48px;opacity:.4"></i><span>0.48</span></div></td><td><span class="pill">not chosen</span></td><td class="dim">Family already has a pick this round (LPSCl-ClRich).</td></tr>
+<tr><td class="nm">LLZO-Ta06-LiRich</td><td class="dim">garnet</td><td><div class="score"><i style="width:70px;opacity:.4"></i><span>0.70</span></div></td><td><span class="pill">not chosen</span></td><td class="dim">Family already has a pick this round (LLZO-Nb05-dense).</td></tr></table></div>
+<div class="panel replan"><div class="h"><span>Re-plan after round 2</span><span>awaiting approval</span></div><div class="b"><span>The model proposes <b>1 new hypothesis</b> from the results: a Cl-rich analog of the validated argyrodite. Nothing is added until it is approved.</span><span><button class="btn go">review plan</button></span></div></div>
+</section></div>
+<script src="plot.js"></script><script src="d-common.js"></script></body></html>

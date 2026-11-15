@@ -1,0 +1,54 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>proef: Option E, blueprint</title>
+<style>
+:root{--bg:#eef2f8;--ink:#14224f;--blue:#1f3a8a;--mu:#4a5a8a;--fa:#8a97bb;--ln:#1f3a8a;--hl:rgba(31,58,138,.2);--v:#2b4fc4;--r:#c8321e;--a:#b8860b;
+--sans:"Helvetica Neue",Helvetica,Arial,sans-serif;--mono:ui-monospace,"SF Mono",Menlo,monospace}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);background-image:radial-gradient(rgba(31,58,138,.16) 1px,transparent 1px);background-size:20px 20px;color:var(--ink);font:13px/1.5 var(--sans);-webkit-font-smoothing:antialiased;padding:22px}
+.sheet{border:2px solid var(--ln);background:rgba(238,242,248,.94);position:relative;padding:0 0 0 0}
+.zonesT{display:grid;grid-template-columns:repeat(6,1fr);border-bottom:1px solid var(--ln);font:10px var(--mono);color:var(--mu)}.zonesT span{text-align:center;padding:2px;border-right:1px solid var(--hl)}
+.nav{display:flex;align-items:center;gap:26px;padding:10px 22px;border-bottom:1px solid var(--ln);font:12px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--mu)}
+.logo{font:700 20px var(--sans);letter-spacing:-.03em;color:var(--ink);text-transform:none;margin-right:12px}.logo i{color:#ff8a1f;font-style:normal}.nav .on{color:var(--ink);font-weight:700;border-bottom:2px solid var(--ink)}
+.body{display:grid;grid-template-columns:1fr 300px}
+.main{padding:22px 26px;border-right:1px solid var(--ln)}
+.tag{font:10.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--mu)}
+h1{font:600 24px/1.25 var(--sans);letter-spacing:-.015em;margin:6px 0 18px;max-width:30em}
+.dim{position:relative;border:1px solid var(--ln);background:#fff;padding:34px 18px 8px 18px;margin-bottom:6px}
+.dim .ttl{position:absolute;top:-1px;left:-1px;background:var(--ln);color:#fff;font:10.5px var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:4px 10px}
+.cap{font:11px var(--mono);color:var(--mu);margin:0 0 22px}
+.hold{border:2px solid var(--ln);padding:14px 16px;position:relative;margin-bottom:22px;background:#fff}
+.hold .st{position:absolute;top:-11px;left:14px;background:var(--bg);padding:0 8px;font:700 11px var(--mono);letter-spacing:.14em;color:var(--ink)}
+.hold li{list-style:none;display:grid;grid-template-columns:210px 1fr auto;gap:12px;padding:9px 0;border-bottom:1px dashed var(--hl);align-items:center}.hold li:last-child{border:0}
+.hold ul{margin:4px 0 0;padding:0}.hold .n{font:12.5px var(--mono)}.hold .w{color:var(--mu);font-size:12.5px}
+.btn{font:11px var(--mono);text-transform:uppercase;letter-spacing:.05em;padding:5px 9px;border:1px solid var(--ln);background:none;color:var(--ink);margin-left:5px}.btn.go{background:var(--ln);color:#fff}
+table{border-collapse:collapse;width:100%;font:12px var(--mono)}td,th{border:1px solid var(--hl);padding:5px 9px;text-align:left}th{background:rgba(31,58,138,.06);font-weight:500;color:var(--mu);text-transform:uppercase;letter-spacing:.06em;font-size:10.5px}
+.tb{display:flex;flex-direction:column}
+.tb .cell{border-bottom:1px solid var(--ln);padding:8px 14px}.tb .k{font:9.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--fa)}.tb .v{font:12.5px var(--mono);margin-top:1px;color:var(--ink)}.tb .big{font:600 15px var(--sans)}
+.tb .sig{display:grid;grid-template-columns:1fr 1fr}.tb .sig .cell+.cell{border-left:1px solid var(--ln)}
+.rev{font:11px var(--mono)}.rev div{display:grid;grid-template-columns:34px 1fr 54px;border-bottom:1px solid var(--hl);padding:3px 0}
+</style></head><body><div class="sheet">
+<div class="zonesT"><span>A</span><span>B</span><span>C</span><span>D</span><span>E</span><span>F</span></div>
+<div class="nav"><span class="logo">proef<i>.</i></span><span>Today</span><span>Inbox 3</span><span class="on">Campaigns</span><span>Analyze</span><span>Evidence</span><span>Lab</span></div>
+<div class="body"><div class="main">
+<div class="tag">Campaign · Lithium metal · Drawing cmp-1794679189</div>
+<h1>Find a lithium solid electrolyte with room-temperature ionic conductivity of at least 1 mS/cm that stays stable against lithium metal.</h1>
+<div class="dim"><span class="ttl">Fig. 1 · Estimate and 95% interval against gate</span><div id="plot"></div></div>
+<p class="cap">Gate fixed before any data: conductivity ≥ 1 mS/cm. Shaded region meets the gate. Three replicates each, log scale. ● validated  ■ refuted  ◇ abstained (interval crosses the gate).</p>
+<div class="hold"><span class="st">HOLD POINT · 3 AWAITING DECISION</span><ul>
+<li><span class="n">Li3N-textured-dense</span><span class="w">4.43 [0.31, 8.55]. Too wide to say.</span><span><button class="btn go">Follow up</button><button class="btn">Accept</button><button class="btn">Drop</button></span></li>
+<li><span class="n">Li3N-textured-fast</span><span class="w">1.60 [0.62, 2.58]</span><span><button class="btn go">Follow up</button><button class="btn">Accept</button><button class="btn">Drop</button></span></li>
+<li><span class="n">LLZO-Nb05-dense</span><span class="w">0.57 [0.12, 1.02]</span><span><button class="btn go">Follow up</button><button class="btn">Accept</button><button class="btn">Drop</button></span></li></ul></div>
+<table><tr><th>Round</th><th>Candidates</th><th>Selection</th><th>Result</th></tr>
+<tr><td>1</td><td>LLZO-Ta06-dense, LPSCl-disordered, Li3N-textured-fast</td><td>one per family</td><td>1 refuted, 2 abstained</td></tr>
+<tr><td>2</td><td>LLZO-Nb05-dense, LPSCl-ClRich, Li3N-textured-dense</td><td>one per family</td><td>1 validated, 2 abstained</td></tr></table>
+</div>
+<aside class="tb">
+<div class="cell"><div class="k">Drawing no.</div><div class="v big">cmp-1794679189</div></div>
+<div class="cell"><div class="k">Title</div><div class="v">Solid electrolyte, conductivity ≥ 1 mS/cm</div></div>
+<div class="cell"><div class="k">Gate · pre-registered</div><div class="v">conductivity ≥ 1 mS/cm</div></div>
+<div class="sig"><div class="cell"><div class="k">Proposed</div><div class="v">gpt-6-luna</div></div><div class="cell"><div class="k">Reviewed</div><div class="v">critic</div></div></div>
+<div class="sig"><div class="cell"><div class="k">Approved</div><div class="v">local-user</div></div><div class="cell"><div class="k">Date</div><div class="v">14 Nov 2026</div></div></div>
+<div class="sig"><div class="cell"><div class="k">Sheet</div><div class="v">1 / 1</div></div><div class="cell"><div class="k">Rev</div><div class="v">2</div></div></div>
+<div class="cell"><div class="k">Lab · budget</div><div class="v">simulated · 6 of 12 runs</div></div>
+<div class="cell"><div class="k">Revisions</div><div class="rev"><div><b>R2</b><span>round 2 judged</span><span>10:48</span></div><div><b>R1</b><span>round 1 judged</span><span>10:46</span></div><div><b>R0</b><span>plan approved</span><span>10:44</span></div></div></div>
+<div class="cell" style="border-bottom:0"><div class="k">Ledger</div><div class="v">57 records · chain verified</div></div>
+</aside></div></div>
+<script src="plot.js"></script><script>gatePlot(document.getElementById('plot'),{width:700,left:176,labels:'inline',rowH:44,top:4,ink:'#14224f',line:'rgba(31,58,138,.15)',goodFill:'rgba(43,79,196,.08)',mute:'#4a5a8a',font:'ui-monospace,Menlo,monospace'})</script></body></html>

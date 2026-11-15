@@ -21,3 +21,6 @@ proef-*.whl
 # local UI screenshots
 web/.shots/
 .sample*/
+
+# design exploration screenshots
+.design-shots/

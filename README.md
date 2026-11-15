@@ -128,7 +128,7 @@ proef anchor [--publish-cmd CMD]          # Merkle-root the store; PUBLISH the r
 proef anchor --verify                     # does the store still match the anchored root?
 proef halt --engage --reason "spill"      # operator stop-condition outside the agent's reach
 proef halt --clear                        # only a human clears it
-proef sop list                            # agent-proposed recurring procedures awaiting sign-off
+proef sop list                            # agent-proposed recurring procedures pending sign-off
 proef sop approve <sop-id> --by "lab lead"  # sign-off turns a procedure into standing policy
 proef why char-ridge train.csv CCCCCO     # attribution panel: per-prediction drivers,
                                        # caveats + applicability domain
@@ -354,11 +354,11 @@ instrument the campaign refuses rather than falling back to simulation
 
 `make api` serves the web workbench (React + FastAPI), all local, no accounts, no cloud:
 
-- **Today:** what is awaiting your decision, and each program's progress against its pre-registered gate.
+- **Programs:** each program's progress against its pre-registered gate, with what is pending decision on top. **Decisions** is the full queue of plan and submission approvals and abstention reviews.
 - **Decisions:** approve or decline gated lab submissions, and review abstentions (follow up, accept as inconclusive, or drop). Every decision is sealed in the ledger under your name.
 - **Campaign cockpit:** every estimate drawn with its 95% interval against the gate, why each batch was chosen (and what was refused), who did what (agents and people, with full traces), and an independent reviewer. A candidate whose interval straddles the gate is shown as **abstained**, never as a coin-flip verdict.
 - **Evidence behind a verdict:** the recorded dose–response curves re-read from the run files, the plate's QC, and how the number was derived.
-- **Analyze:** drop a plate-reader export and get curves with IC50 and its interval, plate QC, and honest abstentions. It warns when a call rests on an inferred top plateau. Record your decision beside the computed call, and attach the analysis to a campaign as supporting evidence.
+- **Analyze:** two kinds of file. A **dose–response plate** (a plate-reader export) gets curves with IC50 and its interval, plate QC, and honest abstentions, and warns when a call rests on an inferred top plateau. A **table of measurements** (one row per reading: sample, value, repeated for replicates; conductivity, solubility, yield, a pH reading) gets the mean and a 95% interval per sample against your gate, by the same rule: an interval that straddles the gate abstains, and fewer than 3 readings earn no call. A table has no plate, so there is no Z′ and the page says so. The kind is detected from the columns (or you pick it). Record your decision beside the computed call, and attach the analysis to a campaign as supporting evidence. **Submit results** on a hand-run campaign takes either kind.
 - **Run it yourself:** start a hand-run campaign, whose gate is registered on each candidate before any data. Run the plate, then **Submit results**: the CSV is judged by those pre-registered criteria, and the submission is sealed before anything is judged.
 - **Evidence and Lab:** verify the whole ledger, anchor it outside this machine, and export a campaign's record. Instruments are labelled simulated, real, or hardware-validated, and the page shows what agents may do alone, what needs a person, the SOP sign-offs and the stop switch.
 - **Try it:** `proef demo` runs the abstain-and-refute cascade; `make sample` seeds a sample workspace.
@@ -377,8 +377,12 @@ instrument the campaign refuses rather than falling back to simulation
    Promising results are confirmed with an orthogonal assay.
 5. **You decide what is left.** Follow up on an abstention, accept it, or drop it. "What next" suggests the next step,
    and, with **Re-plan after each round** on, the model proposes the next hypotheses from the results. You approve those
-   the same way. To start from several questions instead of one, **Split into sub-problems** lets the model propose a split and
-   you keep the real ones: each runs on its own gate and they share the program's limits.
+   the same way. To start from several questions instead of one, **Split into sub-problems** lets the model propose a *tree*
+   (sub-problems can split again) and you keep the real ones and set each gate. The program's **Split depth** and
+   **Sub-problems** limits cap the tree, the lab-run budget flows down it by priority, each leaf runs as its own campaign, and
+   the results roll up: a parent is achieved only when its required children are. A second agent, the **critic**, reads the plan
+   before you do and raises concerns (advisory: it can't change or approve anything). The model also designs each variant's dose
+   ladder, validated and bounded, and you see it in the plan.
 
 | Start research: the plan you review before anything runs | The finished campaign: what the model wrote, what you removed, what the rule decided |
 |---|---|
@@ -390,7 +394,7 @@ outcomes say nothing about real EGFR inhibitors; the example shows the flow and 
 There are three ways to run, chosen per campaign in the **New campaign** dialog. The experiment loop is the same code
 in all of them; they differ in who proposes the hypotheses and who runs the plate.
 
-| | **Start research** | **I have candidates** | **I run the plate myself** |
+| | **Start research** | **Candidate list** | **Manual plate run** |
 |---|---|---|---|
 | Hypotheses come from | a language model | your list | your list |
 | Plan review | yes, in "Ask me first" mode | not needed: the list is your plan | not needed |
@@ -447,7 +451,7 @@ step, and which layer is responsible at each point:
 | 3. Portfolio filter | **Portfolio selector** | Scores + ranks, applies diversity cap | Records every accept/reject with reason |
 | 4. Readiness review | **ExperimentDefinition** | Checks: is the readout capable? denominator present? synthesis feasible? | **Blocks** if the result would be uninterpretable |
 | 5. Safety gate | **SafetyEngine** | Checks reagents, BSL, step count, **toxicophores in sample structures**, dual-use text | **Refuses** with machine-readable reason + rule-set version |
-| 5b. Governance gate | **HaltSwitch + AuthorizationMatrix + SOP registry** — code the agent cannot reach | Checks the operator halt, the autonomous/human/never column, and SOP sign-off for recurring work | Refuses outside the agent's reach; every decision recorded as provenance |
+| 5b. Governance gate | **HaltSwitch + PauseRegistry + AuthorizationMatrix + SOP registry** — code the agent cannot reach | Checks the operator halt, any program or campaign pause (which holds submissions and releases them on resume), the autonomous/human/never column, and SOP sign-off for recurring work | Refuses outside the agent's reach; every decision recorded as provenance |
 | 6. Lab execution | **LabAdapter** (simulator, Opentrons, PlateReaderShare) | Runs the assay, produces raw evidence | Records run ID, parameters, and raw output |
 | 7. Device event | **DeviceMonitor** | Notices the export appeared | Triggers agent analysis automatically |
 | 8. Analysis | **Analysis agent** + `labread` | Fits IC50s, checks QC, flags artifacts | Records measurements + QC flags as provenance |

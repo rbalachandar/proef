@@ -45,7 +45,7 @@ const click = async (loc, after = 700) => { await move(loc); await wait(180); aw
 await p.goto(BASE + '/?theme=light'); await wait(1500)
 await p.mouse.move(640, 400)
 
-await caption('Today — each program is judged against a gate registered before any data'); await wait(2600)
+await caption('Programs: each program is judged against a gate registered before any data'); await wait(2600)
 
 await caption('A campaign: every estimate drawn with its 95% interval against the gate')
 await click(p.getByRole('link', { name: 'Campaigns' }).first(), 900)
@@ -59,10 +59,10 @@ await click(p.getByRole('tab', { name: 'Evidence' }), 3200)
 await p.keyboard.press('Escape'); await wait(600)
 
 await caption('Now run it yourself: the gate is registered before the plate is read')
-await click(p.getByRole('link', { name: 'Today' }).first(), 1000)
+await click(p.getByRole('link', { name: 'Programs' }).first(), 1000)
 await click(p.getByRole('link', { name: /EGFR hit finding/ }).first(), 1200)
-await click(p.getByRole('button', { name: /I have candidates/ }).first(), 700)
-await click(p.getByRole('radio', { name: /run the plate myself/ }), 400)
+await click(p.getByRole('button', { name: /Candidate list/ }).first(), 700)
+await click(p.getByRole('radio', { name: /Manual plate run/ }), 400)
 await p.getByPlaceholder(/EG-02/).fill('C1\nBORD'); await wait(900)
 await click(p.getByRole('button', { name: 'Create campaign' }), 2200)
 

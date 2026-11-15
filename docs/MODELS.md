@@ -4,7 +4,7 @@ A model is optional. Proef runs an experiment loop (design, synthesise, run, rea
 gate, confirm with an orthogonal assay) the same way however a campaign starts. What differs is **who proposes the
 hypotheses**. The **New campaign** dialog offers three ways, chosen per campaign:
 
-| | **Start research** | **I have candidates** | **I run the plate myself** |
+| | **Start research** | **Candidate list** | **Manual plate run** |
 |---|---|---|---|
 | Hypotheses come from | a language model, from the problem statement | your list | your list |
 | Plan review | yes, in "Ask me first" mode | not needed | not needed |
@@ -28,6 +28,31 @@ approve what is left, with an optional note. Removed hypotheses are never tested
 before testing" with the reason, and your decision is sealed in the ledger under your name. Removing everything counts
 as declining. A declined plan submits nothing to the lab and the campaign reads "plan declined".
 
+Two more things appear in the plan: the **dose ladder** the model designed for each variant (3 to 8 concentrations,
+0.001 to 1000 µM, cleaned and de-duplicated; anything unusable falls back to the campaign default, and replicates stay a
+property of the lab), and the **critic's notes**.
+
+## The critic: a second agent
+
+Before you see the plan, a second model reads it and raises concerns (near-duplicate hypotheses, a claim the gate's metric
+cannot test, a "refuted if" nothing could observe, an unearned confidence). It is **advisory by construction**: it cannot
+remove a hypothesis, change a gate or approve anything, and if it fails the plan is shown without notes. Its notes and the
+model that wrote them are recorded (`plan_critique`). It uses the main model unless you give it its own, which is better,
+because two copies of one model share blind spots:
+
+```sh
+export PROEF_LLM_CRITIC_MODEL=another-model     # also _API, _BASE_URL, _TOKEN, _PRESET, _SESSION_HEADER; each falls back to the main setting
+```
+
+## Research trees
+
+**Split into sub-problems** asks the model to split the objective, recursively. The program's **Split depth** (1 to 3) and
+**Sub-problems** (2 to 16) limits cap the tree and the server re-checks them whatever the browser sends; at most 4 children per
+node. You keep the real ones and edit each gate before starting. Starting seals your decision (`research_tree`), shares the
+program's lab runs down the tree by priority (a leaf never spends more than its slice), and runs one campaign per leaf. The
+program page shows the tree and rolls it up each time it is read: a parent is achieved only when its required children are,
+and abstentions count as undecided, never as failure.
+
 ## Replay
 
 `proef campaign reproduce <branch>` rebuilds a campaign from its ledger and compares verdicts one by one. It reuses the
@@ -39,16 +64,17 @@ rounds was captured replay as a single round.
 ## Limits
 
 A program sets hard caps that every campaign inherits: rounds, lab runs, hypotheses, families, variants per family, and
-hypotheses taken to the lab per round. A campaign may ask for less, never more; exhausting a cap is recorded, not
+hypotheses taken to the lab per round, how deep a split may go and how many sub-problems a tree may have. A campaign may ask for less, never more; exhausting a cap is recorded, not
 silent. Programs created before limits existed get the defaults (3 rounds, 20 lab runs, 12 hypotheses, 3 × 3, 3 per round).
 
 ## What the model does in Start research
 
-Exactly two jobs, and it **never decides a verdict**.
+Three jobs, and it **never decides a verdict**.
 
 | Job | When it runs | Providers | What is recorded |
 |---|---|---|---|
 | **Propose hypotheses** | a campaign with `"hypothesis_source": "agent"` | any | the model on every hypothesis (`predicted_by`), plus the prompt and response, sealed as a `tool_invocation` |
+| **Critique the plan** | before you review it (the critic) | any | `plan_critique`: the critic model and its notes (advisory) |
 | **Review the verdicts** | automatically, when a model took part in the campaign | any | `review_report_llm`: model, prompt hash, advisory flags (flags only, schema-enforced) |
 
 Other features that use a model have their own transport and speak the **Anthropic Messages API only** today:
@@ -100,7 +126,7 @@ and the workbench returns the same message as a `409` instead of starting a camp
 
 ## Run each mode
 
-**I have candidates**: [`examples/campaign.json`](../examples/campaign.json) lists its candidates; no key, no network model:
+**Candidate list**: [`examples/campaign.json`](../examples/campaign.json) lists its candidates; no key, no network model:
 
 ```sh
 proef campaign auto examples/campaign.json --yes

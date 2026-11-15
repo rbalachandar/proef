@@ -1,11 +1,12 @@
 import { Link } from 'react-router-dom'
 import { Anchor, Check, Copy, Download, FileText, ShieldCheck, ShieldX, Stamp } from 'lucide-react'
-import { useAnchor, useCampaigns, useCreateAnchor, useEvals, useLedger, useVerifyLedger } from '../../api/hooks'
+import { useSystemStatus, useAnchor, useCampaigns, useCreateAnchor, useEvals, useLedger, useVerifyLedger } from '../../api/hooks'
 import { useToast } from '../../app/toast'
 import { Button } from '../../ui/Button'
 import { Card, CardHeader, EmptyState, Skeleton } from '../../ui/Card'
 import { Tag } from '../../ui/Chip'
 import { Tip } from '../../ui/Tooltip'
+import { PageHeader } from '../../ui/PageHeader'
 import { ago } from '../campaign/format'
 
 function LedgerCard() {
@@ -18,7 +19,7 @@ function LedgerCard() {
     <Card>
       <CardHeader title="Ledger" hint="every record, re-hashed on demand"
         right={<Button size="sm" variant="primary" disabled={verify.isPending}
-          onClick={() => verify.mutate(undefined, { onSuccess: (d) => toast({ tone: d.chain.verified ? 'ok' : 'bad', text: d.chain.verified ? `Verified ${d.chain.records.toLocaleString()} records in ${d.verified_in_ms} ms — nothing was altered.` : 'Integrity check FAILED — see the branches below.' }) })}>
+          onClick={() => verify.mutate(undefined, { onSuccess: (d) => toast({ tone: d.chain.verified ? 'ok' : 'bad', text: d.chain.verified ? `Verified ${d.chain.records.toLocaleString()} records in ${d.verified_in_ms} ms: nothing was altered.` : 'Integrity check FAILED: see the branches below.' }) })}>
           <ShieldCheck size={14} /> {verify.isPending ? 'Verifying…' : 'Verify now'}</Button>} />
       <div className="flex items-center gap-3 px-4 py-4">
         {ok ? <ShieldCheck size={26} className="text-ok" /> : <ShieldX size={26} className="text-bad" />}
@@ -54,11 +55,11 @@ function AnchorCard() {
   const create = useCreateAnchor()
   const toast = useToast()
   const latest = data?.anchors[0]
-  const copy = (t: string) => navigator.clipboard?.writeText(t).then(() => toast({ tone: 'ok', text: 'Root copied. Publish it somewhere you do not control.' }))
+  const copy = (t: string) => navigator.clipboard?.writeText(t).then(() => toast({ tone: 'ok', text: 'Root copied. Publish it outside this system’s control.' }))
   return (
     <Card>
       <CardHeader title="External anchor" hint="a fingerprint of the whole ledger"
-        right={<Button size="sm" variant="secondary" disabled={create.isPending} onClick={() => create.mutate(undefined, { onSuccess: () => toast({ tone: 'ok', text: 'Anchor created. Now publish the root — an unpublished anchor protects nothing.' }) })}><Stamp size={14} /> Anchor now</Button>} />
+        right={<Button size="sm" variant="secondary" disabled={create.isPending} onClick={() => create.mutate(undefined, { onSuccess: () => toast({ tone: 'ok', text: 'Anchor created. Now publish the root: an unpublished anchor protects nothing.' }) })}><Stamp size={14} /> Anchor now</Button>} />
       <div className="px-4 py-4">
         {latest ? (
           <>
@@ -69,7 +70,7 @@ function AnchorCard() {
                 : <Tag tone="bad">{data.check.content_tampered ? 'content altered' : 'does not match'}</Tag>)}
             </div>
             <div className="mt-2 flex items-center gap-2">
-              <code className="num min-w-0 flex-1 truncate rounded bg-sunken px-2 py-1 text-xs" title={latest.merkle_root}>{latest.merkle_root}</code>
+              <code className="num min-w-0 flex-1 truncate bg-sunken px-2 py-1 text-xs" title={latest.merkle_root}>{latest.merkle_root}</code>
               <Tip label="Copy the Merkle root"><Button size="icon" variant="ghost" aria-label="Copy root" onClick={() => copy(latest.merkle_root)}><Copy size={14} /></Button></Tip>
             </div>
           </>
@@ -114,7 +115,7 @@ function MeasuredCard() {
           <span className="text-sm text-muted">mean over {data.n_tasks} tasks · pass bar {data.pass_bar} · {data.all_pass ? 'all pass' : 'some failing'}</span></div>
         {!!deductions.length && (
           <div className="mt-3">
-            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted">Honest deductions — passing, but below 1.0</div>
+            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wider text-muted">Deductions: passing, but below 1.0</div>
             <ul className="space-y-1">{deductions.map((t) => (
               <li key={t.task} className="flex items-baseline gap-2 text-[13px]"><span className="num w-44 shrink-0 font-medium">{t.task}</span><span className="num w-12 shrink-0 text-muted">{t.score.toFixed(3)}</span><span className="min-w-0 flex-1 truncate text-faint" title={t.notes}>{t.notes}</span></li>))}</ul>
             <p className="mt-2 text-xs text-faint">An abstention is graded down rather than counted as a pass, so these are the harness refusing to overcredit its own agents.</p>
@@ -126,10 +127,16 @@ function MeasuredCard() {
 }
 
 export default function EvidencePage() {
+  const { data: st } = useSystemStatus()
   return (
-    <div className="mx-auto max-w-6xl p-6">
-      <h1 className="mb-1 text-xl font-semibold tracking-tight">Evidence</h1>
-      <p className="mb-5 max-w-3xl text-sm text-muted">Can you defend a result? Everything an agent or a person did is in one tamper-evident ledger. Verify it, anchor it outside this machine, and export any campaign's record.</p>
+    <div className="mx-auto max-w-[1400px] p-6">
+      <PageHeader title="Evidence"
+        cells={[
+          { k: 'Records', v: st ? st.chain.records.toLocaleString() : '', s: 'across all branches' },
+          { k: 'Chain', v: st ? (st.chain.verified ? 'verified' : 'integrity failed') : '', s: 're-hashed on demand', tone: st && !st.chain.verified ? 'bad' : undefined },
+          { k: 'Anchor', v: st ? (st.anchor ? 'anchored' : 'none') : '', s: st?.anchor ? (st.anchor.published === false ? 'not published' : 'published') : 'publish a root to make it checkable', tone: st && !st.anchor ? 'warn' : undefined },
+          { k: 'Eval', v: st?.eval ? st.eval.mean.toFixed(3) : 'n/a', s: st?.eval ? `${st.eval.tasks} tasks` : undefined },
+        ]} />
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="space-y-4"><LedgerCard /><MeasuredCard /></div>
         <div className="space-y-4"><AnchorCard /><ExportsCard /></div>

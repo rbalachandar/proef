@@ -32,11 +32,27 @@ export function PlanReview({ item, compact }: { item: Item; compact?: boolean })
         <div className="min-w-0 flex-1">
           <div className="text-sm font-medium">Review the research plan</div>
           <div className="text-xs text-muted">
-            A model proposed {all.length} hypotheses in {item.plan.families.length} famil{item.plan.families.length === 1 ? 'y' : 'ies'}. Nothing reaches the lab until you decide; verdicts will still come from the fixed rule, not from the model.
+            A model proposed {all.length} hypotheses in {item.plan.families.length} famil{item.plan.families.length === 1 ? 'y' : 'ies'}. Nothing reaches the lab until a decision is made. Verdicts come from the fixed rule, not the model.
             <span className="text-faint"> {ago(item.ts)}{!compact && item.campaign_id && <> · <Link className="text-accent hover:underline" to={`/campaigns/${item.campaign_id}`}>{item.campaign_title}</Link></>}</span>
           </div>
         </div>
       </div>
+
+      {item.plan.critique && (
+        <div className="mt-3 rounded-lg border border-line bg-sunken px-3 py-2 text-[13px]">
+          <div className="mb-1 text-xs font-medium text-muted" title="A second model reviews the plan first. Advisory only: it cannot remove, change or approve anything.">
+            Critic’s notes · <span className="num">{item.plan.critique.model}</span>
+          </div>
+          {item.plan.critique.notes.length === 0
+            ? <p className="text-muted">The critic found nothing to raise.</p>
+            : <ul className="space-y-1">{item.plan.critique.notes.map((n, i) => (
+                <li key={i} className="flex gap-2">
+                  <span className={n.severity === 'concern' ? 'text-warn' : 'text-faint'} aria-label={n.severity}>{n.severity === 'concern' ? '⚠' : '·'}</span>
+                  <span><b className="num text-xs">{n.target === 'plan' ? 'Plan' : n.target}</b> · {n.text}</span>
+                </li>))}
+              </ul>}
+        </div>
+      )}
 
       <div className="mt-3 space-y-3">
         {item.plan.families.map((f) => (
@@ -66,6 +82,7 @@ export function PlanReview({ item, compact }: { item: Item; compact?: boolean })
                         <b className="num">{v.candidate}</b> <span className="text-muted">{v.statement}</span>
                         {v.predicted && <span className="mt-0.5 block text-[11px] text-faint"><span className="font-medium">Predicts</span> · {v.predicted}</span>}
                         {v.rationale && <span className="block text-[11px] text-faint"><span className="font-medium">Why</span> · {v.rationale}</span>}
+                        {v.protocol && <span className="block text-[11px] text-faint"><span className="font-medium">Designed test</span> · {v.protocol}</span>}
                       </span>
                     </label>
                   </li>
@@ -77,7 +94,7 @@ export function PlanReview({ item, compact }: { item: Item; compact?: boolean })
       </div>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
-        <Input className="min-w-0 flex-1" placeholder="Note for the record (optional), e.g. why you removed something" value={note} onChange={(e) => setNote(e.target.value)} />
+        <Input className="min-w-0 flex-1" placeholder="Note for the record (optional), e.g. reason for a removal" value={note} onChange={(e) => setNote(e.target.value)} />
         <Button size="sm" variant="secondary" disabled={decide.isPending} onClick={() => go(false)}><X size={14} /> Decline plan</Button>
         <Button size="sm" variant="primary" disabled={decide.isPending || kept === 0} onClick={() => go(true)}>
           <Check size={14} /> Approve {removed.size ? `${kept} of ${all.length}` : `all ${all.length}`}

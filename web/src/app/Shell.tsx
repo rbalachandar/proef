@@ -1,45 +1,67 @@
-import { NavLink, Outlet } from 'react-router-dom'
-import { Moon, ShieldAlert, ShieldCheck, Sun, ShieldX } from 'lucide-react'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Moon, ShieldAlert, Sun } from 'lucide-react'
 import { useSystemStatus } from '../api/hooks'
-import { Tag } from '../ui/Chip'
 import { Tip } from '../ui/Tooltip'
 import { cn } from '../ui/cn'
-import { Button } from '../ui/Button'
 import { CommandPalette } from './CommandPalette'
 import { HaltControl } from './HaltDialog'
 import { NAV } from './nav'
 import { useTheme } from './theme'
 
-const ago = (s: number | null | undefined) => {
-  if (s == null) return null
-  const m = Math.floor(s / 60)
-  if (m < 1) return 'just now'
-  if (m < 60) return `${m} min ago`
-  const h = Math.floor(m / 60)
-  return h < 48 ? `${h} h ago` : `${Math.floor(h / 24)} d ago`
+/** Global, true on every page: the ledger's state, the stop switch, search. Anything about one campaign or program
+ *  lives in that page's own context strip, never here. */
+function TopBar() {
+  const { data } = useSystemStatus()
+  const { theme, toggle } = useTheme()
+  const chain = data?.chain, anchor = data?.anchor
+  return (
+    <header className="flex h-[42px] shrink-0 items-stretch border-b border-line bg-surface">
+      <div className="flex w-14 shrink-0 items-center gap-2 border-r border-line px-3.5 lg:w-[168px]">
+        <img src="/proef-mark-light.png" alt="" width={24} height={24} className="dark:hidden" />
+        <img src="/proef-mark.png" alt="" width={24} height={24} className="hidden dark:block" />
+        <span className="hidden text-[19px] font-bold tracking-[-.03em] lg:inline">proef<span aria-hidden className="text-[#ff8a1f]">.</span></span>
+      </div>
+      <div className="flex items-center pl-[18px]"><CommandPalette dark={theme === 'dark'} onToggleTheme={toggle} /></div>
+      <div className="ml-auto flex items-stretch font-mono text-[11.5px] text-muted">
+        {chain && (
+          <Tip label={chain.verified
+            ? `Every one of ${chain.records.toLocaleString()} records was re-hashed and linked to the one before just now. ${anchor ? 'An anchor exists.' : 'No anchor yet: see Evidence.'}`
+            : `${chain.problems.length} record(s) fail verification: the ledger was altered.`}>
+            <span className={cn('flex items-center gap-2 border-l border-line px-[18px]', !chain.verified && 'text-bad')}>
+              <span aria-hidden className={cn('h-[7px] w-[7px] rounded-full', chain.verified ? 'bg-accent shadow-[0_0_0_3px_var(--accent-soft)]' : 'bg-bad')} />
+              <b className={cn('font-medium', chain.verified && 'text-ink')}>{chain.verified ? 'ledger verified' : 'ledger integrity failed'}</b>
+            </span>
+          </Tip>
+        )}
+        {anchor && anchor.published === false && (
+          <Tip label="An anchor was created but never published. It protects nothing until the root is published outside this system’s control. See Evidence.">
+            <span className="flex items-center border-l border-line px-[18px] text-warn">anchor unpublished</span>
+          </Tip>
+        )}
+        <HaltControl />
+        <button onClick={toggle} aria-label="Toggle theme" className="flex items-center border-l border-line px-4 hover:bg-sunken hover:text-ink">
+          {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
+        </button>
+      </div>
+    </header>
+  )
 }
 
 function Rail() {
   const { data } = useSystemStatus()
+  const { pathname } = useLocation()
   return (
-    <aside className="flex w-14 shrink-0 flex-col border-r border-line bg-surface lg:w-52">
-      <div className="flex h-12 items-center gap-2.5 border-b border-line px-3.5">
-        <img src="/proef-mark-light.png" alt="" width={30} height={30} className="dark:hidden" />
-        <img src="/proef-mark.png" alt="" width={30} height={30} className="hidden dark:block" />
-        <span className="hidden text-[17px] font-semibold tracking-tight lg:inline">proef<span aria-hidden className="font-bold text-[#ff8a1f]">.</span></span>
-      </div>
-      <nav className="flex flex-col gap-0.5 p-2" aria-label="Sections">
+    <aside className="w-14 shrink-0 border-r border-line-strong bg-[var(--rail)] py-3.5 lg:w-[168px]">
+      <nav aria-label="Sections" className="flex flex-col">
         {NAV.map(({ to, label, icon: Icon, ...rest }) => (
           <NavLink key={to} to={to} end={'end' in rest}
-            className={({ isActive }) => cn(
-              'flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm text-muted hover:bg-sunken hover:text-ink',
-              isActive && 'bg-accent-soft font-medium text-accent hover:bg-accent-soft hover:text-accent')}>
-            <Icon size={16} aria-hidden />
+            className={({ isActive: active }) => cn(
+              'flex items-center justify-between border-l-2 border-transparent px-4 py-[7px] font-mono text-[12.5px] lowercase text-muted hover:text-ink',
+              (active || (to === '/' && pathname.startsWith('/programs'))) && 'border-ink bg-ink font-semibold text-canvas hover:text-canvas dark:bg-sunken dark:text-ink dark:hover:text-ink')}>
+            <Icon size={15} aria-hidden className="lg:hidden" />
             <span className="hidden lg:inline">{label}</span>
-            {label === 'Inbox' && !!data?.pending_approvals && (
-              <span className="num ml-auto hidden rounded-full bg-warn-soft px-1.5 text-[11px] font-semibold text-warn lg:inline">
-                {data.pending_approvals}
-              </span>
+            {label === 'Decisions' && !!data?.pending_approvals && (
+              <span className="num hidden bg-ink px-1.5 text-[11px] font-bold text-canvas lg:inline [.bg-ink_&]:bg-canvas [.bg-ink_&]:text-ink">{data.pending_approvals}</span>
             )}
           </NavLink>
         ))}
@@ -48,60 +70,19 @@ function Rail() {
   )
 }
 
-function TrustStrip() {
-  const { data } = useSystemStatus()
-  if (!data) return <footer className="h-8 border-t border-line bg-surface" />
-  const { chain, anchor, eval: ev } = data
-  return (
-    <footer className="flex h-8 shrink-0 items-center gap-4 border-t border-line bg-surface px-4 text-xs text-muted">
-      <Tip label={chain.verified
-        ? 'Every record was re-hashed and its link to the previous record checked just now.'
-        : `${chain.problems.length} record(s) fail verification — the ledger was altered.`}>
-        <span className={cn('flex items-center gap-1.5', !chain.verified && 'font-medium text-bad')}>
-          {chain.verified ? <ShieldCheck size={13} className="text-ok" /> : <ShieldX size={13} />}
-          {chain.verified ? 'Chain verified' : 'Chain integrity failed'}
-          <span className="num text-faint">· {chain.records.toLocaleString()} records</span>
-        </span>
-      </Tip>
-      <Tip label={anchor ? 'Merkle root of the ledger. An anchor protects you only once it is published somewhere you do not control.'
-        : 'No anchor yet — run `proef anchor` and publish the root to make the record externally checkable.'}>
-        <span className="flex items-center gap-1.5">
-          {anchor ? <>Anchored <span className="num">{ago(anchor.age_s)}</span>{anchor.published === false && <Tag tone="warn">unpublished</Tag>}</>
-            : <Tag tone="warn">not anchored</Tag>}
-        </span>
-      </Tip>
-      {ev && (
-        <Tip label="Deterministic eval suite (proef eval). Scores below 1.0 are honest deductions, not hidden.">
-          <span>Graded <span className="num">{ev.mean.toFixed(3)}</span> · <span className="num">{ev.tasks}</span> tasks{ev.all_pass ? '' : ' · failing'}</span>
-        </Tip>
-      )}
-    </footer>
-  )
-}
-
 export default function Shell() {
-  const { theme, toggle } = useTheme()
   const { data } = useSystemStatus()
   return (
-    <div className="flex h-full bg-canvas text-ink">
-      <Rail />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-12 shrink-0 items-center gap-3 border-b border-line bg-surface px-4">
-          <CommandPalette dark={theme === 'dark'} onToggleTheme={toggle} />
-          <div className="ml-auto flex items-center gap-2">
-            <Button variant="ghost" size="icon" onClick={toggle} aria-label="Toggle theme">
-              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-            </Button>
-            <HaltControl />
-          </div>
-        </header>
-        {data?.halted && (
-          <div role="alert" className="flex items-center gap-2 bg-bad-soft px-4 py-2 text-sm font-medium text-bad">
-            <ShieldAlert size={16} /> All agents are halted{data.halt_reason ? ` — ${data.halt_reason}` : ''}. Nothing new will be submitted to the lab until a human resumes.
-          </div>
-        )}
-        <main className="min-h-0 flex-1 overflow-auto"><Outlet /></main>
-        <TrustStrip />
+    <div className="flex h-full flex-col bg-canvas text-ink">
+      <TopBar />
+      {data?.halted && (
+        <div role="alert" className="flex items-center gap-2 bg-bad-soft px-4 py-2 text-sm font-medium text-bad">
+          <ShieldAlert size={16} /> All agents are halted{data.halt_reason ? `: ${data.halt_reason}` : ''}. Nothing new will be submitted to the lab until a human resumes.
+        </div>
+      )}
+      <div className="flex min-h-0 flex-1">
+        <Rail />
+        <main className="min-h-0 min-w-0 flex-1 overflow-auto"><Outlet /></main>
       </div>
     </div>
   )

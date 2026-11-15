@@ -133,6 +133,39 @@ export function useLaunchCampaign(slug: string) {
   })
 }
 
+export const useTrees = (slug: string) =>
+  useQuery({ queryKey: ['trees', slug], queryFn: () => unwrap(api.GET('/api/v1/programs/{slug}/trees', { params: { path: { slug } } })), refetchInterval: 6000 })
+
+export function useStartTree(slug: string) {
+  const refresh = useRefresh()
+  return useMutation({
+    mutationFn: (body: Schemas['TreeCreate']) =>
+      unwrap(api.POST('/api/v1/programs/{slug}/trees', { params: { path: { slug } }, body })),
+    onSuccess: refresh,
+  })
+}
+
+export function usePauseProgram(slug: string) {
+  const refresh = useRefresh()
+  return useMutation({
+    mutationFn: (v: { paused: boolean; reason: string }) =>
+      unwrap(api.POST('/api/v1/programs/{slug}/pause', { params: { path: { slug } }, body: v })),
+    onSuccess: refresh,
+  })
+}
+
+export function usePauseCampaign(id: string) {
+  const refresh = useRefresh()
+  return useMutation({
+    mutationFn: (v: { paused: boolean; reason: string }) =>
+      unwrap(api.POST('/api/v1/campaigns/{eid}/pause', { params: { path: { eid: id } }, body: v })),
+    onSuccess: refresh,
+  })
+}
+
+export const useCheckInstrument = () =>
+  useMutation({ mutationFn: (id: string) => unwrap(api.POST('/api/v1/lab/instruments/{instrument_id}/check', { params: { path: { instrument_id: id } } })) })
+
 export const useDecompose = (slug: string) =>
   useMutation({ mutationFn: () => unwrap(api.POST('/api/v1/programs/{slug}/decompose', { params: { path: { slug } } })) })
 
@@ -191,9 +224,10 @@ export const useAnalysis = (id: string | undefined) =>
 export function useUploadAnalysis() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: async ({ file, layout }: { file: File; layout?: File }) => {
+    mutationFn: async ({ file, layout, profile }: { file: File; layout?: File; profile?: string }) => {
       const fd = new FormData()
       fd.append('file', file)
+      if (profile && profile !== 'auto') fd.append('profile', profile)
       if (layout) fd.append('layout', layout)
       const r = await window.fetch('/api/v1/analyses', { method: 'POST', body: fd })
       const j = await r.json()

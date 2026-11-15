@@ -18,7 +18,7 @@ export function DialogContent({ title, description, children, className }: {
         <D.Title className="text-base font-semibold">{title}</D.Title>
         {description && <D.Description className="mt-1 text-sm text-muted">{description}</D.Description>}
         <div className="mt-4">{children}</div>
-        <D.Close aria-label="Close" className="absolute right-3 top-3 rounded p-1 text-faint hover:bg-sunken hover:text-ink">
+        <D.Close aria-label="Close" className="absolute right-3 top-3 p-1 text-faint hover:bg-sunken hover:text-ink">
           <X size={16} />
         </D.Close>
       </D.Content>

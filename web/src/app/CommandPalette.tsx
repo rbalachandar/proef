@@ -26,14 +26,14 @@ export function CommandPalette({ onToggleTheme, dark }: { onToggleTheme: () => v
   return (
     <>
       <button onClick={() => setOpen(true)}
-        className="flex h-8 w-72 items-center gap-2 rounded-md border border-line-strong bg-surface px-2.5 text-left text-sm text-faint hover:bg-sunken">
+        className="flex h-8 w-80 items-center gap-2 border border-line-strong bg-transparent px-3 text-left font-mono text-xs text-faint hover:bg-sunken">
         <Search size={14} /> <span className="flex-1">Search or jump to…</span> <Kbd>⌘K</Kbd>
       </button>
       <D.Root open={open} onOpenChange={setOpen}>
         <D.Portal>
           <D.Overlay className="fixed inset-0 z-40 bg-black/40" />
           <D.Content aria-label="Command palette"
-            className="fixed left-1/2 top-[14%] z-50 w-[min(560px,92vw)] -translate-x-1/2 overflow-hidden rounded-xl border border-line-strong bg-surface shadow-2xl">
+            className="fixed left-1/2 top-[14%] z-50 w-[min(560px,92vw)] -translate-x-1/2 overflow-hidden border border-line-strong bg-surface shadow-2xl">
             <D.Title className="sr-only">Command palette</D.Title>
             <Command label="Command palette">
               <Command.Input autoFocus placeholder="Go to a screen, a campaign, or run an action…"

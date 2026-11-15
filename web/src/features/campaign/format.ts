@@ -30,7 +30,7 @@ export function explain(h: Hyp, gate: Schemas['Gate']): string {
       : `The 95% interval straddles the gate (${sig(g)}), so the data cannot say which side the true value is on. No claim either way.`
   }
   if (v.status === 'validated')
-    return `The whole 95% interval lies ${side} the gate (${sig(g)}). Preliminary — pending an orthogonal confirmation.`
+    return `The whole 95% interval lies ${side} the gate (${sig(g)}). Preliminary: pending an orthogonal confirmation.`
   if (v.status === 'confirmed')
     return `Confirmed: an orthogonal re-measurement agrees, and the 95% interval lies ${side} the gate (${sig(g)}).`
   return `The whole 95% interval lies on the wrong side of the gate (${sig(g)}): this candidate does not meet the criterion.`

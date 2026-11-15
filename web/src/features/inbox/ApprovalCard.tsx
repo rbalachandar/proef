@@ -27,7 +27,7 @@ function LabApproval({ item, compact }: { item: Pick<Schemas['InboxItem'], 'id' 
         <div className="text-sm font-medium">{title}</div>
         {item.detail && <div className="mt-0.5 text-xs text-muted">{item.detail}</div>}
         <div className="mt-1 text-[11px] text-faint">
-          The agent paused here: nothing reaches the lab until you decide. {ago(item.ts)}
+          Agent paused: nothing reaches the lab until a decision is made. {ago(item.ts)}
           {!compact && item.campaign_id && <> · <Link className="text-accent hover:underline" to={`/campaigns/${item.campaign_id}`}>{item.campaign_title}</Link></>}
         </div>
         {decide.error && <div role="alert" className="mt-1 text-xs text-bad">{(decide.error as Error).message}</div>}

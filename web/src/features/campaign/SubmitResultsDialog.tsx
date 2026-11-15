@@ -29,10 +29,10 @@ export function SubmitResultsDialog({ id, open, onOpenChange }: { id: string; op
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent title="Submit measured results" className="!w-[min(640px,94vw)] !top-[8%]"
-        description="Export the plate as CSV. It is judged against the gate this campaign registered before it ran, for hypotheses that are still open.">
+        description="Export the plate, or a table of measurements (sample, value, one row per reading), as CSV. It is judged against the gate this campaign registered before it ran, for hypotheses that are still open.">
         {done ? (
           <div>
-            <p className="mb-2 text-sm font-medium">Judged {done.verdicts.length} hypothes{done.verdicts.length === 1 ? 'is' : 'es'}. Recorded under your name.</p>
+            <p className="mb-2 text-sm font-medium">Judged {done.verdicts.length} hypothes{done.verdicts.length === 1 ? 'is' : 'es'}. Recorded in the ledger.</p>
             <ul className="divide-y divide-line rounded-md border border-line">
               {done.verdicts.map((v) => (
                 <li key={v.hypothesis_id} className="flex items-center gap-3 px-3 py-2 text-sm">
@@ -55,11 +55,16 @@ export function SubmitResultsDialog({ id, open, onOpenChange }: { id: string; op
           {p && (
             <div className="mt-4 space-y-3 text-sm">
               <div className="flex flex-wrap items-center gap-2">
-                <Tag>{p.n_wells} wells</Tag>
-                <Tag tone={p.qc_ok ? 'ok' : 'warn'}>Z′ {p.z_prime != null ? p.z_prime.toFixed(2) : 'n/a'}{p.z_kind === 'heuristic' ? ' (heuristic)' : ''}</Tag>
-                {!p.qc_ok && <span className="text-xs text-warn">below the QC floor: verdicts are recorded with QC failed</span>}
+                {p.kind === 'measurements' ? (<>
+                  <Tag>{p.n_wells} measurements</Tag>
+                  <Tag title="A table of readings has no plate or controls, so there is no Z′. Each hypothesis is judged on the mean of its replicates and a 95% interval. Fewer than 3 replicates cannot earn a verdict.">table of measurements · no plate QC</Tag>
+                </>) : (<>
+                  <Tag>{p.n_wells} wells</Tag>
+                  <Tag tone={p.qc_ok ? 'ok' : 'warn'}>Z′ {p.z_prime != null ? p.z_prime.toFixed(2) : 'n/a'}{p.z_kind === 'heuristic' ? ' (heuristic)' : ''}</Tag>
+                  {!p.qc_ok && <span className="text-xs text-warn">below the QC floor: verdicts are recorded with QC failed</span>}
+                </>)}
               </div>
-              {p.failure && <p className="flex items-start gap-2 rounded-md bg-bad-soft px-3 py-2 text-bad"><AlertTriangle size={14} className="mt-0.5 shrink-0" />Physical failure: {p.failure}. No verdicts will be derived — re-run the plate.</p>}
+              {p.failure && <p className="flex items-start gap-2 rounded-md bg-bad-soft px-3 py-2 text-bad"><AlertTriangle size={14} className="mt-0.5 shrink-0" />Physical failure: {p.failure}. No verdicts will be derived: re-run the plate.</p>}
               {p.already_submitted && <p className="rounded-md bg-warn-soft px-3 py-2 text-warn">This exact file was already submitted to this campaign.</p>}
               <div>
                 <div className="mb-1 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-muted"><FlaskConical size={12} />Will be judged ({p.matches.length})</div>
@@ -71,7 +76,7 @@ export function SubmitResultsDialog({ id, open, onOpenChange }: { id: string; op
               </div>
               {!!p.already_judged.length && <p className="text-xs text-muted">Already have a verdict and will be left alone: <span className="num">{p.already_judged.join(', ')}</span></p>}
               {!!p.in_file_only.length && <p className="text-xs text-muted">In the file but not part of this campaign (ignored): <span className="num">{p.in_file_only.join(', ')}</span></p>}
-              {!!p.waiting_for_data.length && <p className="text-xs text-muted">Still waiting for data: <span className="num">{p.waiting_for_data.join(', ')}</span></p>}
+              {!!p.waiting_for_data.length && <p className="text-xs text-muted">No data yet for: <span className="num">{p.waiting_for_data.join(', ')}</span></p>}
             </div>
           )}
           <div className="mt-5 flex items-end gap-3">

@@ -42,7 +42,7 @@ export function ResultsTable({ hyps: input, gate, onOpen, selected, sub }: {
           return (
             <div key={h.id} style={{ height: ROW_H }} className="flex flex-col justify-center border-b border-line px-4 text-right">
               {v?.observed != null ? (
-                <Tip label={v.ci ? `95% interval ${sig(v.ci[0])} – ${sig(v.ci[1])} ${unit}` : 'single estimate — no interval'}>
+                <Tip label={v.ci ? `95% interval ${sig(v.ci[0])} – ${sig(v.ci[1])} ${unit}` : 'single estimate: no interval'}>
                   <span className="num cursor-default text-sm">{sig(v.observed)} <span className="text-xs text-faint">{unit}</span></span>
                 </Tip>
               ) : (

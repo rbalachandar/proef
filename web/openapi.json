@@ -52,6 +52,30 @@
       ],
       "title": "Candidate"
      },
+     "event": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "the ledger event type, e.g. lab_run, gate_decision",
+      "title": "Event"
+     },
+     "hash": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "first characters of the record's hash in the ledger chain",
+      "title": "Hash"
+     },
      "kind": {
       "title": "Kind",
       "type": "string"
@@ -247,6 +271,18 @@
       "title": "Entity",
       "type": "string"
      },
+     "estimate": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "measurements: the mean",
+      "title": "Estimate"
+     },
      "ic50_um": {
       "anyOf": [
        {
@@ -257,6 +293,17 @@
        }
       ],
       "title": "Ic50 Um"
+     },
+     "n": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "N"
      },
      "n_points": {
       "anyOf": [
@@ -280,6 +327,17 @@
       ],
       "title": "Reason"
      },
+     "sd": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Sd"
+     },
      "top_known": {
       "anyOf": [
        {
@@ -291,6 +349,14 @@
       ],
       "description": "False: the plateau was inferred from the data, so the call depends on that assumption",
       "title": "Top Known"
+     },
+     "values": {
+      "default": [],
+      "items": {
+       "type": "number"
+      },
+      "title": "Values",
+      "type": "array"
      }
     },
     "required": [
@@ -330,6 +396,17 @@
    "AnalysisPreview": {
     "description": "What the system understood from the file, before any fit.",
     "properties": {
+     "columns": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/MeasurementColumns"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "measurements tables: the columns understood"
+     },
      "diagnostics": {
       "default": [],
       "items": {
@@ -359,9 +436,23 @@
       "title": "Has Doses",
       "type": "boolean"
      },
+     "kind": {
+      "default": "plate",
+      "enum": [
+       "plate",
+       "measurements"
+      ],
+      "title": "Kind",
+      "type": "string"
+     },
      "n_controls": {
       "default": 0,
       "title": "N Controls",
+      "type": "integer"
+     },
+     "n_measurements": {
+      "default": 0,
+      "title": "N Measurements",
       "type": "integer"
      },
      "n_wells": {
@@ -431,6 +522,37 @@
        }
       ]
      },
+     "kind": {
+      "default": "plate",
+      "enum": [
+       "plate",
+       "measurements"
+      ],
+      "title": "Kind",
+      "type": "string"
+     },
+     "method": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Method"
+     },
+     "metric": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Metric"
+     },
      "note": {
       "anyOf": [
        {
@@ -456,6 +578,17 @@
      "state": {
       "title": "State",
       "type": "string"
+     },
+     "unit": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Unit"
      },
      "z_kind": {
       "anyOf": [
@@ -606,6 +739,29 @@
       "description": "known assay ceiling, if the top plateau is known",
       "title": "Max Response"
      },
+     "metric": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "measurements tables: what the values are, e.g. ionic_conductivity_mS_cm",
+      "title": "Metric"
+     },
+     "sample_column": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Sample Column"
+     },
      "threshold": {
       "anyOf": [
        {
@@ -615,8 +771,30 @@
         "type": "null"
        }
       ],
-      "description": "IC50 gate, in the data's concentration unit",
+      "description": "the gate: IC50 in the data's concentration unit for a plate; the value itself for a measurements table",
       "title": "Threshold"
+     },
+     "unit": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Unit"
+     },
+     "value_column": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Value Column"
      }
     },
     "title": "AnalysisRun",
@@ -689,6 +867,11 @@
      },
      "preview": {
       "$ref": "#/components/schemas/AnalysisPreview"
+     },
+     "profile": {
+      "default": "plate_assay",
+      "title": "Profile",
+      "type": "string"
      },
      "result": {
       "anyOf": [
@@ -1091,6 +1274,11 @@
        }
       ],
       "title": "Layout"
+     },
+     "profile": {
+      "default": "auto",
+      "title": "Profile",
+      "type": "string"
      }
     },
     "required": [
@@ -1249,7 +1437,7 @@
      },
      "mode": {
       "default": "agent",
-      "description": "'hand': you run the plate yourself and submit it; candidates are required",
+      "description": "'hand': the plate is run by hand and submitted; candidates are required",
       "enum": [
        "agent",
        "hand"
@@ -1270,7 +1458,7 @@
      },
      "replan": {
       "default": false,
-      "description": "after each round the model proposes the next hypotheses from the results; you approve them",
+      "description": "after each round the model proposes the next hypotheses from the results; they require approval",
       "title": "Replan",
       "type": "boolean"
      },
@@ -1287,14 +1475,6 @@
       ],
       "description": "defaults to 2, and is capped by the program's limit",
       "title": "Rounds"
-     },
-     "share": {
-      "default": 1,
-      "description": "how many sub-problems split the program's lab-run and hypothesis limits",
-      "maximum": 8.0,
-      "minimum": 1.0,
-      "title": "Share",
-      "type": "integer"
      },
      "sub_problem": {
       "anyOf": [
@@ -1396,6 +1576,34 @@
        }
       ],
       "title": "Objective"
+     },
+     "pause": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/PauseState"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "this campaign is paused"
+     },
+     "paused": {
+      "default": false,
+      "description": "held by a pause on this campaign or on its program",
+      "title": "Paused",
+      "type": "boolean"
+     },
+     "paused_by_program": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/PauseState"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "its program is paused, which holds it too"
      },
      "plan_review": {
       "anyOf": [
@@ -1541,6 +1749,12 @@
      "id": {
       "title": "Id",
       "type": "string"
+     },
+     "paused": {
+      "default": false,
+      "description": "held by a pause on this campaign or on its program",
+      "title": "Paused",
+      "type": "boolean"
      },
      "problem_id": {
       "anyOf": [
@@ -1857,28 +2071,87 @@
    },
    "Decomposition": {
     "properties": {
+     "max_depth": {
+      "title": "Max Depth",
+      "type": "integer"
+     },
+     "max_subproblems": {
+      "title": "Max Subproblems",
+      "type": "integer"
+     },
      "model": {
       "title": "Model",
       "type": "string"
      },
+     "nodes": {
+      "items": {
+       "$ref": "#/components/schemas/TreeNode"
+      },
+      "title": "Nodes",
+      "type": "array"
+     },
      "objective": {
       "title": "Objective",
       "type": "string"
-     },
-     "sub_problems": {
-      "items": {
-       "$ref": "#/components/schemas/SubProblem"
-      },
-      "title": "Sub Problems",
-      "type": "array"
      }
     },
     "required": [
      "objective",
-     "sub_problems",
-     "model"
+     "nodes",
+     "model",
+     "max_depth",
+     "max_subproblems"
     ],
     "title": "Decomposition",
+    "type": "object"
+   },
+   "DriverCheck": {
+    "description": "What a driver check found. It never changes an instrument's validation status: only verification\nagainst a physical device does that.",
+    "properties": {
+     "checked_at": {
+      "title": "Checked At",
+      "type": "number"
+     },
+     "detail": {
+      "title": "Detail",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "simulation_only": {
+      "default": true,
+      "description": "the check ran the driver in simulation mode; no physical device was addressed",
+      "title": "Simulation Only",
+      "type": "boolean"
+     },
+     "status": {
+      "enum": [
+       "ready",
+       "not-installed",
+       "needs-configuration",
+       "failed"
+      ],
+      "title": "Status",
+      "type": "string"
+     },
+     "tools": {
+      "default": [],
+      "items": {
+       "type": "string"
+      },
+      "title": "Tools",
+      "type": "array"
+     }
+    },
+    "required": [
+     "id",
+     "status",
+     "detail",
+     "checked_at"
+    ],
+    "title": "DriverCheck",
     "type": "object"
    },
    "EvalSummary": {
@@ -2719,6 +2992,14 @@
       "title": "Breadth",
       "type": "integer"
      },
+     "max_depth": {
+      "default": 2,
+      "description": "how many levels an objective may be split into sub-problems",
+      "maximum": 3.0,
+      "minimum": 1.0,
+      "title": "Max Depth",
+      "type": "integer"
+     },
      "max_families": {
       "default": 3,
       "description": "distinct mechanistic bets a model may propose",
@@ -2749,6 +3030,14 @@
       "maximum": 8.0,
       "minimum": 1.0,
       "title": "Max Rounds",
+      "type": "integer"
+     },
+     "max_subproblems": {
+      "default": 8,
+      "description": "sub-problems in one research tree, all levels together",
+      "maximum": 16.0,
+      "minimum": 2.0,
+      "title": "Max Subproblems",
       "type": "integer"
      },
      "max_variants_per_family": {
@@ -2787,6 +3076,50 @@
      }
     },
     "title": "LlmUse",
+    "type": "object"
+   },
+   "MeasurementColumns": {
+    "properties": {
+     "all": {
+      "default": [],
+      "items": {
+       "type": "string"
+      },
+      "title": "All",
+      "type": "array"
+     },
+     "candidates": {
+      "default": [],
+      "items": {
+       "type": "string"
+      },
+      "title": "Candidates",
+      "type": "array"
+     },
+     "sample": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Sample"
+     },
+     "value": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Value"
+     }
+    },
+    "title": "MeasurementColumns",
     "type": "object"
    },
    "ModelStatus": {
@@ -2887,6 +3220,91 @@
     "title": "NextStep",
     "type": "object"
    },
+   "PauseIn": {
+    "properties": {
+     "paused": {
+      "title": "Paused",
+      "type": "boolean"
+     },
+     "reason": {
+      "default": "",
+      "maxLength": 300,
+      "title": "Reason",
+      "type": "string"
+     }
+    },
+    "required": [
+     "paused"
+    ],
+    "title": "PauseIn",
+    "type": "object"
+   },
+   "PauseResult": {
+    "properties": {
+     "pause": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/PauseState"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "paused": {
+      "title": "Paused",
+      "type": "boolean"
+     }
+    },
+    "required": [
+     "paused"
+    ],
+    "title": "PauseResult",
+    "type": "object"
+   },
+   "PauseState": {
+    "properties": {
+     "by": {
+      "title": "By",
+      "type": "string"
+     },
+     "kind": {
+      "enum": [
+       "program",
+       "campaign"
+      ],
+      "title": "Kind",
+      "type": "string"
+     },
+     "reason": {
+      "default": "",
+      "title": "Reason",
+      "type": "string"
+     },
+     "scope": {
+      "title": "Scope",
+      "type": "string"
+     },
+     "ts": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Ts"
+     }
+    },
+    "required": [
+     "scope",
+     "kind",
+     "by"
+    ],
+    "title": "PauseState",
+    "type": "object"
+   },
    "Pick": {
     "properties": {
      "candidate": {
@@ -2942,6 +3360,16 @@
    "Plan": {
     "description": "What a model proposed, shown to a person before anything reaches the lab.",
     "properties": {
+     "critique": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/PlanCritique"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "families": {
       "default": [],
       "items": {
@@ -2950,6 +3378,18 @@
       "title": "Families",
       "type": "array"
      },
+     "label": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "e.g. 'after round 1' for a re-plan",
+      "title": "Label"
+     },
      "n_hypotheses": {
       "default": 0,
       "title": "N Hypotheses",
@@ -2957,6 +3397,26 @@
      }
     },
     "title": "Plan",
+    "type": "object"
+   },
+   "PlanCritique": {
+    "description": "A second model's review of the plan. Advisory: it cannot change or approve anything.",
+    "properties": {
+     "model": {
+      "default": "",
+      "title": "Model",
+      "type": "string"
+     },
+     "notes": {
+      "default": [],
+      "items": {
+       "$ref": "#/components/schemas/PlanNote"
+      },
+      "title": "Notes",
+      "type": "array"
+     }
+    },
+    "title": "PlanCritique",
     "type": "object"
    },
    "PlanFamily": {
@@ -3016,6 +3476,33 @@
      "id"
     ],
     "title": "PlanFamily",
+    "type": "object"
+   },
+   "PlanNote": {
+    "properties": {
+     "severity": {
+      "default": "note",
+      "enum": [
+       "concern",
+       "note"
+      ],
+      "title": "Severity",
+      "type": "string"
+     },
+     "target": {
+      "default": "plan",
+      "title": "Target",
+      "type": "string"
+     },
+     "text": {
+      "title": "Text",
+      "type": "string"
+     }
+    },
+    "required": [
+     "text"
+    ],
+    "title": "PlanNote",
     "type": "object"
    },
    "PlanReview": {
@@ -3095,6 +3582,12 @@
       "title": "Predicted",
       "type": "string"
      },
+     "protocol": {
+      "default": "",
+      "description": "the dose ladder the model designed, as one line",
+      "title": "Protocol",
+      "type": "string"
+     },
      "rationale": {
       "default": "",
       "title": "Rationale",
@@ -3132,10 +3625,12 @@
       "$ref": "#/components/schemas/Limits",
       "default": {
        "breadth": 3,
+       "max_depth": 2,
        "max_families": 3,
        "max_hypotheses": 12,
        "max_lab_runs": 20,
        "max_rounds": 3,
+       "max_subproblems": 8,
        "max_variants_per_family": 3
       }
      },
@@ -3194,10 +3689,12 @@
       "$ref": "#/components/schemas/Limits",
       "default": {
        "breadth": 3,
+       "max_depth": 2,
        "max_families": 3,
        "max_hypotheses": 12,
        "max_lab_runs": 20,
        "max_rounds": 3,
+       "max_subproblems": 8,
        "max_variants_per_family": 3
       }
      },
@@ -3245,6 +3742,17 @@
        }
       ],
       "title": "Objective"
+     },
+     "pause": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/PauseState"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "the program is paused: no new lab submissions until resumed"
      },
      "results": {
       "default": [],
@@ -3379,10 +3887,12 @@
       "$ref": "#/components/schemas/Limits",
       "default": {
        "breadth": 3,
+       "max_depth": 2,
        "max_families": 3,
        "max_hypotheses": 12,
        "max_lab_runs": 20,
        "max_rounds": 3,
+       "max_subproblems": 8,
        "max_variants_per_family": 3
       }
      },
@@ -3422,6 +3932,17 @@
        }
       ],
       "title": "Objective"
+     },
+     "pause": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/PauseState"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "the program is paused: no new lab submissions until resumed"
      },
      "running": {
       "title": "Running",
@@ -3711,6 +4232,15 @@
       },
       "title": "In File Only",
       "type": "array"
+     },
+     "kind": {
+      "default": "plate",
+      "enum": [
+       "plate",
+       "measurements"
+      ],
+      "title": "Kind",
+      "type": "string"
      },
      "matches": {
       "default": [],
@@ -4144,6 +4674,328 @@
     "title": "Today",
     "type": "object"
    },
+   "TreeCreate": {
+    "properties": {
+     "autonomy": {
+      "default": "gate",
+      "enum": [
+       "observe",
+       "gate",
+       "act"
+      ],
+      "title": "Autonomy",
+      "type": "string"
+     },
+     "nodes": {
+      "items": {
+       "$ref": "#/components/schemas/TreeNode"
+      },
+      "maxItems": 40,
+      "minItems": 1,
+      "title": "Nodes",
+      "type": "array"
+     },
+     "objective": {
+      "maxLength": 300,
+      "minLength": 3,
+      "title": "Objective",
+      "type": "string"
+     },
+     "rounds": {
+      "anyOf": [
+       {
+        "maximum": 8.0,
+        "minimum": 1.0,
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Rounds"
+     }
+    },
+    "required": [
+     "objective",
+     "nodes"
+    ],
+    "title": "TreeCreate",
+    "type": "object"
+   },
+   "TreeNode": {
+    "description": "One sub-problem in a research tree. `parent` is another node's id, or null for a direct child of the objective.",
+    "properties": {
+     "depth": {
+      "default": 1,
+      "title": "Depth",
+      "type": "integer"
+     },
+     "direction": {
+      "default": "min",
+      "enum": [
+       "min",
+       "max"
+      ],
+      "title": "Direction",
+      "type": "string"
+     },
+     "gate": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Gate"
+     },
+     "id": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Id",
+      "type": "string"
+     },
+     "metric": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Metric"
+     },
+     "objective": {
+      "maxLength": 200,
+      "minLength": 3,
+      "title": "Objective",
+      "type": "string"
+     },
+     "parent": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Parent"
+     },
+     "priority": {
+      "default": 1.0,
+      "exclusiveMinimum": 0.0,
+      "maximum": 100.0,
+      "title": "Priority",
+      "type": "number"
+     },
+     "rationale": {
+      "default": "",
+      "title": "Rationale",
+      "type": "string"
+     },
+     "unit": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Unit"
+     }
+    },
+    "required": [
+     "id",
+     "objective"
+    ],
+    "title": "TreeNode",
+    "type": "object"
+   },
+   "TreeNodeView": {
+    "properties": {
+     "campaign_id": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Campaign Id"
+     },
+     "depth": {
+      "default": 1,
+      "title": "Depth",
+      "type": "integer"
+     },
+     "direction": {
+      "default": "min",
+      "enum": [
+       "min",
+       "max"
+      ],
+      "title": "Direction",
+      "type": "string"
+     },
+     "gate": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Gate"
+     },
+     "id": {
+      "maxLength": 40,
+      "minLength": 1,
+      "title": "Id",
+      "type": "string"
+     },
+     "metric": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Metric"
+     },
+     "objective": {
+      "maxLength": 200,
+      "minLength": 3,
+      "title": "Objective",
+      "type": "string"
+     },
+     "parent": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Parent"
+     },
+     "priority": {
+      "default": 1.0,
+      "exclusiveMinimum": 0.0,
+      "maximum": 100.0,
+      "title": "Priority",
+      "type": "number"
+     },
+     "rationale": {
+      "default": "",
+      "title": "Rationale",
+      "type": "string"
+     },
+     "runs": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "lab runs allocated to this leaf",
+      "title": "Runs"
+     },
+     "status": {
+      "default": "open",
+      "description": "open | in lab | achieved | partial | failed | inconclusive",
+      "title": "Status",
+      "type": "string"
+     },
+     "unit": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Unit"
+     },
+     "verdicts": {
+      "additionalProperties": {
+       "type": "string"
+      },
+      "default": {},
+      "title": "Verdicts",
+      "type": "object"
+     }
+    },
+    "required": [
+     "id",
+     "objective"
+    ],
+    "title": "TreeNodeView",
+    "type": "object"
+   },
+   "TreeView": {
+    "properties": {
+     "by": {
+      "title": "By",
+      "type": "string"
+     },
+     "id": {
+      "title": "Id",
+      "type": "string"
+     },
+     "nodes": {
+      "items": {
+       "$ref": "#/components/schemas/TreeNodeView"
+      },
+      "title": "Nodes",
+      "type": "array"
+     },
+     "objective": {
+      "title": "Objective",
+      "type": "string"
+     },
+     "run_budget": {
+      "title": "Run Budget",
+      "type": "integer"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "ts": {
+      "anyOf": [
+       {
+        "type": "number"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Ts"
+     }
+    },
+    "required": [
+     "id",
+     "objective",
+     "by",
+     "status",
+     "nodes",
+     "run_budget"
+    ],
+    "title": "TreeView",
+    "type": "object"
+   },
    "ValidationError": {
     "properties": {
      "ctx": {
@@ -4373,7 +5225,7 @@
     ]
    },
    "post": {
-    "description": "Store the file (bound by digest), detect what it is. No fit, no verdict.",
+    "description": "Store the file (bound by digest), detect what it is: a dose-response plate, or a table of measurements\n(`profile` forces one). No fit, no verdict.",
     "operationId": "create_analysis_api_v1_analyses_post",
     "requestBody": {
      "content": {
@@ -5018,7 +5870,7 @@
   },
   "/api/v1/campaigns/{eid}/hypotheses/{hid}/curves": {
    "get": {
-    "description": "The recorded dose\u2013response data behind a verdict: every plate point,\nthe fit with its interval, and the plate's QC \u2014 so a scientist can LOOK at\nthe evidence, not only read the number.",
+    "description": "The recorded dose\u2013response data behind a verdict: every plate point,\nthe fit with its interval, and the plate's QC: so a scientist can LOOK at\nthe evidence, not only read the number.",
     "operationId": "get_curves_api_v1_campaigns__eid__hypotheses__hid__curves_get",
     "parameters": [
      {
@@ -5127,6 +5979,58 @@
     "summary": "Review Hypothesis",
     "tags": [
      "campaigns"
+    ]
+   }
+  },
+  "/api/v1/campaigns/{eid}/pause": {
+   "post": {
+    "operationId": "pause_campaign_api_v1_campaigns__eid__pause_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "eid",
+      "required": true,
+      "schema": {
+       "title": "Eid",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PauseIn"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PauseResult"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Pause Campaign",
+    "tags": [
+     "governance"
     ]
    }
   },
@@ -5630,6 +6534,49 @@
     ]
    }
   },
+  "/api/v1/lab/instruments/{instrument_id}/check": {
+   "post": {
+    "description": "Check a driver, on request. Recorded as an action by the person; it can never mark an instrument validated.",
+    "operationId": "check_instrument_api_v1_lab_instruments__instrument_id__check_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "instrument_id",
+      "required": true,
+      "schema": {
+       "title": "Instrument Id",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/DriverCheck"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Check Instrument",
+    "tags": [
+     "lab"
+    ]
+   }
+  },
   "/api/v1/lab/sops/{sop_id}/approve": {
    "post": {
     "description": "Sign off a recurring procedure: from now on it may run unattended.\nAttributed to the authenticated person.",
@@ -5670,6 +6617,31 @@
     "summary": "Approve Sop",
     "tags": [
      "lab"
+    ]
+   }
+  },
+  "/api/v1/pauses": {
+   "get": {
+    "operationId": "list_pauses_api_v1_pauses_get",
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/PauseState"
+         },
+         "title": "Response List Pauses Api V1 Pauses Get",
+         "type": "array"
+        }
+       }
+      },
+      "description": "Successful Response"
+     }
+    },
+    "summary": "List Pauses",
+    "tags": [
+     "governance"
     ]
    }
   },
@@ -5834,7 +6806,7 @@
   },
   "/api/v1/programs/{slug}/decompose": {
    "post": {
-    "description": "A model proposes how to split the program's objective into separately testable sub-problems.\nA proposal only: nothing is recorded or run until the person starts research on the ones they keep.",
+    "description": "A model proposes how to split the program's objective (recursively, within the program's depth and size\nlimits). A proposal only: nothing is recorded or run until the person starts the tree.",
     "operationId": "decompose_program_api_v1_programs__slug__decompose_post",
     "parameters": [
      {
@@ -5870,6 +6842,154 @@
      }
     },
     "summary": "Decompose Program",
+    "tags": [
+     "programs"
+    ]
+   }
+  },
+  "/api/v1/programs/{slug}/pause": {
+   "post": {
+    "operationId": "pause_program_api_v1_programs__slug__pause_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "slug",
+      "required": true,
+      "schema": {
+       "title": "Slug",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/PauseIn"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/PauseResult"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Pause Program",
+    "tags": [
+     "governance"
+    ]
+   }
+  },
+  "/api/v1/programs/{slug}/trees": {
+   "get": {
+    "operationId": "list_trees_api_v1_programs__slug__trees_get",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "slug",
+      "required": true,
+      "schema": {
+       "title": "Slug",
+       "type": "string"
+      }
+     }
+    ],
+    "responses": {
+     "200": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "items": {
+          "$ref": "#/components/schemas/TreeView"
+         },
+         "title": "Response List Trees Api V1 Programs  Slug  Trees Get",
+         "type": "array"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "List Trees",
+    "tags": [
+     "programs"
+    ]
+   },
+   "post": {
+    "operationId": "start_tree_api_v1_programs__slug__trees_post",
+    "parameters": [
+     {
+      "in": "path",
+      "name": "slug",
+      "required": true,
+      "schema": {
+       "title": "Slug",
+       "type": "string"
+      }
+     }
+    ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/TreeCreate"
+       }
+      }
+     },
+     "required": true
+    },
+    "responses": {
+     "201": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/TreeView"
+        }
+       }
+      },
+      "description": "Successful Response"
+     },
+     "422": {
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      },
+      "description": "Validation Error"
+     }
+    },
+    "summary": "Start Tree",
     "tags": [
      "programs"
     ]

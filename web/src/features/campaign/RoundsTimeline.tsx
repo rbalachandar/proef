@@ -33,7 +33,7 @@ function Why({ r, gate }: { r: Round; gate: Detail['gate'] }) {
       )}
       {!!w.refusals.length && (
         <div>
-          <div className="mb-1 font-semibold uppercase tracking-wider text-[10px] text-muted">Not chosen — and why</div>
+          <div className="mb-1 font-semibold uppercase tracking-wider text-[10px] text-muted">Not chosen, and why</div>
           <ul className="space-y-1">
             {w.refusals.map((p) => (
               <li key={p.candidate} className="flex items-start gap-2 px-2 py-0.5">
@@ -86,7 +86,7 @@ export function RoundsTimeline({ d, onOpen }: { d: Detail; onOpen: (hid: string)
           </li>
         )
       })}
-      {!d.rounds.length && <li className="py-6 text-center text-sm text-faint">{d.status === 'awaiting_results' ? 'No rounds: you run the plate, then submit it.' : 'No round has started yet.'}</li>}
+      {!d.rounds.length && <li className="py-6 text-center text-sm text-faint">{d.status === 'awaiting_results' ? 'No rounds: the plate is run by hand, then submitted.' : 'No round has started yet.'}</li>}
     </ol>
   )
 }

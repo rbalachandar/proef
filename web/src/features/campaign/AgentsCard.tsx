@@ -8,7 +8,7 @@ import { ago } from './format'
 
 const ICON: Record<string, typeof Bot> = { agent: Bot, service: Cpu, human: User, instrument: ShieldCheck }
 
-function TraceDrawer({ id, actor, onClose }: { id: string; actor: string | null; onClose: () => void }) {
+export function TraceDrawer({ id, actor, onClose }: { id: string; actor: string | null; onClose: () => void }) {
   const { data, isLoading } = useTrace(id, actor)
   const [open, setOpen] = useState<number | null>(null)
   return (

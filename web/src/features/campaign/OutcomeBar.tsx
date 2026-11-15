@@ -13,9 +13,9 @@ const Step = ({ label, n, of }: { label: string; n: number; of: number }) => (
 export function OutcomeBar({ d }: { d: Detail }) {
   const f = d.funnel
   const seg = [
-    { k: 'claimed', n: f.claimed, c: 'bg-ok', t: 'Claimed — the whole 95% interval meets the gate' },
-    { k: 'refuted', n: f.refuted, c: 'bg-bad', t: 'Refuted — the whole interval is on the wrong side of the gate' },
-    { k: 'abstained', n: f.abstained, c: 'bg-abstain', t: 'Abstained — the interval straddles the gate; no claim either way' },
+    { k: 'claimed', n: f.claimed, c: 'bg-ok', t: 'Claimed: the whole 95% interval meets the gate' },
+    { k: 'refuted', n: f.refuted, c: 'bg-bad', t: 'Refuted: the whole interval is on the wrong side of the gate' },
+    { k: 'abstained', n: f.abstained, c: 'bg-abstain', t: 'Abstained: the interval straddles the gate. No claim either way' },
   ]
   return (
     <div className="flex flex-wrap items-center gap-x-8 gap-y-3">
@@ -32,7 +32,7 @@ export function OutcomeBar({ d }: { d: Detail }) {
               <span className="num font-semibold text-ink">{s.n}</span> {s.k}</span>
           ))}
         </div>
-        <div className="flex h-2.5 overflow-hidden rounded-full bg-sunken" role="img"
+        <div className="flex h-2.5 overflow-hidden bg-sunken" role="img"
           aria-label={`${f.claimed} claimed, ${f.refuted} refuted, ${f.abstained} abstained of ${f.judged} judged`}>
           {f.judged > 0 && seg.map((s) => s.n > 0 && (
             <Tip key={s.k} label={s.t}><div className={s.c} style={{ width: `${(s.n / f.judged) * 100}%` }} /></Tip>

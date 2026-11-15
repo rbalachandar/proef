@@ -49,7 +49,7 @@ export function NewProgramDialog({ open, onOpenChange }: { open: boolean; onOpen
         </div>
         <details className="mb-3 rounded-md border border-line px-3 py-2">
           <summary className="cursor-pointer text-xs font-medium text-muted">
-            Limits <span className="font-normal text-faint">— hard caps on every campaign ({limitsLine(limits)})</span>
+            Limits <span className="font-normal text-faint">(hard caps on every campaign: {limitsLine(limits)})</span>
           </summary>
           <div className="mt-3"><LimitsEditor value={limits} onChange={setLimits} /></div>
           <p className="mt-2 text-[11px] text-faint">A campaign may use less than this, never more. Exhausting a cap is recorded, not silent.</p>

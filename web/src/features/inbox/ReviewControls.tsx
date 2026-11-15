@@ -30,7 +30,7 @@ export function ReviewControls({ campaignId, hid, candidate, review }: {
     return (
       <div>
         <p className="text-[13px]"><b>{review.by}</b> {DONE[review.decision]} <span className="num">{candidate}</span>
-          {review.note && <> — “{review.note}”</>}
+          {review.note && <>: “{review.note}”</>}
           {review.follow_up_campaign_id && <> · <Link className="text-accent hover:underline" to={`/campaigns/${review.follow_up_campaign_id}`}>open the follow-up campaign</Link></>}
           <span className="text-faint"> · {ago(review.ts)}</span></p>
         {pending && (
@@ -44,11 +44,11 @@ export function ReviewControls({ campaignId, hid, candidate, review }: {
     )
   }
   const quick = (decision: Decision) => record(decision).then(() =>
-    toast({ tone: 'ok', text: `Recorded: ${DONE[decision]} ${candidate}. It is sealed in the ledger under your name.` }))
+    toast({ tone: 'ok', text: `Recorded: ${DONE[decision]} ${candidate}. Sealed in the ledger.` }))
 
   return (
     <div>
-      {showNote && <Input autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (recorded with your decision)" aria-label="Decision note" className="mb-2" />}
+      {showNote && <Input autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (recorded with the decision)" aria-label="Decision note" className="mb-2" />}
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" variant="primary" disabled={m.isPending} onClick={() => setFu(true)}>Follow up…</Button>
         <Button size="sm" variant="secondary" disabled={m.isPending} onClick={() => quick('accept')}>Accept as inconclusive</Button>

@@ -5,6 +5,7 @@ import { useToday } from '../../api/hooks'
 import { Button } from '../../ui/Button'
 import { Card, CardHeader, EmptyState, Skeleton } from '../../ui/Card'
 import { Tag } from '../../ui/Chip'
+import { PageHeader } from '../../ui/PageHeader'
 import { StatusTag, when } from '../../routes/Campaigns'
 import { MiniOutcome, OutcomeCounts } from '../campaign/MiniOutcome'
 import { goalLine } from '../program/goal'
@@ -15,29 +16,33 @@ const TONE = { ok: 'text-ok', warn: 'text-warn', neutral: 'text-muted' }
 export default function TodayPage() {
   const { data, isLoading, error } = useToday()
   const [np, setNp] = useState(false)
-  if (isLoading) return <div className="mx-auto max-w-6xl space-y-4 p-6"><Skeleton className="h-8 w-40" /><Skeleton className="h-28" /><Skeleton className="h-48" /></div>
+  if (isLoading) return <div className="mx-auto max-w-[1400px] space-y-4 p-6"><Skeleton className="h-8 w-40" /><Skeleton className="h-28" /><Skeleton className="h-48" /></div>
   if (error || !data) return <div className="mx-auto max-w-3xl p-10"><EmptyState title="Could not load" hint={(error as Error | null)?.message} /></div>
   const { attention: a, programs, standalone } = data
+  const pending = a.pending_approvals + a.abstentions.reduce((n, x) => n + x.candidates.length, 0)
   const clear = !a.pending_approvals && !a.abstentions.length && !a.halted
 
   return (
-    <div className="mx-auto max-w-6xl p-6">
+    <div className="mx-auto max-w-[1400px] p-6">
       <NewProgramDialog open={np} onOpenChange={setNp} />
-      <div className="mb-4 flex items-baseline gap-3">
-        <h1 className="text-xl font-semibold tracking-tight">Today</h1>
-        <span className="text-sm text-muted">{new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}</span>
-        {!!a.running && <Tag tone="accent">{a.running} running</Tag>}
-      </div>
+      <PageHeader title="Programs"
+        right={<Button size="sm" variant="primary" onClick={() => setNp(true)}><Plus size={14} /> New program</Button>}
+        cells={[
+          { k: 'Programs', v: `${programs.length}` },
+          { k: 'Pending decisions', v: `${pending}`, s: pending ? 'review them in Decisions' : 'nothing is held', tone: pending ? 'warn' : undefined },
+          { k: 'Running', v: `${a.running}`, s: 'campaigns in progress' },
+          { k: 'Standalone', v: `${standalone.length}`, s: 'campaigns outside a program' },
+        ]} />
 
       <Card className="mb-6">
-        <CardHeader title="Awaiting your decision" />
+        <CardHeader title="Pending decision" />
         {clear ? (
-          <p className="flex items-center gap-2 px-4 py-4 text-sm text-muted"><CheckCircle2 size={16} className="text-ok" /> All clear — nothing is waiting on a decision.</p>
+          <p className="flex items-center gap-2 px-4 py-4 text-sm text-muted"><CheckCircle2 size={16} className="text-ok" /> All clear: no decision is pending.</p>
         ) : (
           <ul className="divide-y divide-line">
             {!!a.pending_approvals && (
               <li><Link to="/inbox" className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-sunken">
-                <Inbox size={16} className="text-warn" /><span><b>Approve:</b> {a.pending_approvals} request{a.pending_approvals > 1 ? 's' : ''} waiting (research plans and lab submissions)</span>
+                <Inbox size={16} className="text-warn" /><span><b>Approve:</b> {a.pending_approvals} request{a.pending_approvals > 1 ? 's' : ''} pending (research plans and lab submissions)</span>
               </Link></li>
             )}
             {a.abstentions.map((n) => (
@@ -50,13 +55,9 @@ export default function TodayPage() {
         )}
       </Card>
 
-      <div className="mb-3 flex items-center">
-        <h2 className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">Programs</h2>
-        <Button size="sm" variant="secondary" className="ml-auto" onClick={() => setNp(true)}><Plus size={14} /> New program</Button>
-      </div>
       {!programs.length ? (
         <Card><EmptyState icon={<Layers size={28} />} title="No programs yet"
-          hint="A program is the scientific goal — a metric, a direction and a gate, such as “IC50 ≤ 20 µM”. Campaigns are runs that try to meet it, and every candidate in all of them is judged against the same gate." /></Card>
+          hint="A program is the scientific goal: a metric, a direction and a gate, such as “IC50 ≤ 20 µM”. Campaigns are runs that try to meet it, and every candidate in all of them is judged against the same gate." /></Card>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {programs.map((p) => {

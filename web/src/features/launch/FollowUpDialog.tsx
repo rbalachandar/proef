@@ -15,7 +15,7 @@ export function FollowUpDialog({ open, onOpenChange, campaignId, candidates, onL
     return (
       <Dialog open onOpenChange={onOpenChange}>
         <DialogContent title="Attach this to a program first" description="A follow-up is judged against a program's gate, and this campaign does not belong to one.">
-          <p className="text-sm text-muted">Create a program on <Link className="text-accent hover:underline" to="/">Today</Link>, then start the follow-up from its page.</p>
+          <p className="text-sm text-muted">Create a program on <Link className="text-accent hover:underline" to="/">Programs</Link>, then start the follow-up from its page.</p>
         </DialogContent>
       </Dialog>
     )

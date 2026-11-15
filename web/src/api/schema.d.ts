@@ -16,7 +16,8 @@ export interface paths {
         put?: never;
         /**
          * Create Analysis
-         * @description Store the file (bound by digest), detect what it is. No fit, no verdict.
+         * @description Store the file (bound by digest), detect what it is: a dose-response plate, or a table of measurements
+         *     (`profile` forces one). No fit, no verdict.
          */
         post: operations["create_analysis_api_v1_analyses_post"];
         delete?: never;
@@ -257,7 +258,7 @@ export interface paths {
         /**
          * Get Curves
          * @description The recorded dose–response data behind a verdict: every plate point,
-         *     the fit with its interval, and the plate's QC — so a scientist can LOOK at
+         *     the fit with its interval, and the plate's QC: so a scientist can LOOK at
          *     the evidence, not only read the number.
          */
         get: operations["get_curves_api_v1_campaigns__eid__hypotheses__hid__curves_get"];
@@ -284,6 +285,23 @@ export interface paths {
          *     in the same hash chain as everything the agents did.
          */
         post: operations["review_hypothesis_api_v1_campaigns__eid__hypotheses__hid__review_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/campaigns/{eid}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause Campaign */
+        post: operations["pause_campaign_api_v1_campaigns__eid__pause_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -517,6 +535,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/lab/instruments/{instrument_id}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Instrument
+         * @description Check a driver, on request. Recorded as an action by the person; it can never mark an instrument validated.
+         */
+        post: operations["check_instrument_api_v1_lab_instruments__instrument_id__check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/lab/sops/{sop_id}/approve": {
         parameters: {
             query?: never;
@@ -532,6 +570,23 @@ export interface paths {
          *     Attributed to the authenticated person.
          */
         post: operations["approve_sop_api_v1_lab_sops__sop_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/pauses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Pauses */
+        get: operations["list_pauses_api_v1_pauses_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -605,10 +660,45 @@ export interface paths {
         put?: never;
         /**
          * Decompose Program
-         * @description A model proposes how to split the program's objective into separately testable sub-problems.
-         *     A proposal only: nothing is recorded or run until the person starts research on the ones they keep.
+         * @description A model proposes how to split the program's objective (recursively, within the program's depth and size
+         *     limits). A proposal only: nothing is recorded or run until the person starts the tree.
          */
         post: operations["decompose_program_api_v1_programs__slug__decompose_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/programs/{slug}/pause": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pause Program */
+        post: operations["pause_program_api_v1_programs__slug__pause_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/programs/{slug}/trees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Trees */
+        get: operations["list_trees_api_v1_programs__slug__trees_get"];
+        put?: never;
+        /** Start Tree */
+        post: operations["start_tree_api_v1_programs__slug__trees_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -675,6 +765,16 @@ export interface components {
             actor?: string | null;
             /** Candidate */
             candidate?: string | null;
+            /**
+             * Event
+             * @description the ledger event type, e.g. lab_run, gate_decision
+             */
+            event?: string | null;
+            /**
+             * Hash
+             * @description first characters of the record's hash in the ledger chain
+             */
+            hash?: string | null;
             /** Kind */
             kind: string;
             /** Text */
@@ -734,17 +834,31 @@ export interface components {
             curve?: components["schemas"]["Curve"] | null;
             /** Entity */
             entity: string;
+            /**
+             * Estimate
+             * @description measurements: the mean
+             */
+            estimate?: number | null;
             /** Ic50 Um */
             ic50_um?: number | null;
+            /** N */
+            n?: number | null;
             /** N Points */
             n_points?: number | null;
             /** Reason */
             reason?: string | null;
+            /** Sd */
+            sd?: number | null;
             /**
              * Top Known
              * @description False: the plateau was inferred from the data, so the call depends on that assumption
              */
             top_known?: boolean | null;
+            /**
+             * Values
+             * @default []
+             */
+            values: number[];
         };
         /** AnalysisDiagnostic */
         AnalysisDiagnostic: {
@@ -763,6 +877,8 @@ export interface components {
          * @description What the system understood from the file, before any fit.
          */
         AnalysisPreview: {
+            /** @description measurements tables: the columns understood */
+            columns?: components["schemas"]["MeasurementColumns"] | null;
             /**
              * Diagnostics
              * @default []
@@ -781,10 +897,21 @@ export interface components {
              */
             has_doses: boolean;
             /**
+             * Kind
+             * @default plate
+             * @enum {string}
+             */
+            kind: "plate" | "measurements";
+            /**
              * N Controls
              * @default 0
              */
             n_controls: number;
+            /**
+             * N Measurements
+             * @default 0
+             */
+            n_measurements: number;
             /**
              * N Wells
              * @default 0
@@ -813,6 +940,16 @@ export interface components {
              */
             compounds: components["schemas"]["AnalysisCompound"][];
             gate?: components["schemas"]["Gate"] | null;
+            /**
+             * Kind
+             * @default plate
+             * @enum {string}
+             */
+            kind: "plate" | "measurements";
+            /** Method */
+            method?: string | null;
+            /** Metric */
+            metric?: string | null;
             /** Note */
             note?: string | null;
             /**
@@ -828,6 +965,8 @@ export interface components {
             refused: boolean;
             /** State */
             state: string;
+            /** Unit */
+            unit?: string | null;
             /** Z Kind */
             z_kind?: string | null;
             /** Z Note */
@@ -895,10 +1034,21 @@ export interface components {
              */
             max_response?: number | null;
             /**
+             * Metric
+             * @description measurements tables: what the values are, e.g. ionic_conductivity_mS_cm
+             */
+            metric?: string | null;
+            /** Sample Column */
+            sample_column?: string | null;
+            /**
              * Threshold
-             * @description IC50 gate, in the data's concentration unit
+             * @description the gate: IC50 in the data's concentration unit for a plate; the value itself for a measurements table
              */
             threshold?: number | null;
+            /** Unit */
+            unit?: string | null;
+            /** Value Column */
+            value_column?: string | null;
         };
         /** AnalysisSummary */
         AnalysisSummary: {
@@ -923,6 +1073,11 @@ export interface components {
             /** Id */
             id: string;
             preview: components["schemas"]["AnalysisPreview"];
+            /**
+             * Profile
+             * @default plate_assay
+             */
+            profile: string;
             result?: components["schemas"]["AnalysisResult"] | null;
             /**
              * Reviews
@@ -1069,6 +1224,11 @@ export interface components {
             file: string;
             /** Layout */
             layout?: string | null;
+            /**
+             * Profile
+             * @default auto
+             */
+            profile: string;
         };
         /** Body_submit_results_api_v1_campaigns__eid__results_post */
         Body_submit_results_api_v1_campaigns__eid__results_post: {
@@ -1132,7 +1292,7 @@ export interface components {
             k?: number | null;
             /**
              * Mode
-             * @description 'hand': you run the plate yourself and submit it; candidates are required
+             * @description 'hand': the plate is run by hand and submitted; candidates are required
              * @default agent
              * @enum {string}
              */
@@ -1141,7 +1301,7 @@ export interface components {
             objective?: string | null;
             /**
              * Replan
-             * @description after each round the model proposes the next hypotheses from the results; you approve them
+             * @description after each round the model proposes the next hypotheses from the results; they require approval
              * @default false
              */
             replan: boolean;
@@ -1150,12 +1310,6 @@ export interface components {
              * @description defaults to 2, and is capped by the program's limit
              */
             rounds?: number | null;
-            /**
-             * Share
-             * @description how many sub-problems split the program's lab-run and hypothesis limits
-             * @default 1
-             */
-            share: number;
             /** @description judged against this sub-problem's own gate instead of the program's */
             sub_problem?: components["schemas"]["SubProblem"] | null;
         };
@@ -1190,6 +1344,16 @@ export interface components {
             llm?: components["schemas"]["LlmUse"] | null;
             /** Objective */
             objective?: string | null;
+            /** @description this campaign is paused */
+            pause?: components["schemas"]["PauseState"] | null;
+            /**
+             * Paused
+             * @description held by a pause on this campaign or on its program
+             * @default false
+             */
+            paused: boolean;
+            /** @description its program is paused, which holds it too */
+            paused_by_program?: components["schemas"]["PauseState"] | null;
             plan_review?: components["schemas"]["PlanReview"] | null;
             /** Problem Id */
             problem_id?: string | null;
@@ -1226,6 +1390,12 @@ export interface components {
             autonomy?: string | null;
             /** Id */
             id: string;
+            /**
+             * Paused
+             * @description held by a pause on this campaign or on its program
+             * @default false
+             */
+            paused: boolean;
             /** Problem Id */
             problem_id?: string | null;
             program?: components["schemas"]["ProgramRef"] | null;
@@ -1338,12 +1508,45 @@ export interface components {
         };
         /** Decomposition */
         Decomposition: {
+            /** Max Depth */
+            max_depth: number;
+            /** Max Subproblems */
+            max_subproblems: number;
             /** Model */
             model: string;
+            /** Nodes */
+            nodes: components["schemas"]["TreeNode"][];
             /** Objective */
             objective: string;
-            /** Sub Problems */
-            sub_problems: components["schemas"]["SubProblem"][];
+        };
+        /**
+         * DriverCheck
+         * @description What a driver check found. It never changes an instrument's validation status: only verification
+         *     against a physical device does that.
+         */
+        DriverCheck: {
+            /** Checked At */
+            checked_at: number;
+            /** Detail */
+            detail: string;
+            /** Id */
+            id: string;
+            /**
+             * Simulation Only
+             * @description the check ran the driver in simulation mode; no physical device was addressed
+             * @default true
+             */
+            simulation_only: boolean;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ready" | "not-installed" | "needs-configuration" | "failed";
+            /**
+             * Tools
+             * @default []
+             */
+            tools: string[];
         };
         /** EvalSummary */
         EvalSummary: {
@@ -1670,6 +1873,12 @@ export interface components {
              */
             breadth: number;
             /**
+             * Max Depth
+             * @description how many levels an objective may be split into sub-problems
+             * @default 2
+             */
+            max_depth: number;
+            /**
              * Max Families
              * @description distinct mechanistic bets a model may propose
              * @default 3
@@ -1693,6 +1902,12 @@ export interface components {
              * @default 3
              */
             max_rounds: number;
+            /**
+             * Max Subproblems
+             * @description sub-problems in one research tree, all levels together
+             * @default 8
+             */
+            max_subproblems: number;
             /**
              * Max Variants Per Family
              * @default 3
@@ -1721,6 +1936,23 @@ export interface components {
              * @default false
              */
             reviewed: boolean;
+        };
+        /** MeasurementColumns */
+        MeasurementColumns: {
+            /**
+             * All
+             * @default []
+             */
+            all: string[];
+            /**
+             * Candidates
+             * @default []
+             */
+            candidates: string[];
+            /** Sample */
+            sample?: string | null;
+            /** Value */
+            value?: string | null;
         };
         /**
          * ModelStatus
@@ -1764,6 +1996,41 @@ export interface components {
             /** Title */
             title: string;
         };
+        /** PauseIn */
+        PauseIn: {
+            /** Paused */
+            paused: boolean;
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+        };
+        /** PauseResult */
+        PauseResult: {
+            pause?: components["schemas"]["PauseState"] | null;
+            /** Paused */
+            paused: boolean;
+        };
+        /** PauseState */
+        PauseState: {
+            /** By */
+            by: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "program" | "campaign";
+            /**
+             * Reason
+             * @default
+             */
+            reason: string;
+            /** Scope */
+            scope: string;
+            /** Ts */
+            ts?: number | null;
+        };
         /** Pick */
         Pick: {
             /** Candidate */
@@ -1785,16 +2052,38 @@ export interface components {
          * @description What a model proposed, shown to a person before anything reaches the lab.
          */
         Plan: {
+            critique?: components["schemas"]["PlanCritique"] | null;
             /**
              * Families
              * @default []
              */
             families: components["schemas"]["PlanFamily"][];
             /**
+             * Label
+             * @description e.g. 'after round 1' for a re-plan
+             */
+            label?: string | null;
+            /**
              * N Hypotheses
              * @default 0
              */
             n_hypotheses: number;
+        };
+        /**
+         * PlanCritique
+         * @description A second model's review of the plan. Advisory: it cannot change or approve anything.
+         */
+        PlanCritique: {
+            /**
+             * Model
+             * @default
+             */
+            model: string;
+            /**
+             * Notes
+             * @default []
+             */
+            notes: components["schemas"]["PlanNote"][];
         };
         /**
          * PlanFamily
@@ -1836,6 +2125,22 @@ export interface components {
              * @default []
              */
             variants: components["schemas"]["PlanVariant"][];
+        };
+        /** PlanNote */
+        PlanNote: {
+            /**
+             * Severity
+             * @default note
+             * @enum {string}
+             */
+            severity: "concern" | "note";
+            /**
+             * Target
+             * @default plan
+             */
+            target: string;
+            /** Text */
+            text: string;
         };
         /**
          * PlanReview
@@ -1880,6 +2185,12 @@ export interface components {
              */
             predicted: string;
             /**
+             * Protocol
+             * @description the dose ladder the model designed, as one line
+             * @default
+             */
+            protocol: string;
+            /**
              * Rationale
              * @default
              */
@@ -1906,10 +2217,12 @@ export interface components {
             /**
              * @default {
              *       "breadth": 3,
+             *       "max_depth": 2,
              *       "max_families": 3,
              *       "max_hypotheses": 12,
              *       "max_lab_runs": 20,
              *       "max_rounds": 3,
+             *       "max_subproblems": 8,
              *       "max_variants_per_family": 3
              *     }
              */
@@ -1951,10 +2264,12 @@ export interface components {
             /**
              * @default {
              *       "breadth": 3,
+             *       "max_depth": 2,
              *       "max_families": 3,
              *       "max_hypotheses": 12,
              *       "max_lab_runs": 20,
              *       "max_rounds": 3,
+             *       "max_subproblems": 8,
              *       "max_variants_per_family": 3
              *     }
              */
@@ -1972,6 +2287,8 @@ export interface components {
             next_steps: components["schemas"]["NextStep"][];
             /** Objective */
             objective?: string | null;
+            /** @description the program is paused: no new lab submissions until resumed */
+            pause?: components["schemas"]["PauseState"] | null;
             /**
              * Results
              * @default []
@@ -2017,10 +2334,12 @@ export interface components {
             /**
              * @default {
              *       "breadth": 3,
+             *       "max_depth": 2,
              *       "max_families": 3,
              *       "max_hypotheses": 12,
              *       "max_lab_runs": 20,
              *       "max_rounds": 3,
+             *       "max_subproblems": 8,
              *       "max_variants_per_family": 3
              *     }
              */
@@ -2033,6 +2352,8 @@ export interface components {
             name: string;
             /** Objective */
             objective?: string | null;
+            /** @description the program is paused: no new lab submissions until resumed */
+            pause?: components["schemas"]["PauseState"] | null;
             /** Running */
             running: number;
             /** Slug */
@@ -2146,6 +2467,12 @@ export interface components {
              * @default []
              */
             in_file_only: string[];
+            /**
+             * Kind
+             * @default plate
+             * @enum {string}
+             */
+            kind: "plate" | "measurements";
             /**
              * Matches
              * @default []
@@ -2319,6 +2646,133 @@ export interface components {
             programs: components["schemas"]["ProgramSummary"][];
             /** Standalone */
             standalone: components["schemas"]["CampaignDigest"][];
+        };
+        /** TreeCreate */
+        TreeCreate: {
+            /**
+             * Autonomy
+             * @default gate
+             * @enum {string}
+             */
+            autonomy: "observe" | "gate" | "act";
+            /** Nodes */
+            nodes: components["schemas"]["TreeNode"][];
+            /** Objective */
+            objective: string;
+            /** Rounds */
+            rounds?: number | null;
+        };
+        /**
+         * TreeNode
+         * @description One sub-problem in a research tree. `parent` is another node's id, or null for a direct child of the objective.
+         */
+        TreeNode: {
+            /**
+             * Depth
+             * @default 1
+             */
+            depth: number;
+            /**
+             * Direction
+             * @default min
+             * @enum {string}
+             */
+            direction: "min" | "max";
+            /** Gate */
+            gate?: number | null;
+            /** Id */
+            id: string;
+            /** Metric */
+            metric?: string | null;
+            /** Objective */
+            objective: string;
+            /** Parent */
+            parent?: string | null;
+            /**
+             * Priority
+             * @default 1
+             */
+            priority: number;
+            /**
+             * Rationale
+             * @default
+             */
+            rationale: string;
+            /** Unit */
+            unit?: string | null;
+        };
+        /** TreeNodeView */
+        TreeNodeView: {
+            /** Campaign Id */
+            campaign_id?: string | null;
+            /**
+             * Depth
+             * @default 1
+             */
+            depth: number;
+            /**
+             * Direction
+             * @default min
+             * @enum {string}
+             */
+            direction: "min" | "max";
+            /** Gate */
+            gate?: number | null;
+            /** Id */
+            id: string;
+            /** Metric */
+            metric?: string | null;
+            /** Objective */
+            objective: string;
+            /** Parent */
+            parent?: string | null;
+            /**
+             * Priority
+             * @default 1
+             */
+            priority: number;
+            /**
+             * Rationale
+             * @default
+             */
+            rationale: string;
+            /**
+             * Runs
+             * @description lab runs allocated to this leaf
+             */
+            runs?: number | null;
+            /**
+             * Status
+             * @description open | in lab | achieved | partial | failed | inconclusive
+             * @default open
+             */
+            status: string;
+            /** Unit */
+            unit?: string | null;
+            /**
+             * Verdicts
+             * @default {}
+             */
+            verdicts: {
+                [key: string]: string;
+            };
+        };
+        /** TreeView */
+        TreeView: {
+            /** By */
+            by: string;
+            /** Id */
+            id: string;
+            /** Nodes */
+            nodes: components["schemas"]["TreeNodeView"][];
+            /** Objective */
+            objective: string;
+            /** Run Budget */
+            run_budget: number;
+            /** Status */
+            status: string;
+            /** Ts */
+            ts?: number | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -2904,6 +3358,41 @@ export interface operations {
             };
         };
     };
+    pause_campaign_api_v1_campaigns__eid__pause_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                eid: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PauseIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PauseResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_provenance_api_v1_campaigns__eid__provenance_get: {
         parameters: {
             query?: {
@@ -3268,6 +3757,37 @@ export interface operations {
             };
         };
     };
+    check_instrument_api_v1_lab_instruments__instrument_id__check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                instrument_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DriverCheck"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     approve_sop_api_v1_lab_sops__sop_id__approve_post: {
         parameters: {
             query?: never;
@@ -3295,6 +3815,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_pauses_api_v1_pauses_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PauseState"][];
                 };
             };
         };
@@ -3436,6 +3976,107 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Decomposition"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    pause_program_api_v1_programs__slug__pause_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PauseIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PauseResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_trees_api_v1_programs__slug__trees_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreeView"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_tree_api_v1_programs__slug__trees_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                slug: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TreeCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreeView"];
                 };
             };
             /** @description Validation Error */

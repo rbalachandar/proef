@@ -57,7 +57,7 @@ export function HypothesisDrawer({ campaign, hid, onClose }: { campaign: Detail;
                   )}
                   {h.state === 'abstained' && (
                     <div className="mb-4 rounded-lg border border-abstain/30 p-3">
-                      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-abstain">Your decision</div>
+                      <div className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-abstain">Decision</div>
                       <ReviewControls campaignId={campaign.id} hid={h.id} candidate={h.head} review={h.review} />
                     </div>
                   )}

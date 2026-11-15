@@ -9,7 +9,7 @@ export function goalLine(goal: Goal, gate: Gate): { tone: 'ok' | 'warn' | 'neutr
   const unit = gate.unit ? ` ${gate.unit}` : ''
   const b = goal.best
   if (goal.met && b)
-    return { tone: 'ok', title: 'Goal met', detail: `${b.candidate} — ${sig(b.observed)}${unit} against ${gate.label} (${b.state}, ${b.campaign_title})` }
+    return { tone: 'ok', title: 'Goal met', detail: `${b.candidate}: ${sig(b.observed)}${unit} against ${gate.label} (${b.state}, ${b.campaign_title})` }
   if (b)
     return { tone: 'warn', title: 'Not met yet',
       detail: `closest so far: ${b.candidate} at ${sig(b.observed)}${unit} (${b.state})${goal.abstained ? ` · ${goal.abstained} abstained candidate${goal.abstained > 1 ? 's' : ''} could still resolve it` : ''}` }

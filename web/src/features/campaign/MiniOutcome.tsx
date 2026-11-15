@@ -5,7 +5,7 @@ export function MiniOutcome({ f }: { f: Schemas['Funnel'] }) {
   const seg = [{ n: f.claimed, c: 'bg-ok' }, { n: f.refuted, c: 'bg-bad' }, { n: f.abstained, c: 'bg-abstain' }]
   return (
     <div className="flex items-center gap-2" title={`${f.claimed} claimed · ${f.refuted} refuted · ${f.abstained} abstained of ${f.judged} judged`}>
-      <div className="flex h-1.5 w-20 overflow-hidden rounded-full bg-sunken">
+      <div className="flex h-1.5 w-20 overflow-hidden bg-sunken">
         {f.judged > 0 && seg.map((s, i) => s.n > 0 && <div key={i} className={s.c} style={{ width: `${(s.n / f.judged) * 100}%` }} />)}
       </div>
       <span className="num text-[11px] text-muted">{f.claimed}/{f.refuted}/{f.abstained}</span>

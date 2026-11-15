@@ -44,3 +44,55 @@ def test_cli_demo_exit_zero(tmp_path):
     assert out.returncode == 0
     assert "the two moments landed" in out.stdout
     assert "chain verified: OK" in out.stdout
+
+
+def _shuffled_listing(monkeypatch, seed):
+    """What another filesystem could do: list a directory's files in a different order."""
+    import random
+    real = Path.glob
+    monkeypatch.setattr(Path, "glob", lambda self, pat: iter(random.Random(seed).sample(list(real(self, pat)),
+                                                                                         len(list(real(self, pat))))))
+
+
+def _confirmation_runs(rep):
+    """candidate -> the run id its orthogonal confirmation was submitted under (from the campaign's own log)."""
+    import re
+    return dict(re.findall(r"orthogonal confirmation assay for (\w+) .*-> run (sim-\d+-\d+)", "\n".join(rep["lines"])))
+
+
+def test_confirmation_run_ids_and_verdicts_do_not_depend_on_directory_listing_order(tmp_path, monkeypatch):
+    """CI found this: macOS and Linux list an outbox in different orders, and the analysis order decided which
+    confirmation run got which run id (and so which simulator noise). The monitor now fixes the order."""
+    baseline = _confirmation_runs(run_demo(db_path=tmp_path / "base.db"))
+    assert baseline == {"WINNER": "sim-19-004", "FALSER": "sim-19-005", "BORDER": "sim-19-006"}, baseline
+    for seed in range(6):
+        _shuffled_listing(monkeypatch, seed)
+        rep = run_demo(db_path=tmp_path / f"s{seed}.db")
+        assert _confirmation_runs(rep) == baseline, f"listing order {seed} changed which run confirmed what"
+        assert rep["verdicts"] == EXPECTED
+
+
+def test_the_monitor_yields_files_in_a_fixed_order(tmp_path, monkeypatch):
+    from proef.watch import DeviceMonitor
+    for name in ("sim-1-003.csv", "sim-1-001.csv", "sim-1-002.csv"):
+        (tmp_path / name).write_text("x")
+    _shuffled_listing(monkeypatch, 3)
+    assert [e.path.name for e in DeviceMonitor(tmp_path).poll()] == ["sim-1-001.csv", "sim-1-002.csv", "sim-1-003.csv"]
+
+
+def test_the_false_positive_is_engineered_not_left_to_noise():
+    """FALSER looks potent in the binding assay and is inactive by the orthogonal enzymatic method, by explicit bias."""
+    from proef.demo import DEMO_METHOD_BIAS
+    from proef.adapters.lab.simulator import SimulatorLab
+    from proef.core.contracts import Envelope, ProtocolOp, ProtocolStep, ProtocolSubmission, SampleKind, SampleSpec
+
+    def run(lab, assay):
+        p = ProtocolSubmission(envelope=Envelope(experiment_branch_id="t"), title="t", assay_type=assay,
+                               steps=[ProtocolStep(seq=1, op=ProtocolOp.dispense)],
+                               samples=[SampleSpec(sample_id="FALSER", kind=SampleKind.compound, concentration="1uM")])
+        return lab.apparent_ic50_um(lab.submit_protocol(p), "FALSER")
+    plain, biased = SimulatorLab(seed=19), SimulatorLab(seed=19, method_bias=DEMO_METHOD_BIAS)
+    assert run(biased, "binding") == run(plain, "binding"), "the primary (binding) assay is untouched"
+    assert run(biased, "enzymatic") == 4.0 * run(plain, "enzymatic"), "only the orthogonal method disagrees"
+    again = SimulatorLab.import_state(biased.export_state())
+    assert again.method_bias == DEMO_METHOD_BIAS, "the bias survives the sandbox state round trip"

@@ -1092,7 +1092,9 @@ def _export_instrument_file(inbox: Path, run_id: str, candidate: str,
     true_prop = lab._property_true_value(run_id, candidate) \
         if prop_mode else None
     true_ic50 = None
-    if lab is not None and hasattr(lab, "true_ic50_um"):
+    if lab is not None and hasattr(lab, "apparent_ic50_um"):
+        true_ic50 = lab.apparent_ic50_um(run_id, candidate)     # includes any method-specific bias of this run's assay
+    elif lab is not None and hasattr(lab, "true_ic50_um"):
         true_ic50 = lab.true_ic50_um(run_id, candidate)
     well = 3
     for c in concentrations:

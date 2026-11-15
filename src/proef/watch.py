@@ -47,7 +47,10 @@ class DeviceMonitor:
     def poll(self) -> list[LabEvent]:
         events = []
         for pattern in self.patterns:
-            for f in self.inbox.glob(pattern):
+            # a FIXED order: directory order differs between filesystems (macOS and Linux), and the order
+            # plates are analysed in decides which confirmation run is submitted first, and so which run id
+            # (and which simulator noise) each confirmation gets. Unsorted listing made verdicts depend on the machine.
+            for f in sorted(self.inbox.glob(pattern)):
                 if f in self._seen:
                     continue
                 self._seen.add(f)

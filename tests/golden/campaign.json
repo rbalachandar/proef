@@ -17,18 +17,18 @@
     "refutation_condition": "",
     "round": 1,
     "selected": true,
-    "stage": "inconclusive \u2014 CI straddles the threshold (IC50 (\u00b5M) 20.883 (95% CI 17.825\u201341.468))",
+    "stage": "inconclusive \u2014 CI straddles the threshold (IC50 (\u00b5M) 26.48 (95% CI 25.79\u201349.879))",
     "state": "inconclusive",
     "statement": "binds",
     "threshold": 2.0,
     "verdict": {
      "ci": [
-      17.825,
-      41.468
+      25.79,
+      49.879
      ],
      "extrapolation": false,
      "margin": "narrow margin",
-     "observed": 20.883,
+     "observed": 26.48,
      "status": "inconclusive",
      "unit_label": "IC50 (\u00b5M)"
     }
@@ -49,18 +49,18 @@
     "refutation_condition": "",
     "round": 1,
     "selected": true,
-    "stage": "confirmed by orthogonal assay \u2014 IC50 (\u00b5M) 4.642 (95% CI 2.598\u20134.642) \u00b7 narrow margin",
+    "stage": "confirmed by orthogonal assay \u2014 IC50 (\u00b5M) 4.403 (95% CI 3.043\u20136.043) \u00b7 borderline: CI spans the gate",
     "state": "confirmed",
     "statement": "binds",
     "threshold": 5.0,
     "verdict": {
      "ci": [
-      2.598,
-      4.642
+      3.043,
+      6.043
      ],
      "extrapolation": false,
-     "margin": "narrow margin",
-     "observed": 4.642,
+     "margin": "borderline: CI spans the gate",
+     "observed": 4.403,
      "status": "confirmed",
      "unit_label": "IC50 (\u00b5M)"
     }
@@ -113,19 +113,19 @@
     "refutation_condition": "",
     "round": 2,
     "selected": true,
-    "stage": "refuted (IC50 (\u00b5M) 49.879 (95% CI 27.188\u201366.674)) \u00b7 narrow margin",
+    "stage": "refuted (IC50 (\u00b5M) 41.468 (95% CI 35.396\u201361.6)) \u00b7 narrow margin",
     "state": "refuted",
     "statement": "binds",
     "threshold": 11.0,
     "verdict": {
      "ci": [
-      27.188,
-      66.674
+      35.396,
+      61.6
      ],
      "extrapolation": false,
      "margin": "narrow margin",
-     "observed": 49.879,
-     "status": "invalidated",
+     "observed": 41.468,
+     "status": "refuted",
      "unit_label": "IC50 (\u00b5M)"
     }
    },
@@ -569,59 +569,6 @@
     }
    ],
    [
-    "hypothesis_invalidated",
-    {
-     "derivation": {
-      "decided_by": {
-       "direction": "min",
-       "metric": "ic50_um",
-       "threshold": 20.0
-      },
-      "derived": {
-       "ci": "residual bootstrap 95%",
-       "method": "hill-bootstrap",
-       "metric": "ic50_um"
-      },
-      "measured_by": "simulator (sim-v1)",
-      "raw": {
-       "quantity": "RFU",
-       "wells": 14
-      }
-     },
-     "direction": "min",
-     "metric": "ic50_um",
-     "observed": 61.6,
-     "observed_ci": [
-      55.431,
-      80.199
-     ],
-     "qc_passed": true,
-     "threshold": 20.0,
-     "verdict": "invalidated"
-    }
-   ],
-   [
-    "lab_run",
-    {
-     "assay": "enzymatic",
-     "concentrations": [
-      10.0
-     ],
-     "instrument": "simulator",
-     "instrument_version": "sim-v1",
-     "n_controls": 1,
-     "n_samples": 1,
-     "replicates": 3,
-     "title": "auto-confirmation-H2"
-    }
-   ],
-   [
-    "hypothesis_tested",
-    {
-     "assay": "enzymatic"
-    }
-   ],
-   [
     "hypothesis_validated",
     {
      "derivation": {
@@ -675,22 +622,75 @@
     }
    ],
    [
-    "hypothesis_validated",
+    "hypothesis_invalidated",
+    {
+     "derivation": {
+      "decided_by": {
+       "direction": "min",
+       "metric": "ic50_um",
+       "threshold": 20.0
+      },
+      "derived": {
+       "ci": "residual bootstrap 95%",
+       "method": "hill-bootstrap",
+       "metric": "ic50_um"
+      },
+      "measured_by": "simulator (sim-v1)",
+      "raw": {
+       "quantity": "RFU",
+       "wells": 14
+      }
+     },
+     "direction": "min",
+     "metric": "ic50_um",
+     "observed": 61.6,
+     "observed_ci": [
+      55.431,
+      80.199
+     ],
+     "qc_passed": true,
+     "threshold": 20.0,
+     "verdict": "invalidated"
+    }
+   ],
+   [
+    "lab_run",
+    {
+     "assay": "enzymatic",
+     "concentrations": [
+      10.0
+     ],
+     "instrument": "simulator",
+     "instrument_version": "sim-v1",
+     "n_controls": 1,
+     "n_samples": 1,
+     "replicates": 3,
+     "title": "auto-confirmation-H2"
+    }
+   ],
+   [
+    "hypothesis_tested",
+    {
+     "assay": "enzymatic"
+    }
+   ],
+   [
+    "hypothesis_inconclusive",
     {
      "confirmation": {
       "agreed": true,
       "primary_ci": [
-       3.043,
-       5.158
+       17.825,
+       41.468
       ],
-      "primary_ic50": 4.288,
-      "ratio": 1.08,
+      "primary_ic50": 20.883,
+      "ratio": 1.27,
       "rule": "ci-overlap",
       "secondary_ci": [
-       2.598,
-       4.642
+       25.79,
+       49.879
       ],
-      "secondary_ic50": 4.642
+      "secondary_ic50": 26.48
      },
      "derivation": {
       "decided_by": {
@@ -711,10 +711,57 @@
      },
      "direction": "min",
      "metric": "ic50_um",
-     "observed": 4.642,
+     "observed": 26.48,
      "observed_ci": [
-      2.598,
-      4.642
+      25.79,
+      49.879
+     ],
+     "qc_passed": true,
+     "threshold": 20.0,
+     "verdict": "inconclusive"
+    }
+   ],
+   [
+    "hypothesis_validated",
+    {
+     "confirmation": {
+      "agreed": true,
+      "primary_ci": [
+       3.043,
+       5.158
+      ],
+      "primary_ic50": 4.288,
+      "ratio": 1.03,
+      "rule": "ci-overlap",
+      "secondary_ci": [
+       3.043,
+       6.043
+      ],
+      "secondary_ic50": 4.403
+     },
+     "derivation": {
+      "decided_by": {
+       "direction": "min",
+       "metric": "ic50_um",
+       "threshold": 20.0
+      },
+      "derived": {
+       "ci": "residual bootstrap 95%",
+       "method": "orthogonal re-measurement + fit",
+       "metric": "ic50_um"
+      },
+      "measured_by": "simulator (sim-v1)",
+      "raw": {
+       "quantity": "RFU",
+       "wells": 14
+      }
+     },
+     "direction": "min",
+     "metric": "ic50_um",
+     "observed": 4.403,
+     "observed_ci": [
+      3.043,
+      6.043
      ],
      "qc_passed": true,
      "threshold": 20.0,
@@ -943,6 +990,53 @@
     }
    ],
    [
+    "hypothesis_invalidated",
+    {
+     "confirmation": {
+      "agreed": true,
+      "primary_ci": [
+       27.188,
+       66.674
+      ],
+      "primary_ic50": 49.879,
+      "ratio": 1.2,
+      "rule": "ci-overlap",
+      "secondary_ci": [
+       35.396,
+       61.6
+      ],
+      "secondary_ic50": 41.468
+     },
+     "derivation": {
+      "decided_by": {
+       "direction": "min",
+       "metric": "ic50_um",
+       "threshold": 20.0
+      },
+      "derived": {
+       "ci": "residual bootstrap 95%",
+       "method": "orthogonal re-measurement + fit",
+       "metric": "ic50_um"
+      },
+      "measured_by": "simulator (sim-v1)",
+      "raw": {
+       "quantity": "RFU",
+       "wells": 14
+      }
+     },
+     "direction": "min",
+     "metric": "ic50_um",
+     "observed": 41.468,
+     "observed_ci": [
+      35.396,
+      61.6
+     ],
+     "qc_passed": true,
+     "threshold": 20.0,
+     "verdict": "refuted"
+    }
+   ],
+   [
     "hypothesis_validated",
     {
      "confirmation": {
@@ -998,7 +1092,7 @@
      ],
      "stage": "round-2-complete",
      "verdicts": {
-      "H3": "invalidated",
+      "H3": "refuted",
       "M1": "confirmed"
      }
     }
@@ -1035,16 +1129,16 @@
       "verdict": "inconclusive"
      },
      {
-      "candidate": "H2",
-      "verdict": "invalidated"
-     },
-     {
       "candidate": "H1",
       "verdict": "confirmed"
      },
      {
-      "candidate": "H3",
+      "candidate": "H2",
       "verdict": "invalidated"
+     },
+     {
+      "candidate": "H3",
+      "verdict": "refuted"
      },
      {
       "candidate": "M1",
@@ -1052,7 +1146,7 @@
      },
      {
       "candidate": "H3",
-      "verdict": "invalidated"
+      "verdict": "refuted"
      },
      {
       "candidate": "M1",
@@ -1133,7 +1227,7 @@
       "n_controls": 1,
       "n_samples": 1,
       "replicates": 3,
-      "title": "auto-confirmation-H2"
+      "title": "auto-confirmation-H1"
      },
      {
       "assay": "enzymatic",
@@ -1145,7 +1239,7 @@
       "n_controls": 1,
       "n_samples": 1,
       "replicates": 3,
-      "title": "auto-confirmation-H1"
+      "title": "auto-confirmation-H2"
      },
      {
       "assay": "binding",
@@ -1292,7 +1386,7 @@
     "derivations": [
      {
       "candidate": "AD1",
-      "description": "measured RFU 14 wells on simulator (sim-v1)  \u2192  IC50 (\u00b5M) by hill-bootstrap, residual bootstrap 95%  \u2192  gate: IC50 (\u00b5M) \u2264 20"
+      "description": "measured RFU 14 wells on simulator (sim-v1)  \u2192  IC50 (\u00b5M) by orthogonal re-measurement + fit, residual bootstrap 95%  \u2192  gate: IC50 (\u00b5M) \u2264 20"
      },
      {
       "candidate": "H1",
@@ -1304,7 +1398,7 @@
      },
      {
       "candidate": "H3",
-      "description": "measured RFU 14 wells on simulator (sim-v1)  \u2192  IC50 (\u00b5M) by hill-bootstrap, residual bootstrap 95%  \u2192  gate: IC50 (\u00b5M) \u2264 20"
+      "description": "measured RFU 14 wells on simulator (sim-v1)  \u2192  IC50 (\u00b5M) by orthogonal re-measurement + fit, residual bootstrap 95%  \u2192  gate: IC50 (\u00b5M) \u2264 20"
      },
      {
       "candidate": "M1",
@@ -1314,19 +1408,19 @@
     "rows": [
      {
       "candidate": "AD1",
-      "ci95": "17.825\u201341.468",
-      "estimated": 20.883,
+      "ci95": "25.79\u201349.879",
+      "estimated": 26.48,
       "estimated_label": "estimated IC50 (\u00b5M)",
-      "evidence_run": "sim-3-001",
+      "evidence_run": "sim-3-004",
       "gate": "IC50 (\u00b5M) 20",
       "verdict": "inconclusive"
      },
      {
       "candidate": "H1",
-      "ci95": "2.598\u20134.642",
-      "estimated": 4.642,
+      "ci95": "3.043\u20136.043",
+      "estimated": 4.403,
       "estimated_label": "estimated IC50 (\u00b5M)",
-      "evidence_run": "sim-3-006",
+      "evidence_run": "sim-3-005",
       "gate": "IC50 (\u00b5M) 20",
       "verdict": "confirmed"
      },
@@ -1341,12 +1435,12 @@
      },
      {
       "candidate": "H3",
-      "ci95": "27.188\u201366.674",
-      "estimated": 49.879,
+      "ci95": "35.396\u201361.6",
+      "estimated": 41.468,
       "estimated_label": "estimated IC50 (\u00b5M)",
-      "evidence_run": "sim-3-007",
+      "evidence_run": "sim-3-009",
       "gate": "IC50 (\u00b5M) 20",
-      "verdict": "invalidated"
+      "verdict": "refuted"
      },
      {
       "candidate": "M1",
@@ -1363,8 +1457,8 @@
   "report": {
    "recommendations": [
     "recommendation: best binder so far is AD1 (IC50 20.883 uM) \u2014 next: confirm with orthogonal assay",
-    "recommendation: best binder so far is H2 (IC50 61.6 uM) \u2014 next: confirm with orthogonal assay",
     "recommendation: best binder so far is H1 (IC50 4.288 uM) \u2014 next: confirm with orthogonal assay",
+    "recommendation: best binder so far is H2 (IC50 61.6 uM) \u2014 next: confirm with orthogonal assay",
     "recommendation: best binder so far is H3 (IC50 49.879 uM) \u2014 next: confirm with orthogonal assay",
     "recommendation: best binder so far is M1 (IC50 1.703 uM) \u2014 next: confirm with orthogonal assay"
    ],
@@ -1380,7 +1474,7 @@
     "AD1": "inconclusive",
     "H1": "confirmed",
     "H2": "invalidated",
-    "H3": "invalidated",
+    "H3": "refuted",
     "M1": "confirmed"
    }
   },

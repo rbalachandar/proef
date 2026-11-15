@@ -11,15 +11,14 @@ Status legend: `[ ]` open · `[~]` in progress · `[x]` done
 > submissions, opt-in re-planning after each round, a recursive research tree with roll-up (depth and size capped), a critic agent, model-designed dose ladders, and a Lab driver check.
 > Open: configuring a real device from the workbench, replicates and controls chosen by the model.
 >
-> **Open, found Nov 15, 2026 (CI): verdicts depend on the order instrument files are analysed in.** `DeviceMonitor.poll()` lists
-> an outbox with `glob()`, which is filesystem order: macOS and Linux differ, and the order decides which orthogonal
-> confirmation is submitted first, so the simulator's shared random draws differ. On GitHub's Linux runner the engineered demo
-> (`tests/test_demo_moment.py`, seed 19) and the golden campaign come out differently, which is why CI has failed since the
-> beginning of November while passing locally. Sorting the listing makes the engine deterministic but moves those outcomes:
-> across 2,000+ seeds none reproduces the demo's three moments, and under sorted order a refuted FALSER tends to arrive with a
-> refuted WINNER and a confirmed BORDER, which looks like confirmations being attached to the wrong compound. Needs a proper
-> look at how confirmations are matched to compounds, then draws that do not depend on processing order, then a re-engineered
-> demo and a regenerated golden file. Until then the demo and golden tests only pass on macOS.
+> **Fixed Nov 15, 2026 (CI red since early Nov): verdicts depended on the order instrument files were analysed in.**
+> `DeviceMonitor.poll()` listed an outbox in filesystem order (macOS and Linux differ), and the analysis order decided which
+> orthogonal confirmation was submitted first. The simulator seeds each run's noise from its run id, so the confirmations got
+> different noise on different machines. The monitor now lists files in sorted order. The demo's "FALSER refuted" moment had never
+> been engineered: it was a lucky draw tied to that order. The simulator now has an explicit `method_bias` (a compound can look
+> potent in one assay type and inactive in the orthogonal one), the demo uses it for FALSER, and the golden campaign was
+> regenerated (one change: H3 invalidated to refuted). Tests: verdicts and confirmation run ids are invariant under shuffled
+> directory listings; verified in your Python and in numpy-less and numpy+rdkit 3.12 environments.
 
 ## P0 — Critical review, Oct 2026 (docs/REVIEW-2026-10.md — fix log there)
 Campaign epistemology was sound; the verdict-READING layers betrayed it.

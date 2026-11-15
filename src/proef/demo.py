@@ -30,6 +30,9 @@ DEMO_SMILES = {
     "BORDER": "Cc1cccc(NC(=O)c2ccc(F)cc2)c1",
 }
 EXPECTED = {"WINNER": "confirmed", "FALSER": "refuted", "BORDER": "inconclusive"}
+# FALSER is an assay artifact: it looks potent in the binding assay and is inactive by the orthogonal enzymatic method.
+# Engineered explicitly (not left to simulator noise), so the moment lands on every machine, in any run order.
+DEMO_METHOD_BIAS = {"FALSER": {"enzymatic": 4.0}}
 
 
 def _campaign_config():
@@ -107,7 +110,7 @@ def run_demo(db_path: str | Path | None = None,
     db.unlink(missing_ok=True)          # idempotent: the demo is stateless
     store = SqliteProvenanceStore(str(db))
     lines: list[str] = []
-    rep = run_campaign(_campaign_config(), SimulatorLab(seed=DEMO_SEED),
+    rep = run_campaign(_campaign_config(), SimulatorLab(seed=DEMO_SEED, method_bias=DEMO_METHOD_BIAS),
                        store,
                        notify=(lambda m: (lines.append(str(m)),
                                           print(f"  [demo] {m}")

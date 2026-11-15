@@ -84,14 +84,21 @@ class SimulatorLab:
       draws; median is the reported value.
     - Counterscreens: 'counterscreen' assay flags assay-interference artifacts
       (PAINS-like): a seeded fraction of compounds shows false signal.
+    - Method bias: `method_bias={"<sample>": {"<assay>": factor}}` multiplies a compound's
+      apparent IC50 in ONE assay type, a method-specific artifact (an aggregator that looks
+      potent in a binding assay and is not active in an enzymatic one). It is how a demo or
+      a test engineers "the orthogonal method disagrees" explicitly, instead of hoping the
+      noise lands that way.
     """
 
     name = "simulator"
     version = "sim-v1"
 
     def __init__(self, seed: int = 7, instruments: dict[str, Any] | None = None,
-                 replicates: int = 3, interference_rate: float = 0.25):
+                 replicates: int = 3, interference_rate: float = 0.25,
+                 method_bias: dict[str, dict[str, float]] | None = None):
         self.seed = seed
+        self.method_bias = {s: dict(b) for s, b in (method_bias or {}).items()}
         self.replicates = replicates
         self.interference_rate = interference_rate
         self._runs: dict[str, ProtocolSubmission] = {}
@@ -130,6 +137,12 @@ class SimulatorLab:
         key = self._compound_key(protocol_id, sample_id)
         return 0.5 + (key % 1000) / 1000.0 * 49.5  # 0.5 – 50 uM
 
+    def apparent_ic50_um(self, run_id: str, sample_id: str) -> float:
+        """What the ASSAY RUN reports: the compound's true potency, times its method bias for this run's assay type."""
+        proto = self._runs.get(run_id)
+        assay = proto.assay_type.value if proto is not None else None
+        return self.true_ic50_um(run_id, sample_id) * self.method_bias.get(sample_id, {}).get(assay, 1.0)
+
     def is_interferer(self, protocol_id: str, sample_id: str) -> bool:
         key = self._compound_key(protocol_id, sample_id)
         return (key % 100) < self.interference_rate * 100
@@ -166,7 +179,7 @@ class SimulatorLab:
         for sample in protocol.samples:
             is_control = sample.kind.value == "buffer" or sample.sample_id.startswith("ctrl")
             conc = parse_concentration_um(sample.concentration)
-            ic50 = self.true_ic50_um(run_id, sample.sample_id)
+            ic50 = self.apparent_ic50_um(run_id, sample.sample_id)
             draws = []
             for rep in range(1, self.replicates + 1):
                 rng = random.Random(self._compound_key(run_id + f"r{rep}", sample.sample_id + str(conc)))
@@ -232,6 +245,7 @@ class SimulatorLab:
         return {
             "seed": self.seed, "replicates": self.replicates,
             "interference_rate": self.interference_rate,
+            "method_bias": self.method_bias,
             "seq": getattr(self, "_seq", 0),
             "runs": {rid: p.model_dump(mode="json")
                      for rid, p in self._runs.items()},
@@ -244,7 +258,8 @@ class SimulatorLab:
         from proef.core.contracts import ProtocolSubmission as _PS
         lab = cls(seed=st["seed"], instruments=st.get("capabilities"),
                   replicates=st["replicates"],
-                  interference_rate=st["interference_rate"])
+                  interference_rate=st["interference_rate"],
+                  method_bias=st.get("method_bias"))
         lab._seq = st["seq"]
         lab._runs = {rid: _PS.model_validate(d)
                      for rid, d in st["runs"].items()}

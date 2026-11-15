@@ -85,7 +85,7 @@ def web_approver(inbox: ApprovalInbox | str | Path = DEFAULT_INBOX,
 
     def approver(title: str) -> bool:
         aid = box.request(title)
-        say(f"approval requested: '{title}' ({aid}) — waiting in the workbench (Approvals)")
+        say(f"approval requested: '{title}' ({aid}) — pending in the workbench (Decisions)")
         deadline = time.time() + timeout_secs
         while time.time() < deadline:
             status = box.status_of(aid)

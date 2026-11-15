@@ -10,7 +10,7 @@ import logging
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, Response
 
 from proef import analysis_store as store
@@ -44,7 +44,7 @@ def _seal(aid: str, event: EventType, user: str, decision: dict, branch: str | N
             Envelope(experiment_branch_id=branch or f"analysis/{aid}"), event,
             Actor(kind=ActorKind.human, id=user), decision=decision))
     except Exception as exc:  # noqa: BLE001
-        log.error("provenance write FAILED for %s: %s — the chain has a gap", aid, exc)
+        log.error("provenance write FAILED for %s: %s: the chain has a gap", aid, exc)
 
 
 def _doc(aid: str) -> dict:
@@ -76,6 +76,9 @@ def _layout(doc: dict) -> str | None:
 
 def _preview(p: dict) -> S.AnalysisPreview:
     return S.AnalysisPreview(
+        kind="measurements" if p.get("kind") == "measurements" else "plate",
+        columns=S.MeasurementColumns(**p["columns"]) if p.get("columns") else None,
+        n_measurements=int(p.get("n_measurements") or 0),
         format=p.get("format"), n_wells=int(p.get("n_wells") or 0),
         n_controls=int(p.get("controls_detected") or 0),
         z_prime=p.get("z_prime"), z_kind=p.get("z_prime_kind"),
@@ -111,6 +114,23 @@ def _curve(entity: str, comp: dict, wells: list[dict], max_response) -> S.Curve 
                    points=[S.CurvePoint(conc_um=c, value=v) for c, v in pts], fit=fit)
 
 
+def _measurements_result(r: dict, cfg: dict, calls: dict, comps: dict) -> S.AnalysisResult:
+    metric, unit = r.get("metric") or "value", r.get("unit")
+    gate = None
+    if r.get("threshold_registered") and cfg.get("threshold") is not None:
+        t, d = float(cfg["threshold"]), cfg.get("direction", "min")
+        gate = S.Gate(metric=metric, direction=d, threshold=t, unit=unit,
+                      label=f"{metric} {'≤' if d == 'min' else '≥'} {t:g}" + (f" {unit}" if unit else ""))
+    out = []
+    for entity in sorted(comps):
+        c, k = comps[entity], calls.get(entity) or {}
+        out.append(S.AnalysisCompound(entity=entity, call=k.get("call"), reason=k.get("reason"), estimate=c.get("mean"),
+                                      ci=list(c["ci"]) if c.get("ci") else None, n=c.get("n"), n_points=c.get("n"),
+                                      sd=c.get("sd"), values=list(c.get("values") or [])))
+    return S.AnalysisResult(kind="measurements", metric=metric, unit=unit, method=r.get("method"), state=str(r.get("state")),
+                            gate=gate, compounds=out)
+
+
 def _result(doc: dict) -> S.AnalysisResult | None:
     r = doc.get("result")
     if not r:
@@ -118,6 +138,8 @@ def _result(doc: dict) -> S.AnalysisResult | None:
     cfg = doc.get("config") or {}
     calls = {c["entity"]: c for c in r.get("calls") or []}
     comps = r.get("compounds") or {}
+    if r.get("kind") == "measurements":
+        return _measurements_result(r, cfg, calls, comps)
     gate = None
     if r.get("threshold_registered") and cfg.get("threshold") is not None:
         t, d = float(cfg["threshold"]), cfg.get("direction", "min")
@@ -142,7 +164,7 @@ def _result(doc: dict) -> S.AnalysisResult | None:
 
 def _view(doc: dict) -> S.AnalysisView:
     return S.AnalysisView(
-        id=doc["id"], filename=_src(doc).get("original_name"), sha256=_src(doc).get("sha256"),
+        profile=doc.get("profile", "plate_assay"), id=doc["id"], filename=_src(doc).get("original_name"), sha256=_src(doc).get("sha256"),
         state=doc["state"], revision=doc["revision"], preview=_preview(doc.get("preview") or {}),
         result=_result(doc),
         reviews=[S.AnalysisReviewEntry(action=d["action"], reason=d.get("reason", ""),
@@ -168,8 +190,10 @@ def list_analyses() -> list[S.AnalysisSummary]:
 
 @router.post("", response_model=S.AnalysisView)
 async def create_analysis(request: Request, file: UploadFile = File(...),
-                          layout: UploadFile | None = File(None)) -> S.AnalysisView:
-    """Store the file (bound by digest), detect what it is. No fit, no verdict."""
+                          layout: UploadFile | None = File(None),
+                          profile: str = Form("auto")) -> S.AnalysisView:
+    """Store the file (bound by digest), detect what it is: a dose-response plate, or a table of measurements
+    (`profile` forces one). No fit, no verdict."""
     store.ensure_tables()
     aid = f"an-{uuid.uuid4().hex[:8]}"
     try:
@@ -178,12 +202,17 @@ async def create_analysis(request: Request, file: UploadFile = File(...),
                if layout is not None and layout.filename else None)
     except ValueError as exc:
         raise _problem(422, "rejected-upload", "File rejected", str(exc)) from None
+    if profile not in ("auto", "plate_assay", "measurements"):
+        raise _problem(422, "unknown-profile", "Unknown analysis type", profile)
+    if profile == "auto":
+        from proef.analysis_profiles import measurements as _M
+        profile = "measurements" if lay is None and _M.looks_like_measurements(Path(src.storage_path)) else "plate_assay"
     try:
-        preview = EA.preview("plate_assay", Path(src.storage_path), {},
+        preview = EA.preview(profile, Path(src.storage_path), {},
                              layout_path=lay.storage_path if lay else None)
     except EA.AnalysisError as exc:
         raise _problem(422, exc.code, "Could not read this file", exc.message) from None
-    store.create(aid, "plate_assay", {}, src, lay, preview)
+    store.create(aid, profile, {}, src, lay, preview)
     _seal(aid, EventType.experiment_defined, who(request), {
         "kind": "analysis_created", "source_sha256": src.sha256, "original_name": src.original_name,
         "layout_sha256": lay.sha256 if lay else None, "preview_state": preview.get("state")})
@@ -200,11 +229,20 @@ def run_analysis(aid: str, body: S.AnalysisRun, request: Request) -> S.AnalysisV
     """Confirm the interpretation and fit. A changed confirmation opens a new
     immutable revision. QC holds and regime refusals come back as states."""
     doc = _doc(aid)
+    measuring = doc["profile"] == "measurements"
     cfg = {k: v for k, v in (doc.get("config") or {}).items()
-           if k not in ("metric", "direction", "threshold", "max_response")}
-    if body.threshold is not None:
+           if k not in ("metric", "direction", "threshold", "max_response", "unit", "sample_column", "value_column")}
+    if measuring:
+        cfg.update(metric=body.metric or "value", direction=body.direction, unit=body.unit or None)
+        if body.threshold is not None:
+            cfg["threshold"] = body.threshold
+        if body.sample_column:
+            cfg["sample_column"] = body.sample_column
+        if body.value_column:
+            cfg["value_column"] = body.value_column
+    elif body.threshold is not None:
         cfg.update(metric="ic50_um", direction=body.direction, threshold=body.threshold)
-    if body.max_response is not None:
+    if body.max_response is not None and not measuring:
         cfg["max_response"] = body.max_response
     if body.evidence_origin:
         cfg["evidence_origin"] = body.evidence_origin
@@ -244,7 +282,7 @@ def review(aid: str, body: S.AnalysisReviewIn, request: Request) -> S.AnalysisVi
         action=DispositionAction(body.action), reason=body.reason, target=body.target, actor=user))
     _seal(aid, EventType.stage_transition, user, {
         "kind": "analysis_reviewed", "action": body.action, "reason": body.reason,
-        "target": body.target, "note": "human disposition — the computed call is unchanged"})
+        "target": body.target, "note": "human disposition: the computed call is unchanged"})
     return _view(out)
 
 
@@ -262,7 +300,7 @@ def attach(aid: str, body: S.AnalysisAttachIn, request: Request) -> S.AnalysisVi
         raise _problem(409, "nothing-to-attach", "Nothing to attach", "run the analysis first")
     if doc["state"] != AnalysisState.reviewed.value:
         raise _problem(409, "review-first", "Review before attaching",
-                       "Record your disposition on the result, then attach it.")
+                       "Record a disposition on the result, then attach it.")
     origin = str(r.get("evidence_origin") or "unknown")
     if origin in ("simulated", "predicted", "unknown"):
         raise _problem(409, "proxy-evidence", "Not measured data",
@@ -277,7 +315,7 @@ def attach(aid: str, body: S.AnalysisAttachIn, request: Request) -> S.AnalysisVi
         "kind": "analysis_attached", "analysis_id": aid, "revision": doc["revision"],
         "source_sha256": _src(doc).get("sha256"), "evidence_origin": origin,
         "candidate": body.candidate, "calls": calls, "note": body.note,
-        "effect": "context only — no campaign verdict is changed by this record"}, branch=branch)
+        "effect": "context only: no campaign verdict is changed by this record"}, branch=branch)
     att = {"campaign_id": body.campaign_id, "candidate": body.candidate, "by": user, "ts": time.time()}
     out = store.update(aid, doc["state"], lambda d: d.setdefault("attachments", []).append(att))
     return _view(out)
@@ -311,9 +349,13 @@ def export_csv(aid: str) -> Response:
     """Raw and normalized values side by side, with the call and reason per row."""
     from proef.analysis_profiles import plate_assay
     from proef.analysis_report import export_csv as _csv
+    from proef.analysis_report import export_measurements_csv
     doc = _doc(aid)
     if doc.get("result") is None:
         raise _problem(409, "nothing-to-export", "No result yet", "run the analysis first")
+    if doc["profile"] == "measurements":
+        return Response(export_measurements_csv(doc["result"]), media_type="text/csv",
+                        headers={"Content-Disposition": f'attachment; filename="{aid}-export.csv"'})
     try:
         cfg = plate_assay.CONFIG_TYPE(**(doc.get("config") or {}))
         lay = _layout(doc)

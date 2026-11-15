@@ -11,6 +11,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
+from proef.protocol_design import describe
 
 
 @dataclass
@@ -38,7 +39,8 @@ def build_plan(portfolio, family_info: dict | None, family_scores: dict | None) 
             "variants": []})
         f["variants"].append({
             "hypothesis_id": h.hypothesis_id, "candidate": h.candidate, "statement": h.statement,
-            "predicted": h.predicted, "rationale": h.rationale, "assay": h.assay_type})
+            "predicted": h.predicted, "rationale": h.rationale, "assay": h.assay_type,
+            "protocol": describe((h.metadata or {}).get("protocol"))})
     return {"families": list(fams.values()), "n_hypotheses": len(portfolio)}
 
 
@@ -52,9 +54,9 @@ def web_plan_approver(inbox, poll_secs: float = 2.0, timeout_secs: float = 24 * 
     def approve(plan: dict, problem_id: str) -> PlanDecision:
         n, m = plan["n_hypotheses"], len(plan["families"])
         title = f"[problem/{problem_id}] Approve the research plan: {n} hypotheses in {m} famil{'y' if m == 1 else 'ies'}"
-        aid = box.request(title, detail="Review what the model proposed. Remove any hypothesis you do not want tested.",
+        aid = box.request(title, detail="Review what the model proposed. Remove any hypothesis that should not be tested.",
                           payload=plan)
-        say(f"plan approval requested ({aid}): {n} hypotheses in {m} families — waiting in the workbench")
+        say(f"plan approval requested ({aid}): {n} hypotheses in {m} families: pending in the workbench")
         deadline = time.time() + timeout_secs
         while time.time() < deadline:
             rec = box.state().get(aid) or {}
@@ -64,6 +66,6 @@ def web_plan_approver(inbox, poll_secs: float = 2.0, timeout_secs: float = 24 * 
                                     by=rec.get("decided_by", "operator"), note=str(data.get("note") or ""))
             time.sleep(poll_secs)
         say("plan approval timed out")
-        return PlanDecision(approved=False, note="timed out waiting for a decision")
+        return PlanDecision(approved=False, note="timed out with no decision")
 
     return approve

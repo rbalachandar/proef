@@ -160,8 +160,50 @@ class LabGateway:
         self.store = store
         self.actor = actor
         self.advisory = advisory
-        self.governance = governance   # {"matrix":..., "halt":...}
+        self.governance = governance   # {"matrix":..., "halt":..., "pause": PauseRegistry}
         self.approver = approver
+        self.pause_poll = 1.0          # seconds between checks while a pause holds a submission
+        self.pause_timeout: float | None = None   # None: wait until resumed
+
+    def _hold_while_paused(self, protocol: ProtocolSubmission) -> str | None:
+        """A pause HOLDS the submission and releases it on resume (recorded both ways). The global halt still wins
+        while held. Returns a rejection reason only if the halt engages or the wait times out."""
+        import os
+        import time
+
+        from proef.core.contracts import EventType
+        from proef.core.interfaces import record_for
+        pause = (self.governance or {}).get("pause")
+        if pause is None:
+            return None
+        pid = (protocol.envelope.experiment_branch_id or "").split("/", 1)[-1] or None
+        prog = os.environ.get("PROEF_PROGRAM")
+        if prog:
+            from proef.program import _slug
+            prog = _slug(prog)
+        held_at = None
+        while True:
+            blocking = pause.blocking(pid, prog)
+            if not blocking:
+                break
+            halt = self.governance["halt"].engaged()
+            if halt:
+                return f"[halt] operator stop-condition engaged while paused: {halt.get('reason', '')}"
+            if held_at is None:
+                held_at = time.monotonic()
+                self.store.append(record_for(
+                    protocol.envelope, EventType.gate_decision, self.actor,
+                    decision={"kind": "paused_hold", "scope": blocking.get("scope"), "reason": blocking.get("reason"),
+                              "paused_by": blocking.get("by"), "title": protocol.title}))
+            if self.pause_timeout is not None and time.monotonic() - held_at >= self.pause_timeout:
+                return f"[paused] {blocking.get('scope')}: {blocking.get('reason') or 'no reason given'}"
+            time.sleep(self.pause_poll)
+        if held_at is not None:
+            self.store.append(record_for(
+                protocol.envelope, EventType.gate_decision, self.actor,
+                decision={"kind": "pause_released", "title": protocol.title,
+                          "held_seconds": round(time.monotonic() - held_at, 1)}))
+        return None
 
     def submit(self, protocol: ProtocolSubmission) -> tuple[str | None, str | None]:
         """Returns (run_id, rejection_reason). run_id is None when rejected."""
@@ -178,6 +220,9 @@ class LabGateway:
                 return None, ("[halt] operator stop-condition engaged: "
                               f"{halt.get('reason', '')} — all submissions "
                               "refused until cleared by a human")
+        held = self._hold_while_paused(protocol)
+        if held:
+            return None, held
         approved, reason = self.safety.check(protocol)
         if not approved:
             self.store.append(record_for(

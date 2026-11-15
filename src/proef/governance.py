@@ -32,6 +32,8 @@ from proef.adapters.bio.tox_alerts import durc_screen
 
 HALT_FILE = Path(".data/HALT")
 HALT_HISTORY = Path(".data/HALT-history.json")
+PAUSES_FILE = Path(".data/PAUSES.json")
+PAUSES_HISTORY = Path(".data/PAUSES-history.json")
 SOPS_FILE = Path(".data/sops.json")
 AUTHZ_ENV = "PROEF_AUTHZ"
 
@@ -99,6 +101,69 @@ class HaltSwitch:
             json.dumps(hist + [entry], indent=1))
         self.path.unlink()
         return True
+
+
+# ----------------------------------------------------------- pauses
+
+class PauseRegistry:
+    """A routine, scoped pause: one program, or one campaign. Unlike the HaltSwitch (global, an emergency stop that
+    REFUSES submissions) a pause HOLDS them: the campaign waits at the lab gateway and carries on when it is resumed,
+    so a pause never burns a campaign's rounds. Running plates finish. Every pause and resume is kept in a history.
+
+    Scopes are strings: "program:<slug>" or "campaign:<problem id>"."""
+
+    def __init__(self, path: Path | None = None, history_path: Path | None = None):
+        self.path = path or PAUSES_FILE
+        self.history_path = history_path or PAUSES_HISTORY
+
+    def active(self) -> dict[str, dict]:
+        try:
+            d = json.loads(self.path.read_text())
+            return d if isinstance(d, dict) else {}
+        except Exception:
+            return {}
+
+    def _save(self, d: dict) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(json.dumps(d, indent=1))
+
+    def pause(self, scope: str, reason: str = "", by: str = "operator") -> dict:
+        d = self.active()
+        entry = d.get(scope) or {"scope": scope, "reason": reason, "by": by, "ts": time.time(),
+                                 "id": f"pause-{uuid.uuid4().hex[:6]}"}
+        d[scope] = entry                       # pausing twice keeps the first pause (who and why)
+        self._save(d)
+        return entry
+
+    def resume(self, scope: str, by: str = "operator") -> bool:
+        d = self.active()
+        entry = d.pop(scope, None)
+        if entry is None:
+            return False
+        entry = {**entry, "resumed_ts": time.time(), "resumed_by": by}
+        try:
+            hist = json.loads(self.history_path.read_text())
+        except Exception:
+            hist = []
+        self.history_path.parent.mkdir(parents=True, exist_ok=True)
+        self.history_path.write_text(json.dumps(hist + [entry], indent=1))
+        self._save(d)
+        return True
+
+    def history(self, limit: int = 20) -> list[dict]:
+        try:
+            return json.loads(self.history_path.read_text())[-limit:]
+        except Exception:
+            return []
+
+    def blocking(self, problem_id: str | None, program: str | None) -> dict | None:
+        """The pause that holds this campaign, if any: its own first, then its program's."""
+        d = self.active()
+        if problem_id and f"campaign:{problem_id}" in d:
+            return d[f"campaign:{problem_id}"]
+        if program and f"program:{program}" in d:
+            return d[f"program:{program}"]
+        return None
 
 
 # -------------------------------------------------------- sop registry

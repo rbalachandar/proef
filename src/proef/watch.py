@@ -137,8 +137,12 @@ class AutoAnalysisAgent:
                 return early
         except Exception as exc:
             return self._unreadable(event, exc)
-        self.notify(f"analyzed: {len(result.analysis['compounds'])} compound(s), "
-                    f"Z'~{result.z_prime} (heuristic)")
+        if getattr(result, "kind", "") == "measurements":
+            self.notify(f"read {len(result.records)} measurements for "
+                        f"{len({r['sample'] for r in result.records})} sample(s): a table, not a plate, so no Z'")
+        else:
+            self.notify(f"analyzed: {len(result.analysis['compounds'])} compound(s), "
+                        f"Z'~{result.z_prime} (heuristic)")
         verdicts = self._update_hypotheses(event, result) if self.tracker else []
         self._recommend(result)
         return {"compounds": len(result.analysis["compounds"]),
@@ -149,11 +153,11 @@ class AutoAnalysisAgent:
     def _read_checked(self, event: LabEvent):
         """Read the export and screen it for PHYSICAL failure modes first.
         Returns (result, None) or (None, early_summary)."""
-        from proef.labread import read_plate
+        from proef.analysis_profiles.measurements import read_plate_or_table
         from proef.physfail import classify as _fm
         self.notify(f"reading instrument output {event.path.name} "
                     "(device finished the measurement)")
-        result = read_plate(event.path, max_response=self.max_response)
+        result = read_plate_or_table(event.path, max_response=self.max_response)
         phys = _fm([r["value"] for r in result.records])
         if phys["kind"] == "physical":
             self.notify(f"⚠ PHYSICAL failure mode "
@@ -229,6 +233,12 @@ class AutoAnalysisAgent:
             top_vals = [v for c, v in cand_vals if c == top_conc]
             return (sum(top_vals) / len(top_vals), replicate_ci(top_vals),
                     len(top_vals), True)
+        # no dose series (a property table: conductivity, solubility, yield...): the replicate rows for this
+        # candidate ARE the replicates. Judge their mean and its interval, never just the first row.
+        flat = [float(r["value"]) for r in _as_dicts(result.records)
+                if r.get("sample") == hyp.candidate and not r.get("control") and isinstance(r.get("value"), (int, float))]
+        if flat:
+            return sum(flat) / len(flat), replicate_ci(flat), len(flat), False
         if any_val is not None:
             return any_val, None, 1, False
         return None
@@ -247,12 +257,15 @@ class AutoAnalysisAgent:
         hyp.observed_value = value
         hyp.observed_ci = ci
         hyp.evidence_run_id = event.path.stem        # run <-> verdict link
-        hyp.qc_passed = (result.z_prime or 0) >= QC_ZPRIME_FLOOR
+        # a table of measurements has no plate to QC: 'not applicable' (None), never a pass and never a fail
+        hyp.qc_passed = (None if getattr(result, "no_plate_qc", False)
+                         else (result.z_prime or 0) >= QC_ZPRIME_FLOOR)
 
     def _verdict_property(self, event, result, hyp, value, ci, n_top, _series):
         crit = hyp.criteria
         self._attach(event, result, hyp, value, ci)
-        hyp.status = crit.classify(value, ci)
+        # no interval, no claim: a property reading with fewer than 3 replicates cannot earn a decisive verdict
+        hyp.status = crit.classify(value, ci) if ci else "inconclusive"
         self._record_derivation(
             hyp, {"direction": crit.direction},
             quantity=crit.metric,

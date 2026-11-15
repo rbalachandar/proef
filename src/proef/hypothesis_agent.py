@@ -23,6 +23,7 @@ from proef.core.hypothesis import (
     Constraint, Hypothesis, HypothesisTracker, ProblemStatement, SuccessCriteria,
 )
 from proef.core.interfaces import record_for
+from proef.protocol_design import sanitize_protocol
 
 PROMPT = """You are the hypothesis lead of a drug-discovery program.
 
@@ -42,6 +43,9 @@ Decide the hypothesis structure yourself:
 - For each variant: which variables you tune and why (declare them in
   "variables"), what it predicts, and its rationale.
 - Your own confidence score per family (0-1) — be honest.
+
+- "protocol" is optional: the dose ladder (3 to 8 concentrations in uM, 0.001 to 1000) YOU would test this
+  variant at. Bracket the gate with doses on both sides of it. The lab validates it and may replace it.
 
 Limits: at most {max_families} families, at most {max_variants_per_family}
 variants per family. Prefer few distinct ideas over many similar ones.
@@ -65,7 +69,8 @@ Reply ONLY with JSON:
         "predicted": "human-readable prediction",
         "predicted_value": 20.0,
         "rationale": "why this variant",
-        "variables": {{"tuned_param": "value"}}}}
+        "variables": {{"tuned_param": "value"}},
+        "protocol": {{"concentrations_uM": [0.1, 0.5, 2, 10, 50], "why": "brackets the gate on both sides"}}}}
     ]}}
 ]}}"""
 
@@ -216,6 +221,7 @@ def propose_families_with_agent(
                 "predicted_value": v.get("predicted_value"),
                 "rationale": v.get("rationale", ""),
                 "variables": v.get("variables", {}),
+                "protocol": sanitize_protocol(v.get("protocol")),
             }
             for k in ("mechanism", "refutation_condition", "citation",
                       "predicted_observables"):
@@ -271,6 +277,8 @@ def propose_families_with_agent(
         for s in specs:
             if s["candidate"] == h.candidate and s["statement"] == h.statement:
                 h.metadata["variables"] = s.get("variables", {})
+                if s.get("protocol"):
+                    h.metadata["protocol"] = s["protocol"]
     tracker.family_info = family_info        # the plan shown to the person is built from these
     tracker.family_scores = family_scores
     return variants, family_scores

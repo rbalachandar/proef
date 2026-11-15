@@ -70,6 +70,7 @@ class CampaignConfig:
     max_families: int = 3
     max_variants_per_family: int = 3
     replan: bool = False                   # after each round the model proposes the next hypotheses from the results
+    critic_model: Any = None               # a second model that critiques the plan before the person reads it (advisory)
     plan_covers_submissions: bool = True   # an approved plan also approves its own lab submissions
     plan_approver: Callable[[dict, str], Any] | None = None   # gate autonomy + model-proposed hypotheses:
                                                               # (plan, problem_id) -> PlanDecision
@@ -383,6 +384,12 @@ def _install_budget_gate(gateway, cfg, store, actor, say) -> None:
     gateway.submit = gateway_submit  # confirmations flow through the same gate
 
 
+def _doses(h, cfg) -> list[str]:
+    """The dose ladder for one hypothesis: the model's validated design when it gave one, else the campaign's default."""
+    proto = (h.metadata or {}).get("protocol")
+    return list(proto["concentrations"]) if proto and proto.get("concentrations") else list(cfg.concentrations)
+
+
 def _design_protocol(h, cfg, problem, adaptive, screen_conc):
     """Build the lab protocol for one hypothesis and attach its design."""
     protocol = ProtocolSubmission(
@@ -400,14 +407,14 @@ def _design_protocol(h, cfg, problem, adaptive, screen_conc):
                       "intent": ("covalent" if "covalent" in
                                  (h.mechanism or "").lower() else "")})
                  for c in ([screen_conc] if adaptive
-                           else cfg.concentrations)]
+                           else _doses(h, cfg))]
         + [SampleSpec(sample_id=f"ctrl-neg{i}", kind=SampleKind.buffer,
                       concentration="10uM") for i in (1, 2)],
         reagents=[ReagentSpec(name="assay-buffer", amount="5 mL",
                               bsl_level=1)],
     )
     h.design = ExperimentDesign(
-        assay_type=str(coerce_assay_type(h.assay_type).value), concentrations=list(cfg.concentrations),
+        assay_type=str(coerce_assay_type(h.assay_type).value), concentrations=list(_doses(h, cfg)),
         replicates=3, controls=["negative"],
         protocol_id=protocol.protocol_id)
     return protocol
@@ -685,6 +692,17 @@ def _plan_gate(cfg, tracker, portfolio, store, actor, say, label=None):
     plan = build_plan(portfolio, getattr(tracker, "family_info", {}), getattr(tracker, "family_scores", {}))
     if label:
         plan["label"] = label
+    critic = cfg.critic_model
+    if critic is not None:
+        from proef.critic import critique_plan
+        gate_txt = "; ".join(c.description for c in cfg.problem.constraints if c.kind == "hard") or ""
+        notes = critique_plan(critic, plan, cfg.problem.objective, gate_txt)
+        who_ = f"{getattr(critic, 'name', 'critic')}/{getattr(critic, 'model_version', '?')}"
+        plan["critique"] = {"model": who_, "notes": notes}
+        store.append(record_for(Envelope(experiment_branch_id=f"problem/{pid}"), EventType.gate_decision, actor, decision={
+            "kind": "plan_critique", "model": who_, "notes": notes, "advisory": True,
+            "stage": label or "initial"}))
+        say(f"critic ({who_}): {len(notes)} note(s) on the plan")
     decision = cfg.plan_approver(plan, pid)
     env = Envelope(experiment_branch_id=f"problem/{pid}")
     removed = [h for h in portfolio if h.hypothesis_id in decision.excluded]
@@ -729,8 +747,8 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
     tracker = HypothesisTracker(store, actor, on_verdict=_on_verdict)
 
     safety = SafetyEngine()
-    from proef.governance import AuthorizationMatrix, HaltSwitch
-    gov = {"matrix": AuthorizationMatrix(), "halt": HaltSwitch()}
+    from proef.governance import AuthorizationMatrix, HaltSwitch, PauseRegistry
+    gov = {"matrix": AuthorizationMatrix(), "halt": HaltSwitch(), "pause": PauseRegistry()}
     say = notify or (lambda m: print(f"[campaign] {m}"))
 
     # resolve the branch name FIRST: lab selection (below) already writes
@@ -886,11 +904,11 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
             h.design.run_id = run_id
             say(f"started lab run {run_id} for {h.candidate} on "
                 f"{getattr(lab, 'name', 'instrument')} "
-                f"({len(cfg.concentrations) if not adaptive else 1} dose"
-                f"{'s' if (len(cfg.concentrations) if not adaptive else 1) > 1 else ''}"
+                f"({len(_doses(h, cfg)) if not adaptive else 1} dose"
+                f"{'s' if (len(_doses(h, cfg)) if not adaptive else 1) > 1 else ''}"
                 f" × 3 replicates)")
             _export(run_id, h.candidate,
-                    [screen_conc] if adaptive else None)
+                    [screen_conc] if adaptive else _doses(h, cfg))
 
         _collect_round(monitor, agent, selected, adaptive, cfg, terminal)
         verdicts_r = {h.candidate: h.status for h in selected}

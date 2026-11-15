@@ -367,7 +367,7 @@ def _campaign_from_doc(cfg_doc: dict) -> "CampaignConfig":
     return CampaignConfig(
         problem=problem, hypotheses=cfg_doc.get("hypotheses") or None,
         hypothesis_source=cfg_doc.get("hypothesis_source", "config"),
-        model=cfg_doc.get("_model"),
+        model=cfg_doc.get("_model"), critic_model=cfg_doc.get("_critic"),
         k=(k_cfg[0] if isinstance(k_cfg, (list, tuple)) else k_cfg),
         k_schedule=k_schedule,
         labs=cfg_doc.get('labs') or (None if cfg_doc.get('lab')
@@ -474,6 +474,9 @@ def cmd_auto(args: argparse.Namespace) -> int:
         try:
             from proef.adapters.models.from_env import model_from_env
             cfg_doc["_model"] = model_from_env()
+            from proef.adapters.models.from_env import model_status
+            if model_status("critic")["configured"]:
+                cfg_doc["_critic"] = model_from_env("critic")      # the critic is the main model unless PROEF_LLM_CRITIC_* says otherwise
         except Exception as exc:
             print(f"agent hypothesis source needs a model: {exc}",
                   file=sys.stderr)

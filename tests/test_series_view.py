@@ -2,6 +2,8 @@
 import pytest
 
 pytest.importorskip("rdkit", reason="chemotype grouping is the rdkit backend")
+from proef.benchmark import SCAFFOLD_BACKEND  # noqa: E402
+pytestmark = pytest.mark.skipif(SCAFFOLD_BACKEND != "rdkit", reason="this rdkit build cannot compute Murcko scaffolds")
 
 from proef.series import build_series, chemotype_key, matched_pairs, series_summary
 

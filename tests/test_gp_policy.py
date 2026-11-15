@@ -17,6 +17,7 @@ TRAIN = ([("CCO", 3.0), ("CCN", 4.0), ("c1ccccc1", 7.0), ("CCCCO", 2.5),
 
 
 def test_import_does_not_require_botorch():
+    pytest.importorskip("numpy", reason="the GP policy module needs numpy (not botorch) to import")
     # the module pulls torch/botorch lazily inside fit/predict, so importing
     # it (or proef) must not demand the extra — the minimal-core contract
     import proef.adapters.models.gp_policy as gp

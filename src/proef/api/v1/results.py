@@ -36,7 +36,8 @@ def _gate(h) -> str:
 def _inspect(eid: str, data: bytes, filename: str, max_response: float | None):
     from proef.adapters.store.sqlite import get_store
     from proef.core.hypothesis import HypothesisTracker
-    from proef.labread import QC_ZPRIME_FLOOR, read_plate
+    from proef.analysis_profiles.measurements import read_plate_or_table
+    from proef.labread import QC_ZPRIME_FLOOR
     from proef.physfail import classify
     from proef.views import ids as _ids
     from proef.watch import AutoAnalysisAgent
@@ -53,7 +54,7 @@ def _inspect(eid: str, data: bytes, filename: str, max_response: float | None):
         path = Path(td) / f"{run_id}.csv"
         path.write_bytes(data)
         try:
-            res = read_plate(path, max_response=max_response)
+            res = read_plate_or_table(path, max_response=max_response)
         except Exception as exc:  # noqa: BLE001
             raise _problem(422, "unreadable-file", "Could not read this file", str(exc)[:200]) from None
     store = get_store(str(_ids.PROVENANCE_DB))
@@ -77,7 +78,8 @@ def _preview(info, filename: str) -> S.ResultsPreview:
     return S.ResultsPreview(
         run_id=info["run_id"], filename=filename, sha256=info["sha"], n_wells=len(res.records),
         z_prime=z, z_kind=(res.analysis or {}).get("z_prime_kind"),
-        qc_ok=z is not None and z >= info["floor"],
+        qc_ok=(z is not None and z >= info["floor"]) or getattr(res, "no_plate_qc", False),
+        kind="measurements" if getattr(res, "no_plate_qc", False) else "plate",
         failure=phys["evidence"] if phys["kind"] == "physical" else None,
         matches=[S.ResultMatch(hypothesis_id=h.hypothesis_id, candidate=h.candidate,
                                statement=h.statement, gate=_gate(h)) for h in info["matches"]],
@@ -106,7 +108,7 @@ async def submit_results(eid: str, request: Request, file: UploadFile = File(...
         raise _problem(409, "already-submitted", "This exact file was already submitted", info["sha"][:12])
     if prev.failure:
         raise _problem(409, "physical-failure", "This plate shows a physical failure",
-                       f"{prev.failure} — no verdicts are derived from it. Re-run the plate.")
+                       f"{prev.failure}: no verdicts are derived from it. Re-run the plate.")
     if not info["matches"]:
         raise _problem(409, "nothing-to-judge", "No open hypothesis matches this file",
                        "None of the samples in the file belong to an open hypothesis of this campaign.")

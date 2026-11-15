@@ -220,8 +220,13 @@ def roc_auc(scores: list[float], labels: list[float]) -> float:
 
 SCAFFOLD_BACKEND = "rdkit"
 try:  # probe once: a silent fallback would change what 'scaffold split' MEANS
-    import rdkit  # noqa: F401
-except ImportError:
+    # A real call, not just an import: some rdkit builds import fine and then fail on every molecule
+    # (2026.09.2: RuntimeError "bad any cast" in MurckoScaffold). Such a build counts as no rdkit, and the
+    # backend stamped into results says so instead of crashing a campaign's diary.
+    from rdkit import Chem as _Chem
+    from rdkit.Chem.Scaffolds import MurckoScaffold as _Murcko
+    _Murcko.MurckoScaffoldSmiles(mol=_Chem.MolFromSmiles("c1ccccc1N"), includeChirality=False)
+except Exception:  # noqa: BLE001 - ImportError, or a broken build
     SCAFFOLD_BACKEND = "none"
 
 

@@ -140,6 +140,8 @@ class ActivityItem(BaseModel):
     text: str
     candidate: str | None = None
     actor: str | None = Field(None, description="who did it (agent / service / person)")
+    event: str | None = Field(None, description="the ledger event type, e.g. lab_run, gate_decision")
+    hash: str | None = Field(None, description="first characters of the record's hash in the ledger chain")
 
 
 class CampaignSummary(BaseModel):
@@ -150,6 +152,7 @@ class CampaignSummary(BaseModel):
     program: ProgramRef | None = None
     updated_at: float | None = None
     problem_id: str | None = None
+    paused: bool = Field(False, description="held by a pause on this campaign or on its program")
 
 
 class PlanVariant(BaseModel):
@@ -159,6 +162,7 @@ class PlanVariant(BaseModel):
     predicted: str = ""
     rationale: str = ""
     assay: str = ""
+    protocol: str = Field("", description="the dose ladder the model designed, as one line")
 
 
 class PlanFamily(BaseModel):
@@ -173,10 +177,24 @@ class PlanFamily(BaseModel):
     variants: list[PlanVariant] = []
 
 
+class PlanNote(BaseModel):
+    target: str = "plan"
+    severity: Literal["concern", "note"] = "note"
+    text: str
+
+
+class PlanCritique(BaseModel):
+    """A second model's review of the plan. Advisory: it cannot change or approve anything."""
+    model: str = ""
+    notes: list[PlanNote] = []
+
+
 class Plan(BaseModel):
     """What a model proposed, shown to a person before anything reaches the lab."""
     families: list[PlanFamily] = []
     n_hypotheses: int = 0
+    label: str | None = Field(None, description="e.g. 'after round 1' for a re-plan")
+    critique: PlanCritique | None = None
 
 
 class ApprovalRef(BaseModel):
@@ -206,6 +224,8 @@ class PlanReview(BaseModel):
 
 
 class CampaignDetail(CampaignSummary):
+    pause: PauseState | None = Field(None, description="this campaign is paused")
+    paused_by_program: PauseState | None = Field(None, description="its program is paused, which holds it too")
     llm: LlmUse | None = None
     plan_review: PlanReview | None = None
     awaiting_approvals: list[ApprovalRef] = []
@@ -348,9 +368,30 @@ class Limits(BaseModel):
     max_families: int = Field(3, ge=1, le=8, description="distinct mechanistic bets a model may propose")
     max_variants_per_family: int = Field(3, ge=1, le=8)
     breadth: int = Field(3, ge=1, le=12, description="hypotheses taken to the lab per round")
+    max_depth: int = Field(2, ge=1, le=3, description="how many levels an objective may be split into sub-problems")
+    max_subproblems: int = Field(8, ge=2, le=16, description="sub-problems in one research tree, all levels together")
+
+
+class PauseState(BaseModel):
+    scope: str
+    kind: Literal["program", "campaign"]
+    reason: str = ""
+    by: str
+    ts: float | None = None
+
+
+class PauseIn(BaseModel):
+    paused: bool
+    reason: str = Field("", max_length=300)
+
+
+class PauseResult(BaseModel):
+    paused: bool
+    pause: PauseState | None = None
 
 
 class ProgramSummary(BaseModel):
+    pause: PauseState | None = Field(None, description="the program is paused: no new lab submissions until resumed")
     slug: str
     name: str
     objective: str | None = None
@@ -480,23 +521,62 @@ class SubProblem(BaseModel):
     rationale: str = ""
 
 
+class TreeNode(BaseModel):
+    """One sub-problem in a research tree. `parent` is another node's id, or null for a direct child of the objective."""
+    id: str = Field(..., min_length=1, max_length=40)
+    parent: str | None = None
+    objective: str = Field(..., min_length=3, max_length=200)
+    metric: str | None = None
+    direction: Literal["min", "max"] = "min"
+    gate: float | None = None
+    unit: str | None = None
+    priority: float = Field(1.0, gt=0, le=100)
+    rationale: str = ""
+    depth: int = 1
+
+
 class Decomposition(BaseModel):
     objective: str
-    sub_problems: list[SubProblem]
+    nodes: list[TreeNode]
     model: str
+    max_depth: int
+    max_subproblems: int
+
+
+class TreeCreate(BaseModel):
+    objective: str = Field(..., min_length=3, max_length=300)
+    nodes: list[TreeNode] = Field(..., min_length=1, max_length=40)
+    autonomy: Literal["observe", "gate", "act"] = "gate"
+    rounds: int | None = Field(None, ge=1, le=8)
+
+
+class TreeNodeView(TreeNode):
+    status: str = Field("open", description="open | in lab | achieved | partial | failed | inconclusive")
+    runs: int | None = Field(None, description="lab runs allocated to this leaf")
+    campaign_id: str | None = None
+    verdicts: dict[str, str] = {}
+
+
+class TreeView(BaseModel):
+    id: str
+    objective: str
+    by: str
+    ts: float | None = None
+    status: str
+    nodes: list[TreeNodeView]
+    run_budget: int
 
 
 class CampaignCreate(BaseModel):
     sub_problem: SubProblem | None = Field(None, description="judged against this sub-problem's own gate instead of the program's")
-    share: int = Field(1, ge=1, le=8, description="how many sub-problems split the program's lab-run and hypothesis limits")
     objective: str | None = None
     candidates: list[str] = []
     mode: Literal["agent", "hand"] = Field(
-        "agent", description="'hand': you run the plate yourself and submit it; candidates are required")
+        "agent", description="'hand': the plate is run by hand and submitted; candidates are required")
     autonomy: Literal["observe", "gate", "act"] = "gate"
     k: int | None = Field(None, ge=1, le=12, description="per round; defaults to, and is capped by, the program's limit")
     rounds: int | None = Field(None, ge=1, le=8, description="defaults to 2, and is capped by the program's limit")
-    replan: bool = Field(False, description="after each round the model proposes the next hypotheses from the results; you approve them")
+    replan: bool = Field(False, description="after each round the model proposes the next hypotheses from the results; they require approval")
 
 
 class HaltState(BaseModel):
@@ -562,6 +642,17 @@ class Instrument(BaseModel):
     note: str | None = None
 
 
+class DriverCheck(BaseModel):
+    """What a driver check found. It never changes an instrument's validation status: only verification
+    against a physical device does that."""
+    id: str
+    status: Literal["ready", "not-installed", "needs-configuration", "failed"]
+    detail: str
+    tools: list[str] = []
+    checked_at: float
+    simulation_only: bool = Field(True, description="the check ran the driver in simulation mode; no physical device was addressed")
+
+
 class AuthorityRule(BaseModel):
     column: Literal["autonomous", "human", "never"]
     when: str
@@ -588,8 +679,18 @@ class AnalysisDiagnostic(BaseModel):
     message: str
 
 
+class MeasurementColumns(BaseModel):
+    sample: str | None = None
+    value: str | None = None
+    candidates: list[str] = []
+    all: list[str] = []
+
+
 class AnalysisPreview(BaseModel):
     """What the system understood from the file, before any fit."""
+    kind: Literal["plate", "measurements"] = "plate"
+    columns: MeasurementColumns | None = Field(None, description="measurements tables: the columns understood")
+    n_measurements: int = 0
     format: str | None = None
     n_wells: int = 0
     n_controls: int = 0
@@ -609,11 +710,19 @@ class AnalysisCompound(BaseModel):
     ic50_um: float | None = None
     ci: Interval | None = None
     n_points: int | None = None
+    estimate: float | None = Field(None, description="measurements: the mean")
+    n: int | None = None
+    sd: float | None = None
+    values: list[float] = []
     top_known: bool | None = Field(None, description="False: the plateau was inferred from the data, so the call depends on that assumption")
     curve: Curve | None = None
 
 
 class AnalysisResult(BaseModel):
+    kind: Literal["plate", "measurements"] = "plate"
+    metric: str | None = None
+    unit: str | None = None
+    method: str | None = None
     state: str
     z_prime: float | None = None
     z_kind: str | None = None
@@ -648,6 +757,7 @@ class AnalysisSummary(BaseModel):
 
 
 class AnalysisView(BaseModel):
+    profile: str = "plate_assay"
     id: str
     filename: str | None = None
     sha256: str | None = None
@@ -662,7 +772,11 @@ class AnalysisView(BaseModel):
 class AnalysisRun(BaseModel):
     """What the scientist confirms before the fit. Without a threshold the run
     is estimate-only: intervals are drawn, no verdict is claimed."""
-    threshold: float | None = Field(None, description="IC50 gate, in the data's concentration unit")
+    metric: str | None = Field(None, description="measurements tables: what the values are, e.g. ionic_conductivity_mS_cm")
+    unit: str | None = None
+    sample_column: str | None = None
+    value_column: str | None = None
+    threshold: float | None = Field(None, description="the gate: IC50 in the data's concentration unit for a plate; the value itself for a measurements table")
     direction: Literal["min", "max"] = "min"
     max_response: float | None = Field(None, description="known assay ceiling, if the top plateau is known")
     evidence_origin: Literal["measured", "historical", "simulated", "predicted", "unknown"] | None = None
@@ -690,6 +804,7 @@ class ResultMatch(BaseModel):
 
 class ResultsPreview(BaseModel):
     """What submitting this file to the campaign WOULD do. Nothing is written."""
+    kind: Literal["plate", "measurements"] = "plate"
     run_id: str
     filename: str
     sha256: str

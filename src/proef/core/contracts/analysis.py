@@ -18,6 +18,7 @@ class AnalysisProfile(str, Enum):
     """Which domain interpretation owns this analysis. New profiles are
     added ONLY when a real second use case validates the shared seam."""
     plate_assay = "plate_assay"
+    measurements = "measurements"    # a table of values per sample (properties, not dose series)
 
 
 class EvidenceOrigin(str, Enum):

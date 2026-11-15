@@ -50,11 +50,11 @@ def generic_header(doc: dict, chain_status: str) -> list[str]:
         for d in dispositions:
             lines.append(f"<li><strong>{_esc(d.get('action'))}</strong> by "
                          f"{_esc(d.get('actor'))}"
-                         + (f" — {_esc(d.get('reason'))}" if d.get("reason")
+                         + (f": {_esc(d.get('reason'))}" if d.get("reason")
                             else "") + "</li>")
         lines.append("</ul>")
     else:
-        lines.append("<p><em>No human disposition recorded — the calls "
+        lines.append("<p><em>No human disposition recorded: the calls "
                      "are machine-derived only.</em></p>")
     return lines
 
@@ -76,14 +76,14 @@ def plate_section(result: dict) -> list[str]:
                      + _esc(" · ".join(f"{k}: {v}" for k, v in
                                        list(inst.items())[:5])) + "</p>")
     if result.get("regime_refused"):
-        lines.append(f"<p><strong>REGIME REFUSED — no absolute claims:</strong> "
+        lines.append(f"<p><strong>REGIME REFUSED: no absolute claims:</strong> "
                      f"{_esc((result.get('regime') or {}).get('note'))}</p>")
     if result.get("threshold_registered"):
         lines.append(f"<p>Registered gate: metric {_esc(result.get('metric'))} "
                      f"({_esc(result.get('direction'))}); a 95% CI straddling "
                      f"the gate abstains.</p>")
     else:
-        lines.append("<p><em>No threshold registered — estimates only, "
+        lines.append("<p><em>No threshold registered: estimates only, "
                      "no hit calls.</em></p>")
     lines.append("<table border=1 cellpadding=4 style='border-collapse:collapse;"
                  "font-size:13px'><tr><th>sample</th><th>IC50 (µM)</th>"
@@ -106,6 +106,44 @@ def plate_section(result: dict) -> list[str]:
     return lines
 
 
+def measurements_section(result: dict) -> list[str]:
+    """Per-sample n, mean, sd and 95% interval against the registered gate, with the method and its limits stated."""
+    unit = f" {_esc(result.get('unit'))}" if result.get("unit") else ""
+    calls = {c["entity"]: c for c in (result.get("calls") or [])}
+    lines = [f"<h2>Measurements: {_esc(result.get('metric'))}{unit}</h2>",
+             f"<p class='muted'>{_esc(result.get('method'))}. No plate or controls, so no Z′ or control-based QC.</p>"]
+    if not result.get("threshold_registered"):
+        lines.append("<p><em>No gate was registered: these are estimates only, no calls.</em></p>")
+    lines.append("<table border='1' cellpadding='4' cellspacing='0'><tr><th>sample</th><th>n</th><th>mean</th>"
+                 "<th>sd</th><th>95% interval</th><th>call</th><th>why</th></tr>")
+    for sample, c in sorted((result.get("compounds") or {}).items()):
+        ci = c.get("ci")
+        k = calls.get(sample, {})
+        lines.append(f"<tr><td>{_esc(sample)}</td><td>{c.get('n')}</td><td>{c.get('mean'):.4g}</td>"
+                     f"<td>{'' if c.get('sd') is None else format(c['sd'], '.3g')}</td>"
+                     f"<td>{'' if not ci else f'{ci[0]:.4g} to {ci[1]:.4g}'}</td>"
+                     f"<td>{_esc(k.get('call', ''))}</td><td>{_esc(k.get('reason', ''))}</td></tr>")
+    lines.append("</table>")
+    return lines
+
+
+def export_measurements_csv(result: dict) -> str:
+    import csv
+    import io
+    calls = {c["entity"]: c for c in (result.get("calls") or [])}
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(["sample", "n", "mean", "sd", "ci_low", "ci_high", "metric", "unit", "call", "call_reason",
+                "evidence_origin", "engine_version", "values"])
+    for sample, c in sorted((result.get("compounds") or {}).items()):
+        ci = c.get("ci") or (None, None)
+        k = calls.get(sample, {})
+        w.writerow([sample, c.get("n"), c.get("mean"), c.get("sd"), ci[0], ci[1], result.get("metric"), result.get("unit") or "",
+                    k.get("call", ""), k.get("reason", ""), result.get("evidence_origin", "unknown"),
+                    result.get("engine_version", "unknown"), " ".join(str(v) for v in c.get("values") or [])])
+    return buf.getvalue()
+
+
 def render_report(doc: dict, chain_status: str) -> str:
     body = generic_header(doc, chain_status)
     result = doc.get("result")
@@ -114,6 +152,8 @@ def render_report(doc: dict, chain_status: str) -> str:
                     "yet.</em></p>")
     elif doc.get("profile") == "plate_assay":
         body.extend(plate_section(result))
+    elif doc.get("profile") == "measurements":
+        body.extend(measurements_section(result))
     else:  # unknown future profile: dump the generic summary honestly
         body.append(f"<p>Profile {doc.get('profile')}: state "
                     f"{_esc(doc.get('state'))}.</p>")

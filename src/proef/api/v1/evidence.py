@@ -1,8 +1,8 @@
 """/api/v1/evidence — can I defend this record?
 
 The ledger (every record re-hashed on demand), the external anchor (a Merkle
-root of the whole ledger — meaningful only once it is published somewhere you
-do not control), and per-campaign exports (report, lab notebook, ELN CSV).
+root of the whole ledger — meaningful only once it is published outside this
+system's control), and per-campaign exports (report, lab notebook, ELN CSV).
 """
 from __future__ import annotations
 
@@ -91,8 +91,8 @@ def _anchor_view() -> S.AnchorView:
             appended_since_anchor=v.get("appended_since_anchor", 0),
             content_tampered=bool(v["content_tampered"]),
             current_root=v["current_root"], anchored_root=v.get("anchored_root"))
-    note = ("An anchor is only protection once it is PUBLISHED somewhere you do "
-            "not control: anyone who can edit this database can edit a local "
+    note = ("An anchor protects only once PUBLISHED outside this system's "
+            "control: anyone who can edit this database can edit a local "
             "anchor file too." if not entries or not any(
                 e.published for e in entries) else "")
     return S.AnchorView(anchors=list(reversed(entries)), check=check, note=note)

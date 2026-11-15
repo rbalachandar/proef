@@ -79,7 +79,7 @@ def summarize(rec) -> tuple[str, str, str | None]:
                 f"{len(decs)} selected", None)
     if et == "lab_run":
         return ("run", f"Run {d.get('run_id', '?')} submitted"
-                + (f" — {d['title']}" if d.get("title") else ""), cand)
+                + (f": {d['title']}" if d.get("title") else ""), cand)
     if et == "synthesis_complete":
         return ("make", f"Synthesised {d.get('candidate', '?')}: yield "
                 f"{d.get('yield_pct', '?')}%, purity {d.get('purity', '?')}%",
@@ -92,9 +92,9 @@ def summarize(rec) -> tuple[str, str, str | None]:
         obs = d.get("observed")
         if d.get("family_id") and not cand:
             # a family's claim, derived from its variants' verdicts
-            return ("verdict", f"Family “{d['family_id']}”: {word} — {d.get('reason') or 'derived from its variants'}", None)
+            return ("verdict", f"Family “{d['family_id']}”: {word} ({d.get('reason') or 'derived from its variants'})", None)
         return ("verdict", f"{cand or '?'}: {word}"
-                + (f" — observed {obs}" if obs is not None else ""), cand)
+                + (f": observed {obs}" if obs is not None else ""), cand)
     if et == "gate_decision" and d.get("kind") == "human_approval":
         verb = "approved" if d.get("approve") else "declined"
         return ("review", f"{rec.actor.id} {verb} the lab submission “{d.get('title', '')}”", cand)
@@ -102,12 +102,12 @@ def summarize(rec) -> tuple[str, str, str | None]:
         verb = {"follow_up": "follow up", "accept": "accept as inconclusive",
                 "drop": "drop"}.get(d.get("decision"), d.get("decision"))
         return ("review", f"{rec.actor.id} decided to {verb} {cand or '?'}"
-                + (f" — “{d['note']}”" if d.get("note") else ""), cand)
+                + (f": “{d['note']}”" if d.get("note") else ""), cand)
     if et == "gate_decision" and d.get("kind") == "plan_decision":
         who_ = d.get("decided_by", "someone")
         if not d.get("approved"):
             return ("review", f"{who_} {'emptied' if d.get('reason') == 'every hypothesis was removed' else 'declined'} "
-                    "the research plan — nothing was submitted to the lab"
+                    "the research plan: nothing was submitted to the lab"
                     + (f" (“{d['note']}”)" if d.get("note") else ""), None)
         rm = len(d.get("removed") or [])
         return ("review", f"{who_} approved the research plan: {d.get('n_kept')} of {d.get('n_proposed')} "
@@ -116,7 +116,7 @@ def summarize(rec) -> tuple[str, str, str | None]:
         return ("run", f"{rec.actor.id} registered a hand-run campaign for "
                 f"{', '.join(d.get('candidates') or [])} against {d.get('gate', 'the gate')}", None)
     if et == "gate_decision" and d.get("kind") == "results_submitted":
-        return ("run", f"{rec.actor.id} submitted a plate ({d.get('original_name', '?')}) — judging "
+        return ("run", f"{rec.actor.id} submitted a plate ({d.get('original_name', '?')}): judging "
                 f"{', '.join(d.get('candidates') or []) or 'nothing'}", None)
     if et == "gate_decision" and d.get("kind") == "analysis_attached":
         return ("review", f"{rec.actor.id} attached analysis {d.get('analysis_id', '?')} as evidence"
@@ -145,13 +145,13 @@ def _ts(rec) -> float | None:
 
 
 ROLE = {
-    "campaign": "Campaign orchestrator — proposes, selects, tests and judges",
-    "synthesis": "Make — synthesis and batch QC",
-    "bioprocess": "Make — bioprocess stability QC",
-    "reviewer": "Independent reviewer — audits every verdict",
-    "llm-reviewer": "Advisory LLM reviewer — can only add flags",
-    "safety": "Safety gate — refuses unsafe submissions",
-    "planner": "Planner — decomposes the objective into sub-problems",
+    "campaign": "Campaign orchestrator: proposes, selects, tests and judges",
+    "synthesis": "Make: synthesis and batch QC",
+    "bioprocess": "Make: bioprocess stability QC",
+    "reviewer": "Independent reviewer: audits every verdict",
+    "llm-reviewer": "Advisory LLM reviewer: can only add flags",
+    "safety": "Safety gate: refuses unsafe submissions",
+    "planner": "Planner: decomposes the objective into sub-problems",
     "program": "Program registry",
 }
 
@@ -163,7 +163,7 @@ def _actor(rec) -> tuple[str, str, str | None]:
 
 def _role(aid: str, kind: str) -> str:
     if kind == "human":
-        return "Scientist — your decisions"
+        return "Scientist: human decisions"
     return ROLE.get(aid, aid)
 
 
@@ -177,7 +177,8 @@ def activity_items(recs, limit: int = 50) -> list[S.ActivityItem]:
         if kind in _QUIET:
             continue
         out.append(S.ActivityItem(ts=_ts(r), kind=kind, text=text,
-                                  candidate=cand, actor=_actor(r)[0]))
+                                  candidate=cand, actor=_actor(r)[0], event=r.event_type.value,
+                                  hash=(r.record_hash or "")[:7] or None))
     return list(reversed(out))[:limit]
 
 
@@ -356,6 +357,9 @@ def _chain(branch: str | None, recs) -> S.ChainStatus:
                          problems=problems[:10])
 
 
+_IN_PROGRESS = ("running", "executing")
+
+
 def _status(raw: str, recs) -> str:
     """The registry status lags (a launched campaign stays 'executing' for
     ever when no log marker exists); the ledger knows: the autonomous loop
@@ -462,6 +466,8 @@ def list_campaigns(program: str | None = Query(None),
     ws = _ws()
     rows = ws.ongoing() + ws.finished(500)
     progs = _program_index()
+    from proef.governance import PauseRegistry
+    held = PauseRegistry().active()
     out = []
     for e in rows:
         payload = e.get("payload") or {}
@@ -481,7 +487,9 @@ def list_campaigns(program: str | None = Query(None),
             id=e["id"], title=e.get("question") or e["id"], status=st,
             autonomy=ag.get("autonomy"), program=pref,
             updated_at=e.get("updated_at"),
-            problem_id=ag.get("problem_id")))
+            problem_id=ag.get("problem_id"),
+            paused=st in _IN_PROGRESS and (f"campaign:{ag.get('problem_id')}" in held
+                                           or bool(pref and f"program:{pref.slug}" in held))))
     out.sort(key=lambda c: -(c.updated_at or 0))
     return out
 
@@ -527,7 +535,11 @@ def get_campaign(eid: str) -> S.CampaignDetail:
                and (r.decision or {}).get("run_id"))
     progs = _program_index()
     pid = problem_id_for(eid, detail)
+    from proef.api.v1.pauses import pauses_for
+    own_pause, program_pause = pauses_for(pid, progs.get(eid).slug if progs.get(eid) else None)
     return S.CampaignDetail(
+        pause=own_pause, paused_by_program=program_pause,
+        paused=bool(own_pause or program_pause) and _status(detail.get("status") or row_status(row), recs) in _IN_PROGRESS,
         llm=llm_use(recs),
         plan_review=plan_review_of(recs),
         awaiting_approvals=pending_approvals(pid),
@@ -592,7 +604,7 @@ def get_hypothesis(eid: str, hid: str) -> S.HypothesisDetail:
 @router.get("/{eid}/hypotheses/{hid}/curves", response_model=S.CurveSet)
 def get_curves(eid: str, hid: str) -> S.CurveSet:
     """The recorded dose–response data behind a verdict: every plate point,
-    the fit with its interval, and the plate's QC — so a scientist can LOOK at
+    the fit with its interval, and the plate's QC: so a scientist can LOOK at
     the evidence, not only read the number."""
     import math
 

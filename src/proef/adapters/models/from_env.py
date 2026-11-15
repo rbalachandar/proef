@@ -36,8 +36,12 @@ class ModelNotConfigured(RuntimeError):
     pass
 
 
-def _resolve() -> dict:
-    env = os.environ.get
+def _resolve(role: str = "") -> dict:
+    """The model settings for the campaign, or for one ROLE (e.g. "critic"): PROEF_LLM_CRITIC_MODEL, _API, _BASE_URL,
+    _TOKEN, _PRESET and _SESSION_HEADER each override the main setting and fall back to it when unset."""
+    def env(name: str):
+        r = f"PROEF_LLM_{role.upper()}_{name[len('PROEF_LLM_'):]}" if role else None
+        return (os.environ.get(r) if r else None) or os.environ.get(name)
     preset_name = (env("PROEF_LLM_PRESET") or "").strip().lower()
     preset = PRESETS.get(preset_name, {})
     if preset_name and not preset:
@@ -62,10 +66,10 @@ def _is_local(base_url: str | None) -> bool:
     return (urlparse(base_url or "").hostname or "") in ("localhost", "127.0.0.1", "::1")
 
 
-def model_status() -> dict:
+def model_status(role: str = "") -> dict:
     """What the workbench shows: is a real model configured, and which? Never includes the key."""
     try:
-        c = _resolve()
+        c = _resolve(role)
     except ModelNotConfigured:
         return {"configured": False, "api": None, "model": None}
     # a key is required for hosted endpoints; a local server (Ollama, vLLM) needs none
@@ -73,9 +77,9 @@ def model_status() -> dict:
     return {"configured": ok, "api": c["api"], "model": c["model"] if ok else None}
 
 
-def model_from_env():
-    c = _resolve()
-    if not model_status()["configured"]:
+def model_from_env(role: str = ""):
+    c = _resolve(role)
+    if not model_status(role)["configured"]:
         raise ModelNotConfigured(
             "no model configured: set PROEF_LLM_MODEL and PROEF_LLM_TOKEN (not needed for a local server), plus PROEF_LLM_BASE_URL "
             "and PROEF_LLM_API=openai or openai-responses for OpenAI-compatible endpoints "

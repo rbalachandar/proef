@@ -250,3 +250,99 @@ def test_replanning_proposes_from_results_and_asks_again(tmp_path):
     report = run_campaign(cfg, SimulatorLab(seed=3), store, approver=lambda t: True, notify=lambda m: None)
     assert len(plans) >= 2 and plans[1].get("label") == "after round 1"
     assert "N1" in report.selected + [c for p in plans[1:] for f in p["families"] for v in f["variants"] for c in [v.get("candidate")]]
+
+
+def test_a_model_designed_dose_ladder_is_validated_and_bounded():
+    from proef.protocol_design import describe, sanitize_protocol
+    ok = sanitize_protocol({"concentrations_uM": [50, 0.1, 2, 10, 0.5, 2], "why": "brackets the gate"})
+    assert ok["concentrations"] == ["0.1uM", "0.5uM", "2uM", "10uM", "50uM"], "sorted, de-duplicated"
+    assert "5 doses, 0.1 to 50 µM" in describe(ok)
+    assert sanitize_protocol({"concentrations_uM": [1, 2]}) is None, "fewer than 3 doses: unusable, fall back to the default"
+    assert sanitize_protocol({"concentrations_uM": [1e9, -3, "x", 0, 5]}) is None, "out of range or junk is dropped"
+    assert len(sanitize_protocol({"concentrations_uM": list(range(1, 40))})["concentrations"]) == 8, "capped at 8 doses"
+    assert sanitize_protocol("a string") is None and sanitize_protocol(None) is None
+
+
+def test_the_designed_ladder_reaches_the_lab_protocol_and_the_plan(tmp_path):
+    class Designer(Scripted):
+        def generate(self, inv, prompt, **kw):
+            fams = json.loads(json.dumps(PLAN_JSON))
+            for v in fams["families"][0]["variants"]:
+                v["protocol"] = {"concentrations_uM": [0.2, 1, 5, 20, 80], "why": "brackets 20 uM"}
+            return ToolResult(envelope=inv.envelope.model_copy(), invocation_id=inv.invocation_id, status="succeeded",
+                              output={"text": json.dumps(fams)}, model_version="s-1")
+    plans = []
+    store = SqliteProvenanceStore(str(tmp_path / "prov.db"))
+    cfg = _gate_cfg(tmp_path, Designer(), lambda plan, pid: plans.append(plan) or PlanDecision(approved=True, by="ana"))
+    cfg.concentrations = ("1uM", "10uM", "100uM")
+    report = run_campaign(cfg, SimulatorLab(seed=3), store, approver=lambda t: True, notify=lambda m: None)
+    v = {x["candidate"]: x for f in plans[0]["families"] for x in f["variants"]}
+    assert "5 doses" in v["H1"]["protocol"] and v["C1"]["protocol"] == "", "only the variant that designed one shows it"
+    runs = {(r.decision or {})["title"]: (r.decision or {})["concentrations"]
+            for r in store.branch_records(f"problem/{report.problem_id}") if r.event_type.value == "lab_run"}
+    assert runs["test-H1"] == [0.2, 1.0, 5.0, 20.0, 80.0], "the lab received the model's validated ladder"
+    assert runs["test-C1"] == [1.0, 10.0, 100.0], "a variant with no design gets the campaign default"
+
+
+def test_a_critic_model_reviews_the_plan_before_the_person_sees_it_and_decides_nothing(tmp_path):
+    class Critic(Scripted):
+        name, model_version = "critic-model", "c-1"
+        def generate(self, inv, prompt, **kw):
+            assert "You are the critic" in prompt and "H1 binds" in prompt, "the critic is shown the proposed plan"
+            doc = {"notes": [{"target": "H2", "severity": "concern", "text": "H2 duplicates H1; spend the run elsewhere."},
+                             {"target": "plan", "severity": "weird", "text": "  Only one assay type is used.  "},
+                             {"target": "x", "text": "   "}]}
+            return ToolResult(envelope=inv.envelope.model_copy(), invocation_id=inv.invocation_id, status="succeeded",
+                              output={"text": "sure: " + json.dumps(doc)}, model_version="c-1")
+    seen = {}
+    store = SqliteProvenanceStore(str(tmp_path / "prov.db"))
+    cfg = _gate_cfg(tmp_path, Scripted(), lambda plan, pid: seen.update(plan=plan) or PlanDecision(approved=True, by="ana"))
+    cfg.critic_model = Critic()
+    report = run_campaign(cfg, SimulatorLab(seed=3), store, approver=lambda t: True, notify=lambda m: None)
+    crit = seen["plan"]["critique"]
+    assert crit["model"] == "critic-model/c-1"
+    assert [(n["target"], n["severity"]) for n in crit["notes"]] == [("H2", "concern"), ("plan", "note")], "blank notes dropped, bad severity normalised"
+    recs = store.branch_records(f"problem/{report.problem_id}")
+    assert [r.decision for r in recs if (r.decision or {}).get("kind") == "plan_critique"][0]["advisory"] is True
+    pd = [r.decision for r in recs if (r.decision or {}).get("kind") == "plan_decision"][0]
+    assert (pd["n_proposed"], pd["n_kept"], pd["removed"]) == (3, 3, []), "the critic's concern removed nothing: only the person can"
+
+
+def test_a_critic_that_fails_never_blocks_the_plan(tmp_path):
+    class Broken(Scripted):
+        def generate(self, inv, prompt, **kw):
+            raise RuntimeError("gateway down")
+    seen = {}
+    store = SqliteProvenanceStore(str(tmp_path / "prov.db"))
+    cfg = _gate_cfg(tmp_path, Scripted(), lambda plan, pid: seen.update(plan=plan) or PlanDecision(approved=True, by="ana"))
+    cfg.critic_model = Broken()
+    run_campaign(cfg, SimulatorLab(seed=3), store, approver=lambda t: True, notify=lambda m: None)
+    assert seen["plan"]["critique"]["notes"] == []
+
+
+def test_the_critic_can_run_on_its_own_model(monkeypatch):
+    from proef.adapters.models.from_env import model_status
+    monkeypatch.setenv("PROEF_LLM_MODEL", "proposer-1"); monkeypatch.setenv("PROEF_LLM_TOKEN", "k"); monkeypatch.setenv("PROEF_LLM_BASE_URL", "http://localhost:1/v1")
+    monkeypatch.setenv("PROEF_LLM_API", "openai"); monkeypatch.delenv("PROEF_LLM_CRITIC_MODEL", raising=False)
+    assert model_status("critic")["model"] == "proposer-1", "falls back to the main model"
+    monkeypatch.setenv("PROEF_LLM_CRITIC_MODEL", "critic-9")
+    assert model_status("critic")["model"] == "critic-9" and model_status()["model"] == "proposer-1"
+
+
+def test_the_activity_feed_carries_the_ledger_event_type_and_a_hash_prefix(tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+
+    from proef.api.app import app
+    from proef.wizard_store import WizardStore
+    report, recs = _run(tmp_path, lambda plan, pid: PlanDecision(approved=True, by="kim"))
+    eid = "plan-hash-1"
+    ws = WizardStore()
+    ws.register_agent(eid, "find IC50<=20", log="", autonomy="gate")
+    ws.link_problem(eid, report.problem_id)
+    monkeypatch.setattr("proef.views.ids.PROVENANCE_DB", str(tmp_path / "prov.db"))
+    with TestClient(app) as c:
+        items = c.get(f"/api/v1/campaigns/{eid}/activity?limit=200").json()
+    assert items and all(i["event"] for i in items) and all(len(i["hash"]) == 7 for i in items)
+    chain = {r.record_hash[:7] for r in recs}
+    assert {i["hash"] for i in items} <= chain, "every hash shown is a real record of this campaign's chain"
+    assert "gate_decision" in {i["event"] for i in items}

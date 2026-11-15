@@ -24,11 +24,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
-from proef.analysis_profiles import plate_assay
+from proef.analysis_profiles import measurements, plate_assay
 from proef.core.contracts.analysis import AnalysisProfile, AnalysisState
 
 PROFILES = {
     AnalysisProfile.plate_assay: plate_assay,
+    AnalysisProfile.measurements: measurements,
 }
 
 

@@ -132,3 +132,56 @@ def test_hand_run_campaign_registers_the_gate_then_judges_a_submitted_plate(tmp_
         out = _post(c, eid, False).json()
         assert {v["candidate"]: v["status"] for v in out["verdicts"]}["C1"] == "validated"
         assert c.get(f"/api/v1/campaigns/{eid}").json()["status"] == "completed"
+
+
+# ---- a table of measurements (properties that are not dose series) --------------------------------------------
+
+@pytest.fixture()
+def material_camp(tmp_path, monkeypatch):
+    db = str(tmp_path / "prov.db")
+    store = SqliteProvenanceStore(db)
+    t = HypothesisTracker(store, Actor(kind=ActorKind.agent, id="designer"))
+    pid = "prob-materials"
+    t.define_problem(ProblemStatement(problem_id=pid, objective="find >= 1 mS/cm", constraints=[
+        Constraint(name="ionic_conductivity_mS_cm", description="conductivity >= 1", kind="hard", limit=1.0, unit="mS/cm")]))
+    crit = SuccessCriteria(metric="ionic_conductivity_mS_cm", direction="max", threshold=1.0)
+    for c in ("LLZO-A", "LPS-B", "NITRIDE-C", "UNMEASURED"):
+        t.propose(f"{c} reaches 1 mS/cm", c, "binding", ">= 1", 1.0, criteria=crit, branch_id=f"problem/{pid}")
+    ws = WizardStore()
+    eid = f"mat-{tmp_path.name}"
+    ws.register_agent(eid, "find >= 1 mS/cm", log="", autonomy="observe")
+    ws.link_problem(eid, pid)
+    monkeypatch.setattr("proef.views.ids.PROVENANCE_DB", db)
+    with TestClient(app) as c:
+        yield c, eid, db, pid
+
+
+TABLE = "\n".join(["sample,conductivity_mS_cm,replicate",
+                   "LLZO-A,0.8,1", "LLZO-A,0.9,2", "LLZO-A,1.1,3",
+                   "LPS-B,2.0,1", "LPS-B,2.2,2", "LPS-B,2.1,3",
+                   "NITRIDE-C,1.0,1"]) + "\n"
+
+
+def test_a_table_of_measurements_is_judged_on_its_replicates_not_misread_as_a_plate(material_camp):
+    c, eid, db, pid = material_camp
+    p = _post(c, eid, True, content=TABLE, name="cond.csv").json()
+    assert p["kind"] == "measurements" and p["n_wells"] == 7 and p["z_prime"] is None
+    assert {m["candidate"] for m in p["matches"]} == {"LLZO-A", "LPS-B", "NITRIDE-C"}, "sample names, not well coordinates"
+    assert p["waiting_for_data"] == ["UNMEASURED"]
+    out = _post(c, eid, False, content=TABLE, name="cond.csv").json()
+    got = {v["candidate"]: v["status"] for v in out["verdicts"]}
+    assert got["LPS-B"] == "validated", "all 3 replicates, interval clear of the gate"
+    assert got["LLZO-A"] == "inconclusive", "mean 0.93 with an interval across the gate abstains"
+    assert got["NITRIDE-C"] == "inconclusive", "one reading earns no verdict"
+    recs = SqliteProvenanceStore(db).branch_records(f"problem/{pid}")
+    v = next(r for r in recs if r.event_type.value == "hypothesis_validated")
+    assert v.decision["qc_passed"] is None, "no plate, so plate QC is 'not applicable', never a pass or a fail"
+    assert v.decision["observed_ci"] is not None
+
+
+def test_replicates_are_all_used_never_just_the_first_row(material_camp):
+    c, eid, db, pid = material_camp
+    # first row alone (2.0) would clear the gate; the three replicates (2.0, 0.1, 0.2) do not
+    t = "sample,conductivity_mS_cm\nLLZO-A,2.0\nLLZO-A,0.1\nLLZO-A,0.2\n"
+    out = _post(c, eid, False, content=t, name="c.csv").json()
+    assert {v["candidate"]: v["status"] for v in out["verdicts"]}["LLZO-A"] != "validated"

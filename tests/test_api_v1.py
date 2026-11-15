@@ -446,7 +446,7 @@ def test_limits_are_validated_and_old_programs_get_defaults(client):
                                      "mode": "autonomous"})          # no 'limits' key: created before limits existed
     got = client.get(f"/api/v1/programs/{program_cfg._slug(name)}").json()["limits"]
     assert got == {"max_rounds": 3, "max_lab_runs": 20, "max_hypotheses": 12, "max_families": 3,
-                   "max_variants_per_family": 3, "breadth": 3}
+                   "max_variants_per_family": 3, "breadth": 3, "max_depth": 2, "max_subproblems": 8}
 
 
 def test_a_research_plan_is_reviewed_in_the_inbox_and_removals_are_sealed(client, seeded):
@@ -503,44 +503,102 @@ def test_a_running_campaign_shows_what_it_is_waiting_for_on_its_own_page(client,
     assert problem_id_for("x", {"agent": {"problem_id": "prob-real"}}) == "prob-real"     # a recorded id wins
 
 
-def test_splitting_a_program_into_sub_problems_with_their_own_gate_and_a_shared_budget(client, monkeypatch):
+def _model(monkeypatch, replies):
     import json
-    import uuid
 
     from proef.core.contracts import ToolResult
-    launched = []
-    monkeypatch.setattr("proef.api.v1.programs.spawn_campaign",
-                        lambda doc, name: launched.append(doc) or f"cmp-sub-{len(launched)}")
-    name = f"Split Test {uuid.uuid4().hex[:6]}"
-    slug = name.lower().replace(" ", "-")
+
+    class M:
+        def __init__(self):
+            self.n = 0
+
+        def generate(self, inv, prompt, **kw):
+            doc = replies[min(self.n, len(replies) - 1)]
+            self.n += 1
+            return ToolResult(envelope=inv.envelope.model_copy(), invocation_id=inv.invocation_id,
+                              status="succeeded", output={"text": json.dumps(doc)}, model_version="m")
+    m = M()
+    monkeypatch.setattr("proef.adapters.models.from_env.model_from_env", lambda: m)
+    monkeypatch.setattr("proef.adapters.models.from_env.model_status",
+                        lambda: {"configured": True, "api": "openai", "model": "m"})
+
+
+def _program(client, **limits):
+    import uuid
+    name = f"Tree Test {uuid.uuid4().hex[:6]}"
     client.post("/api/v1/programs", json={"name": name, "objective": "a drug-like inhibitor",
-                                          "limits": {"max_lab_runs": 12, "max_hypotheses": 8}})
-    # no model: an honest refusal, not a guess
+                                          "limits": {"max_lab_runs": 12, "max_hypotheses": 8, **limits}})
+    return name.lower().replace(" ", "-")
+
+
+SPLIT = {"sub_problems": [
+    {"objective": "Potent against the target", "metric": "ic50_um", "direction": "min", "gate": 2, "priority": 2},
+    {"objective": "Soluble enough to dose", "metric": "solubility_uM", "direction": "max", "gate": 50}]}
+REFINE = {"splits": [{"index": 0, "sub_problems": [
+    {"objective": "Binds the wild type", "metric": "ic50_um", "direction": "min", "gate": 2},
+    {"objective": "Binds the mutant", "metric": "ic50_um", "direction": "min", "gate": 5}]}]}
+
+
+def test_the_model_proposes_a_tree_within_the_programs_depth_and_size_limits(client, monkeypatch):
+    launched = []
+    monkeypatch.setattr("proef.api.v1.trees.spawn_campaign", lambda doc, name: launched.append(doc) or "cmp-x")
+    slug = _program(client)
     monkeypatch.delenv("PROEF_LLM_MODEL", raising=False)
     monkeypatch.delenv("PROEF_LLM_TOKEN", raising=False)
     assert client.post(f"/api/v1/programs/{slug}/decompose").json()["detail"]["type"] == "model-not-configured"
-
-    class M:
-        def generate(self, inv, prompt, **kw):
-            doc = {"sub_problems": [
-                {"objective": "Potent against the target", "metric": "ic50_um", "direction": "min", "gate": 2, "rationale": "r"},
-                {"objective": "Soluble enough to dose", "metric": "solubility_uM", "direction": "max", "gate": 50}]}
-            return ToolResult(envelope=inv.envelope.model_copy(), invocation_id=inv.invocation_id,
-                              status="succeeded", output={"text": json.dumps(doc)}, model_version="m")
-    monkeypatch.setattr("proef.adapters.models.from_env.model_from_env", lambda: M())
-    monkeypatch.setattr("proef.adapters.models.from_env.model_status",
-                        lambda: {"configured": True, "api": "openai", "model": "m"})
+    _model(monkeypatch, [SPLIT, REFINE, {"splits": []}])
     d = client.post(f"/api/v1/programs/{slug}/decompose").json()
-    assert [s["objective"] for s in d["sub_problems"]] == ["Potent against the target", "Soluble enough to dose"]
+    assert d["max_depth"] == 2 and d["max_subproblems"] == 8
+    by = {n["objective"]: n for n in d["nodes"]}
+    assert by["Binds the wild type"]["parent"] == by["Potent against the target"]["id"] and by["Binds the wild type"]["depth"] == 2
     assert launched == [], "a proposal only: nothing runs until the person starts it"
 
-    sp = d["sub_problems"][1]
-    assert client.post(f"/api/v1/programs/{slug}/campaigns", json={
-        "sub_problem": sp, "share": 2, "candidates": []}).status_code == 201
-    doc = launched[0]
-    assert doc["objective"] == "Soluble enough to dose" and doc["metric"] == "solubility_uM"
-    assert (doc["direction"], doc["gate_value"]) == ("max", 50.0)
-    assert doc["budget"] == {"max_total_runs": 6, "max_hypotheses_total": 4}, "two sub-problems share the program's limits"
+
+def test_a_depth_one_program_never_gets_a_deeper_tree(client, monkeypatch):
+    slug = _program(client, max_depth=1)
+    _model(monkeypatch, [SPLIT, REFINE])
+    d = client.post(f"/api/v1/programs/{slug}/decompose").json()
+    assert {n["depth"] for n in d["nodes"]} == {1}
+
+
+def test_starting_a_tree_is_validated_budgeted_sealed_and_rolled_up(client, monkeypatch):
+    launched = []
+    monkeypatch.setattr("proef.api.v1.trees.spawn_campaign",
+                        lambda doc, name: launched.append(doc) or f"cmp-leaf-{len(launched)}")
+    slug = _program(client, max_subproblems=3)
+    nodes = [{"id": "a", "objective": "Potent against the target", "metric": "ic50_um", "gate": 2},
+             {"id": "a1", "parent": "a", "objective": "Binds the wild type", "metric": "ic50_um", "gate": 2},
+             {"id": "a2", "parent": "a", "objective": "Binds the mutant", "metric": "ic50_um", "gate": 5},
+             {"id": "b", "objective": "Soluble enough to dose", "metric": "solubility_uM", "direction": "max", "gate": 50}]
+    # four sub-problems exceed this program's cap of 3: refused, whatever the browser sent
+    r = client.post(f"/api/v1/programs/{slug}/trees", json={"objective": "x inhibitor", "nodes": nodes})
+    assert r.status_code == 422 and r.json()["detail"]["type"] == "tree-over-limit" and launched == []
+    # a cycle or a missing parent is refused too
+    bad = client.post(f"/api/v1/programs/{slug}/trees", json={"objective": "x inhibitor", "nodes": [
+        {"id": "z", "parent": "nope", "objective": "orphan question"}]})
+    assert bad.status_code == 422
+
+    _model(monkeypatch, [SPLIT])
+    slug = _program(client, max_subproblems=6)
+    r = client.post(f"/api/v1/programs/{slug}/trees", json={"objective": "x inhibitor", "nodes": nodes})
+    assert r.status_code == 201, r.text
+    leaves = {n["id"]: n for n in r.json()["nodes"] if n["campaign_id"]}
+    assert set(leaves) == {"a1", "a2", "b"}, "a campaign per LEAF; the parent is rolled up, not run"
+    assert sum(d["budget"]["max_total_runs"] for d in launched) <= 12, "the program's runs are shared down the tree"
+    assert r.json()["status"] == "in lab", "a tree that has just started is in the lab, not 'partial'"
+    got = client.get(f"/api/v1/programs/{slug}/trees").json()
+    assert len(got) == 1 and got[0]["by"] == "local-user" and len(got[0]["nodes"]) == 4
+
+
+def test_the_tree_rollup_follows_its_leaves():
+    from proef.problem_tree import ProblemTree, TreeLimits
+    t = ProblemTree.create("x", limits=TreeLimits(max_depth=2))
+    a = t.add(t.root.id, objective="parent"); a1 = t.add(a.id, objective="one"); a2 = t.add(a.id, objective="two")
+    t.set_leaf_status(a1.id, {"c": "confirmed"})
+    t.set_leaf_status(a2.id, {"d": "abstained"})
+    assert t.rollup()[a.id] in ("partial", "inconclusive") and t.rollup()[t.root.id] != "achieved"
+    t.set_leaf_status(a2.id, {"d": "confirmed"})
+    assert t.rollup()[t.root.id] == "achieved"
 
 
 def test_a_unit_typed_with_a_full_stop_is_stored_clean(client):
@@ -551,3 +609,17 @@ def test_a_unit_typed_with_a_full_stop_is_stored_clean(client):
     assert r.status_code == 201 and r.json()["gate"]["unit"] == "mS/cm"
     assert not r.json()["gate"]["label"].endswith(".")
 
+
+
+def test_a_driver_check_reports_honestly_and_never_validates_hardware(client):
+    ins = {i["id"]: i for i in client.get("/api/v1/lab/instruments").json()}
+    r = client.post("/api/v1/lab/instruments/proef-virtual-lab/check").json()
+    assert r["status"] == "ready" and r["simulation_only"] is True and "synthetic" in r["detail"]
+    ez = client.post("/api/v1/lab/instruments/ezo-ph-reference-mcp/check").json()
+    assert ez["status"] == "ready" and "read_ph" in ez["tools"], ez     # the bundled reference server really answers
+    for iid, i in ins.items():
+        if not i["installed"]:
+            assert client.post(f"/api/v1/lab/instruments/{iid}/check").json()["status"] == "not-installed"
+    after = {i["id"]: i for i in client.get("/api/v1/lab/instruments").json()}
+    assert all(after[k]["hardware_validated"] == ins[k]["hardware_validated"] for k in ins), "a check never validates hardware"
+    assert client.post("/api/v1/lab/instruments/nope/check").status_code == 404

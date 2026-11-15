@@ -173,3 +173,78 @@ def test_proxy_evidence_cannot_be_attached(client, monkeypatch):
 def test_missing_analysis_404(client):
     assert client.get("/api/v1/analyses/an-nope").status_code == 404
     assert client.post("/api/v1/analyses/an-nope/run", json={}).status_code == 404
+
+
+# ---- measurements tables: property data that is not a dose series ------------------------------------------
+
+COND = "\n".join([
+    "sample,conductivity_mS_cm,replicate",
+    "LLZO-A,0.8,1", "LLZO-A,0.9,2", "LLZO-A,1.1,3",       # mean 0.93, interval straddles a gate of 1
+    "LPS-B,2.0,1", "LPS-B,2.2,2", "LPS-B,2.1,3",          # clears it
+    "NITRIDE-C,1.0,1",                                      # one measurement
+]) + "\n"
+MGATE = {"metric": "ionic_conductivity_mS_cm", "unit": "mS/cm", "direction": "max", "threshold": 1.0}
+
+
+def test_a_plain_table_is_read_as_measurements_not_as_a_plate(client):
+    d = _up(client, "conductivity.csv", COND).json()
+    assert d["profile"] == "measurements" and d["preview"]["kind"] == "measurements" and d["state"] == "preview_ready"
+    p = d["preview"]
+    assert p["columns"]["sample"] == "sample" and p["columns"]["value"] == "conductivity_mS_cm"
+    assert p["samples"] == ["LLZO-A", "LPS-B", "NITRIDE-C"] and p["n_measurements"] == 7 and p["z_prime"] is None
+    codes = {x["code"] for x in p["diagnostics"]}
+    assert {"too_few_measurements", "no_qc"} <= codes, "says plainly there is no plate QC and that fewer than 3 readings give no interval"
+    assert d["result"] is None, "no numbers before the person confirms"
+    # a real dose-response plate still goes to the plate profile
+    assert _up(client).json()["profile"] == "plate_assay"
+
+
+def test_measurements_are_judged_by_the_same_rule_the_campaigns_use(client):
+    aid = _up(client, "conductivity.csv", COND).json()["id"]
+    r = client.post(f"/api/v1/analyses/{aid}/run", json=MGATE).json()["result"]
+    assert r["kind"] == "measurements" and r["gate"]["label"] == "ionic_conductivity_mS_cm ≥ 1 mS/cm"
+    by = {c["entity"]: c for c in r["compounds"]}
+    a = by["LLZO-A"]
+    assert (a["n"], round(a["estimate"], 3)) == (3, 0.933) and a["ci"][0] < 1.0 < a["ci"][1]
+    assert a["call"] == "inconclusive" and "straddles" in a["reason"], "an interval across the gate abstains"
+    assert by["LPS-B"]["call"] == "validated"
+    assert by["NITRIDE-C"]["call"] == "no_call" and by["NITRIDE-C"]["ci"] is None
+    assert "Student-t" in r["method"] and "at least 3" in r["method"]
+    # without a gate: estimates only, never a call
+    aid2 = _up(client, "c2.csv", COND).json()["id"]
+    r2 = client.post(f"/api/v1/analyses/{aid2}/run", json={"metric": "x"}).json()["result"]
+    assert r2["gate"] is None and all(c["call"] is None for c in r2["compounds"])
+
+
+def test_an_ambiguous_value_column_must_be_chosen_not_guessed(client):
+    two = "sample,sigma_mS_cm,density_g_cc\nA,1.2,5.1\nA,1.3,5.2\nB,0.4,4.9\nB,0.5,5.0\n"
+    d = _up(client, "two.csv", two).json()
+    assert d["state"] == "needs_mapping" and d["preview"]["columns"]["value"] is None
+    assert set(d["preview"]["columns"]["candidates"]) == {"sigma_mS_cm", "density_g_cc"}
+    r = client.post(f"/api/v1/analyses/{d['id']}/run", json={**MGATE, "value_column": "sigma_mS_cm"})
+    assert r.status_code == 200 and {c["entity"] for c in r.json()["result"]["compounds"]} == {"A", "B"}
+
+
+def test_measurements_export_and_report_state_their_limits(client):
+    aid = _up(client, "conductivity.csv", COND).json()["id"]
+    client.post(f"/api/v1/analyses/{aid}/run", json=MGATE)
+    csv_ = client.get(f"/api/v1/analyses/{aid}/export.csv").text
+    assert csv_.splitlines()[0].startswith("sample,n,mean,sd,ci_low,ci_high") and "LLZO-A" in csv_
+    html = client.get(f"/api/v1/analyses/{aid}/report").text
+    assert "no Z′" in html and "Student-t" in html and "LPS-B" in html
+
+
+def test_real_plate_exports_are_never_read_as_measurements(tmp_path):
+    from proef.analysis_profiles.measurements import looks_like_measurements
+    cases = {
+        "long": "Well ID,Compound,Conc (uM),RFU\nA1,C1,0.1,10\nA2,C1,1,50\n",
+        "grid": ",1,2,3,4,5,6\nA,10,20,30,40,50,60\nB,11,21,31,41,51,61\n",
+        "od": "Well,Sample,OD600\nA1,x,0.4\nA2,x,0.5\n",
+    }
+    for name, text in cases.items():
+        f = tmp_path / f"{name}.csv"
+        f.write_text(text)
+        assert not looks_like_measurements(f), name
+    ok = tmp_path / "t.csv"
+    ok.write_text("material,sigma_mS_cm\nA,1.1\nA,1.2\nA,1.0\n")
+    assert looks_like_measurements(ok)

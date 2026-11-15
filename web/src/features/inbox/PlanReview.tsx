@@ -69,7 +69,7 @@ export function PlanReview({ item, compact }: { item: Item; compact?: boolean })
             <div className="space-y-1.5 px-3 py-2 text-[13px]">
               {f.claim && <p className="font-medium">{f.claim}</p>}
               {f.mechanism && <p className="text-muted"><span className="text-faint">Mechanism · </span>{f.mechanism}</p>}
-              {f.refuted_if && <p><span className="rounded bg-bad-soft px-1.5 py-0.5 text-bad">Refuted if · {f.refuted_if}</span></p>}
+              {f.refuted_if && <p><span className="bg-bad-soft px-1.5 py-0.5 text-bad">Refuted if · {f.refuted_if}</span></p>}
             </div>
             <ul className="divide-y divide-line border-t border-line">
               {f.variants.map((v) => {

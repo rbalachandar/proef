@@ -71,7 +71,7 @@ export function SplitDialog({ open, onOpenChange, slug }: { open: boolean; onOpe
                     <input type="checkbox" className="mt-1" checked={n.keep} onChange={(e) => toggle(n.id, e.target.checked)} />
                     <span className="min-w-0 text-sm">
                       <span className="font-medium">{n.objective}</span>
-                      {!kept.some((k) => k.parent === n.id) && n.keep && <span className="ml-2 rounded bg-sunken px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted">runs as a campaign</span>}
+                      {!kept.some((k) => k.parent === n.id) && n.keep && <span className="ml-2 bg-sunken px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted">runs as a campaign</span>}
                       {n.rationale && <span className="block text-xs text-faint">{n.rationale}</span>}
                     </span>
                   </label>

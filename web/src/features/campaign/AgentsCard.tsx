@@ -19,7 +19,7 @@ export function TraceDrawer({ id, actor, onClose }: { id: string; actor: string 
           <div className="flex items-center gap-3 border-b border-line px-5 py-4">
             <div className="min-w-0 flex-1"><D.Title className="num text-lg font-semibold">Trace · {actor}</D.Title>
               <p className="text-xs text-muted">Every record this actor wrote, in order, exactly as sealed in the ledger.</p></div>
-            <D.Close aria-label="Close" className="rounded p-1 text-faint hover:bg-sunken hover:text-ink"><X size={18} /></D.Close>
+            <D.Close aria-label="Close" className="p-1 text-faint hover:bg-sunken hover:text-ink"><X size={18} /></D.Close>
           </div>
           <div className="min-h-0 flex-1 overflow-auto">
             {isLoading && <div className="space-y-2 p-5"><Skeleton className="h-6" /><Skeleton className="h-6" /></div>}

@@ -19,7 +19,7 @@ gate registered beforehand, and verify the ledger.*
 ![proef demo](assets/demo/proef-demo.gif)
 
 *The same engine from the terminal: `proef demo` runs the abstain-and-refute cascade.* All numbers in both recordings are
-simulated. To try the plate step yourself, drop [`assets/demo/demo-plate.csv`](assets/demo/demo-plate.csv) into **Analyze**.
+simulated. To try the plate step, drop [`assets/demo/demo-plate.csv`](assets/demo/demo-plate.csv) into **Analyze**.
 
 **Try it in a minute**
 
@@ -54,7 +54,7 @@ Proef is built on three principles:
 - **Everything auditable.** The problem, the hypotheses, every decision,
   submission, result and verdict go into a hash-chained provenance store.
   One command renders the whole story as a report. Another seals it with a
-  checksum you can publish somewhere you do not control, so anyone can check
+  checksum that can be published outside the system's control, so anyone can check
   that the record has not been edited.
 
 A campaign also chooses **which experiments to run**: each round's batch can
@@ -111,7 +111,7 @@ proef read plate.csv --layout map.csv \
 proef ingest legacy-eln.csv               # institutional memory: pre-Proef kills
                                        # enter ALREADY RULED OUT + family priors
 proef connect scan <share>                # detect instruments writing into a folder
-proef connect describe <device>           # interview you into an agent-readable device card
+proef connect describe <device>           # interview the operator into an agent-readable device card
 proef watch <outbox>                      # agent notices device outputs as they land
 
 # run campaigns
@@ -221,12 +221,12 @@ confidence. The full table (two dozen rows) is in
 
 Proef supports two working styles on the same engine: use it by hand as a
 daily analysis tool, or hand stages of the loop to an agent as trust grows. The
-loop is **modality-agnostic**: the program defines the objective in your own
+loop is **modality-agnostic**: the program defines the objective in its own
 terms (any metric, unit, direction), Make words production per modality,
 adapters supply the assay, and Analyze reads the registered metric against its
 gate.
 
-### Analyze an instrument export yourself
+### Analyze an instrument export
 
 `proef read` auto-detects long CSV/TSV/XLSX tables, plate grids, kinetic tables
 (Tecan, BioTek) and `.npy` images. IC50 fits carry confidence intervals; Z′ is
@@ -257,7 +257,7 @@ proef read tests/data/instruments/tecan_ON1.csv --normalize pct_inhibition
 `--layout` joins a plate map to exports that carry no compound identity;
 `--normalize pct_inhibition` rescales against the plate's own controls and
 refuses when those are missing. Three genuine vendor exports ship in
-`tests/data/instruments/` so you can try the parser on real output first.
+`tests/data/instruments/` to try the parser on real output first.
 
 ```python
 from proef.labread import read_plate
@@ -280,7 +280,7 @@ python examples/demo_full_flow.py         # one round, end to end: tournament �
 ```sh
 proef templates                              # list presets
 proef campaign auto --template dose-response-screen --field compounds=C1,C2,C3
-proef campaign auto campaign.json            # or your own config
+proef campaign auto campaign.json            # or a custom config
 ```
 
 <details><summary>campaign.json — an example problem statement</summary>
@@ -321,7 +321,7 @@ proef campaign auto campaign.json            # or your own config
 
 Abridged output of `proef campaign auto examples/campaign.json`; the simulator is seeded, so reruns reproduce these numbers.
 
-### Let the agent watch your instruments
+### Let the agent watch the instruments
 
 With `proef watch` on an instrument outbox, no files get shuttled: when a reader
 exports a result the agent reads it, updates open hypotheses against their
@@ -337,7 +337,7 @@ proef connect scan tests/data/instruments
 #   → device: plate reader (auto-exporting to this share)
 ```
 
-### Declare your instrument fence
+### Declare the instrument fence
 
 The program creator declares a **pool of permitted instruments** (`labs:` in the
 campaign config, by id from `proef/instruments.json` or as inline
@@ -354,7 +354,7 @@ instrument the campaign refuses rather than falling back to simulation
 | autonomy | agent behavior |
 |---|---|
 | `observe` | reads, fits, recommends — submits nothing |
-| `gate` | proposes everything and waits for your Approve click: the plan (model-proposed hypotheses) or each lab submission (your own candidate list) |
+| `gate` | proposes everything and waits for an Approve click: the plan (model-proposed hypotheses) or each lab submission (a hand-written candidate list) |
 | `act` | autonomous within the SafetyEngine, including confirmation assays |
 
 - **Round breadth** is schedulable: `"k": [4, 2, 1]` screens wide first, then narrows as the flywheel discounts failed families.
@@ -367,11 +367,11 @@ instrument the campaign refuses rather than falling back to simulation
 `make api` serves the web workbench (React + FastAPI), all local, no accounts, no cloud:
 
 - **Programs:** each program's progress against its pre-registered gate, with what is pending decision on top. **Decisions** is the full queue of plan and submission approvals and abstention reviews.
-- **Decisions:** approve or decline gated lab submissions, and review abstentions (follow up, accept as inconclusive, or drop). Every decision is sealed in the ledger under your name.
+- **Decisions:** approve or decline gated lab submissions, and review abstentions (follow up, accept as inconclusive, or drop). Every decision is sealed in the ledger under the decider's name.
 - **Campaign cockpit:** every estimate drawn with its 95% interval against the gate, why each batch was chosen (and what was refused), who did what (agents and people, with full traces), and an independent reviewer. A candidate whose interval straddles the gate is shown as **abstained**, never as a coin-flip verdict.
 - **Evidence behind a verdict:** the recorded dose–response curves re-read from the run files, the plate's QC, and how the number was derived.
-- **Analyze:** two kinds of file. A **dose–response plate** (a plate-reader export) gets curves with IC50 and its interval, plate QC, and honest abstentions, and warns when a call rests on an inferred top plateau. A **table of measurements** (one row per reading: sample, value, repeated for replicates; conductivity, solubility, yield, a pH reading) gets the mean and a 95% interval per sample against your gate, by the same rule: an interval that straddles the gate abstains, and fewer than 3 readings earn no call. A table has no plate, so there is no Z′ and the page says so. The kind is detected from the columns (or you pick it). Record your decision beside the computed call, and attach the analysis to a campaign as supporting evidence. **Submit results** on a hand-run campaign takes either kind.
-- **Run it yourself:** start a hand-run campaign, whose gate is registered on each candidate before any data. Run the plate, then **Submit results**: the CSV is judged by those pre-registered criteria, and the submission is sealed before anything is judged.
+- **Analyze:** two kinds of file. A **dose–response plate** (a plate-reader export) gets curves with IC50 and its interval, plate QC, and honest abstentions, and warns when a call rests on an inferred top plateau. A **table of measurements** (one row per reading: sample, value, repeated for replicates; conductivity, solubility, yield, a pH reading) gets the mean and a 95% interval per sample against the gate, by the same rule: an interval that straddles the gate abstains, and fewer than 3 readings earn no call. A table has no plate, so there is no Z′ and the page says so. The kind is detected from the columns, or chosen by hand. A decision is recorded beside the computed call, and attach the analysis to a campaign as supporting evidence. **Submit results** on a hand-run campaign takes either kind.
+- **Manual plate run:** start a hand-run campaign, whose gate is registered on each candidate before any data. Run the plate, then **Submit results**: the CSV is judged by those pre-registered criteria, and the submission is sealed before anything is judged.
 - **Evidence and Lab:** verify the whole ledger, anchor it outside this machine, and export a campaign's record. Instruments are labelled simulated, real, or hardware-validated, and the page shows what agents may do alone, what needs a person, the SOP sign-offs and the stop switch.
 - **Try it:** `proef demo` runs the abstain-and-refute cascade; `make sample` seeds a sample workspace.
 
@@ -381,24 +381,32 @@ instrument the campaign refuses rather than falling back to simulation
    rounds, lab runs, hypotheses, families, and how many go to the lab per round. A campaign may use less, never more.
 2. **Start research.** A language model reads the problem and proposes *families* of hypotheses. Each has a mechanism,
    a "refuted if…" clause, the model's own confidence, and a citation that is checked (a fabricated DOI is flagged).
-3. **Review the plan.** Nothing reaches the lab until you decide. Remove any hypothesis, or decline the plan. Your decision,
-   what you removed and your note are sealed in the ledger under your name.
-4. **The agent runs it.** Your plan approval covers its own lab submissions (recorded as `covered_by_plan`; the safety gate still
+3. **Review the plan.** Nothing reaches the lab until a person decides. Any hypothesis can be removed, or the plan declined. The decision,
+   what was removed and the note are sealed in the ledger under the decider's name.
+4. **The agent runs it.** The plan approval covers its own lab submissions (recorded as `covered_by_plan`; the safety gate still
    applies). It runs the experiments, reads the
    plates, and judges every result against the gate by a fixed rule: an interval that straddles the gate **abstains**.
    Promising results are confirmed with an orthogonal assay.
-5. **You decide what is left.** Follow up on an abstention, accept it, or drop it. "What next" suggests the next step,
-   and, with **Re-plan after each round** on, the model proposes the next hypotheses from the results. You approve those
+5. **A person decides what is left.** Follow up on an abstention, accept it, or drop it. "What next" suggests the next step,
+   and, with **Re-plan after each round** on, the model proposes the next hypotheses from the results. Those are approved
    the same way. To start from several questions instead of one, **Split into sub-problems** lets the model propose a *tree*
-   (sub-problems can split again) and you keep the real ones and set each gate. The program's **Split depth** and
+   (sub-problems can split again) and the real ones are kept and each gate is set. The program's **Split depth** and
    **Sub-problems** limits cap the tree, the lab-run budget flows down it by priority, each leaf runs as its own campaign, and
    the results roll up: a parent is achieved only when its required children are. A second agent, the **critic**, reads the plan
-   before you do and raises concerns (advisory: it can't change or approve anything). The model also designs each variant's dose
-   ladder, validated and bounded, and you see it in the plan.
+   before the person does and raises concerns (advisory: it can't change or approve anything). The model also designs each variant's dose
+   ladder, validated and bounded, and shown in the plan.
 
-| Start research: the plan you review before anything runs | The finished campaign: what the model wrote, what you removed, what the rule decided |
-|---|---|
-| ![Plan review](assets/screenshots/plan-review.png) | ![Research result](assets/screenshots/research-result.png) |
+**Start research: the plan, reviewed before anything runs.** The model proposes families of hypotheses, each with a mechanism, the
+observation that would refute it, its own confidence, a citation check and a designed dose ladder. A second model critiques the
+plan. A person removes hypotheses, approves, or declines.
+
+![Plan review](assets/screenshots/plan-review.png)
+
+**The finished campaign: what the model wrote, what was removed, what the rule decided.** One variant was removed from the plan and
+never tested. The rest ran against the gate registered beforehand: one validated, one abstained (the interval crosses the gate, so
+no claim, and the decision is queued for a person), one refuted.
+
+![Research result](assets/screenshots/research-result.png)
 
 *A real run (`gpt-6-luna`) against the **simulated** lab. The simulator does not model the proposed chemistry, so the
 outcomes say nothing about real EGFR inhibitors; the example shows the flow and the record, not a scientific result.*
@@ -408,11 +416,11 @@ in all of them; they differ in who proposes the hypotheses and who runs the plat
 
 | | **Start research** | **Candidate list** | **Manual plate run** |
 |---|---|---|---|
-| Hypotheses come from | a language model | your list | your list |
-| Plan review | yes, in "Ask me first" mode | not needed: the list is your plan | not needed |
-| Who runs the experiment | the agent (simulated lab or instruments) | the agent | you: submit the CSV |
+| Hypotheses come from | a language model | a candidate list | a candidate list |
+| Plan review | yes, in "Ask me first" mode | not needed: the list is the plan | not needed |
+| Who runs the experiment | the agent (simulated lab or instruments) | the agent | a person: submits the CSV |
 | Needs | a configured model | nothing: no key, works offline | nothing |
-| Replay | `proef campaign reproduce` replays the plan you approved, in the same batches and order; the model is not re-asked, so a *fresh* run may propose different hypotheses | `proef campaign reproduce` replays it exactly | n/a |
+| Replay | `proef campaign reproduce` replays the plan that was approved, in the same batches and order; the model is not re-asked, so a *fresh* run may propose different hypotheses | `proef campaign reproduce` replays it exactly | n/a |
 | Header | `LLM · <model> wrote N hypotheses` | `no LLM` | `no LLM` |
 
 **The model never decides a verdict**: its hypotheses are judged by the same fixed rule, against criteria registered before
@@ -443,7 +451,7 @@ Also: `proef diary <branch>` writes the record as a static lab-notebook HTML fil
 
 Proef models Design–Make–Test–Analyze as first-class objects:
 
-- **Target Product Profile** — the program defines winning in your own terms (objective, metric, unit, direction, gate); small-molecule programs can add phased criteria (hit → lead → candidate → clinical) in `proef.tpp`.
+- **Target Product Profile**: the program defines winning in its own terms (objective, metric, unit, direction, gate); small-molecule programs can add phased criteria (hit → lead → candidate → clinical) in `proef.tpp`.
 - **Experiment Definition** — the full manifest: intervention, biological system, readout capabilities, denominators, expected intermediates.
 - **Readiness Review** — runs *before* the safety gate and can block an experiment that would be unsafe to *interpret* (missing denominator, mimetic vs authentic modification, unmeasured delivery variance).
 - **Program hierarchy** — Program ▸ Problem ▸ Hypothesis ▸ Experiment, with the gate inherited downward.
@@ -453,7 +461,7 @@ External database adapters: ChEMBL, Open Targets, PubMed. Benchmark datasets: Mo
 
 ### How a campaign runs — who acts, and what Proef enforces
 
-When you run `proef campaign auto`, here is what happens to one compound, step by
+When `proef campaign auto` runs, this is what happens to one compound, step by
 step, and which layer is responsible at each point:
 
 | Step | Who acts | What happens | What Proef enforces |

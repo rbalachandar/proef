@@ -34,7 +34,7 @@ export function HypothesisDrawer({ campaign, hid, onClose }: { campaign: Detail;
                 {h?.gate_label && <span className="num text-xs text-muted">{h.gate_label}</span>}
               </div>
             </div>
-            <D.Close aria-label="Close" className="rounded p-1 text-faint hover:bg-sunken hover:text-ink"><X size={18} /></D.Close>
+            <D.Close aria-label="Close" className="p-1 text-faint hover:bg-sunken hover:text-ink"><X size={18} /></D.Close>
           </div>
           {!h ? <div className="space-y-3 p-5"><Skeleton className="h-6" /><Skeleton className="h-24" /></div> : (
             <Tabs.Root defaultValue="overview" className="flex min-h-0 flex-1 flex-col">
@@ -52,7 +52,7 @@ export function HypothesisDrawer({ campaign, hid, onClose }: { campaign: Detail;
                         {h.verdict.ci && <span className="ml-2 text-sm font-normal text-muted">95% CI [{sig(h.verdict.ci[0])} – {sig(h.verdict.ci[1])}]</span>}</div>
                       <p className="mt-1.5 text-[13px]">{explain(h, campaign.gate)}</p>
                       {h.verdict.margin && h.verdict.status !== 'abstained' && <p className="mt-1 text-xs text-muted">{h.verdict.margin}</p>}
-                      {tip && <p className="mt-2 rounded bg-abstain-soft px-2.5 py-1.5 text-[13px] text-abstain"><b>Next step:</b> {tip}</p>}
+                      {tip && <p className="mt-2 bg-abstain-soft px-2.5 py-1.5 text-[13px] text-abstain"><b>Next step:</b> {tip}</p>}
                     </div>
                   )}
                   {h.state === 'abstained' && (
@@ -62,7 +62,7 @@ export function HypothesisDrawer({ campaign, hid, onClose }: { campaign: Detail;
                     </div>
                   )}
                   {h.refutation_condition && (
-                    <Field label="Pre-registered: this is refuted if…"><span className="rounded bg-bad-soft px-1.5 py-0.5 text-bad">{h.refutation_condition}</span></Field>
+                    <Field label="Pre-registered: this is refuted if…"><span className="bg-bad-soft px-1.5 py-0.5 text-bad">{h.refutation_condition}</span></Field>
                   )}
                   {h.predicted && <Field label="Predicted before the experiment">{h.predicted}
                     {h.predicted_by && typeof h.predicted_by === 'object' && 'model' in h.predicted_by && <span className="text-xs text-muted"> · by {String(h.predicted_by.model)}</span>}

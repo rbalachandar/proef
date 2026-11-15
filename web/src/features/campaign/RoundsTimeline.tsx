@@ -22,7 +22,7 @@ function Why({ r, gate }: { r: Round; gate: Detail['gate'] }) {
           <div className="mb-1 font-semibold uppercase tracking-wider text-[10px] text-muted">Chosen</div>
           <ul className="space-y-1">
             {w.picks.map((p) => (
-              <li key={p.candidate} className="flex items-baseline gap-2 rounded bg-sunken px-2 py-1">
+              <li key={p.candidate} className="flex items-baseline gap-2 bg-sunken px-2 py-1">
                 <span className="num whitespace-nowrap font-medium">{p.candidate}</span>
                 <span className="min-w-0 flex-1 truncate text-faint" title={p.reason}>{p.reason}</span>
                 {p.score != null && <span className="num text-muted">{ei ? 'EI ' : ''}{sig(p.score, 3)}</span>}

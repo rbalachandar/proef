@@ -34,7 +34,7 @@ function InstrumentCard({ i }: { i: Instrument }) {
         {i.requires_network && <Tag><Wifi size={11} className="mr-1" />network</Tag>}
         {!i.installed && <Tag tone="warn">not installed</Tag>}</div>
       {!!(i.assay_types.length || i.readouts.length) && (
-        <div className="mt-2 flex flex-wrap gap-1">{[...i.assay_types, ...i.readouts].map((a) => <span key={a} className="num rounded bg-sunken px-1.5 py-0.5 text-[11px] text-muted">{a}</span>)}</div>
+        <div className="mt-2 flex flex-wrap gap-1">{[...i.assay_types, ...i.readouts].map((a) => <span key={a} className="num bg-sunken px-1.5 py-0.5 text-[11px] text-muted">{a}</span>)}</div>
       )}
       {i.note && <p className="mt-2 text-xs text-faint">{i.note}</p>}
       <div className="mt-3 flex items-start gap-2 border-t border-line pt-2.5">

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/logo/proef-banner.png" alt="Proef — agentic science framework" width="640">
+  <img src="assets/logo/proef-banner.png" alt="Proef: agentic science framework" width="640">
 </p>
 
 [![ci](https://github.com/rbalachandar/proef/actions/workflows/ci.yml/badge.svg)](https://github.com/rbalachandar/proef/actions/workflows/ci.yml)
@@ -7,23 +7,35 @@
 [![Python](https://img.shields.io/pypi/pyversions/proef)](https://pypi.org/project/proef/)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-**The workbench.** Review what the agents did, see why a candidate abstained, run a plate yourself and have it judged
-against the gate registered beforehand, and verify the ledger. *(Sample data from a simulated lab.)*
+Proef is an open-source framework where AI agents propose hypotheses, run experiments and judge the results against criteria
+fixed before the experiment ran. Every claim carries its uncertainty, every decision is on a tamper-evident record, and a person
+stays in control of what reaches the lab.
 
 ![Proef workbench demo](assets/demo/proef-ui-demo.gif)
 
-**The CLI.** The same engine from the terminal: `proef demo` runs the abstain-and-refute cascade. *(All numbers
-simulated.)* Want to try the plate step yourself? Drop [`assets/demo/demo-plate.csv`](assets/demo/demo-plate.csv) into **Analyze**.
+*The workbench: review what the agents did, see why a candidate abstained, run a plate by hand and have it judged against the
+gate registered beforehand, and verify the ledger.*
 
 ![proef demo](assets/demo/proef-demo.gif)
 
-Proef is an open-source framework in which AI agents run the scientific
-method end to end: given a research problem and its constraints, agents propose
-a portfolio of hypotheses, select the ones worth testing, design experiments,
-execute them on simulated or real laboratory equipment, observe the results as
-they arrive, and deliver verdicts against criteria that were registered before
-the experiment ran. A scientist can use it manually, step by step, as a daily
-analysis tool — and hand stages of the loop to an agent as trust grows.
+*The same engine from the terminal: `proef demo` runs the abstain-and-refute cascade.* All numbers in both recordings are
+simulated. To try the plate step yourself, drop [`assets/demo/demo-plate.csv`](assets/demo/demo-plate.csv) into **Analyze**.
+
+**Try it in a minute**
+
+```sh
+pip install proef
+proef demo            # the abstain-and-refute cascade, on the simulated lab
+```
+
+The workbench needs the `api` extra and, from a checkout, `make api`. See [Installation](#installation).
+
+## What it does
+
+Given a research problem and its constraints, agents propose a portfolio of hypotheses, select the ones worth testing, design
+experiments, execute them on simulated or real laboratory equipment, observe the results as they arrive, and deliver verdicts
+against criteria that were registered before the experiment ran. A scientist can use it manually, step by step, as a daily
+analysis tool, and hand stages of the loop to an agent as trust grows.
 
 Proef is built on three principles:
 
@@ -51,7 +63,7 @@ expected-improvement** acquisition (with an optional BoTorch/GP posterior),
 scored against naive baselines in CI and sealed to provenance with its
 reasoning.
 
-**Contents:** [Installation](#installation) · [CLI](#cli) ·
+**Contents:** [What it does](#what-it-does) · [Installation](#installation) · [CLI](#cli) ·
 [Evals](#evaluation-suite) ·
 [Case studies](#case-studies) ·
 [Using Proef](#using-proef) · [The virtual lab](#the-virtual-lab) ·

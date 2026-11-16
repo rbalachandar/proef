@@ -95,6 +95,11 @@ def summarize(rec) -> tuple[str, str, str | None]:
             return ("verdict", f"Family “{d['family_id']}”: {word} ({d.get('reason') or 'derived from its variants'})", None)
         return ("verdict", f"{cand or '?'}: {word}"
                 + (f": observed {obs}" if obs is not None else ""), cand)
+    if et == "tool_invocation" and d.get("kind") == "tool_call":
+        outcome = "refused" if d.get("refused") else (d.get("status") or "done")
+        return ("tool", f"{rec.actor.id} called {d.get('tool', '?')}: {outcome}", None)
+    if et == "gate_decision" and d.get("kind") == "tool_refused":
+        return ("gate", f"Tool refused ({d.get('tool', '?')}): {d.get('reason', '')}", None)
     if et == "gate_decision" and d.get("kind") == "human_approval":
         verb = "approved" if d.get("approve") else "declined"
         return ("review", f"{rec.actor.id} {verb} the lab submission “{d.get('title', '')}”", cand)

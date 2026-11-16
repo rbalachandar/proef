@@ -80,9 +80,11 @@ def _fit_ic50(points):
 class McpSession:
     """Request/response handler, separated from the stdio loop for testability."""
 
-    def __init__(self, gate: Any = None) -> None:
+    def __init__(self, gate: Any = None, approved: Any = None) -> None:
         """`gate`: the program's pre-registered SuccessCriteria, or PROEF_MCP_GATE like "ic50_um<=20". With none, a
-        client cannot register a hypothesis: a verdict would have no pre-registered rule to be judged by."""
+        client cannot register a hypothesis: a verdict would have no pre-registered rule to be judged by.
+        `approved`: candidates a person approved, or PROEF_MCP_APPROVED="A,B". A client cannot run an assay on any
+        other candidate. The person, not the client, decides what the lab runs, as in a campaign's plan review."""
         from proef.adapters.lab.simulator import SimulatorLab
         from proef.adapters.store.sqlite import SqliteProvenanceStore
         from proef.adapters.models.openai_compat import OpenAICompatProvider
@@ -92,6 +94,7 @@ class McpSession:
         from proef.core.safety import LabGateway, SafetyEngine
 
         self.gate = gate if gate is not None else _gate_from_env()
+        self.approved = set(approved) if approved is not None else _approved_from_env()
         self.branch = "mcp-session"
         self.store = SqliteProvenanceStore()
         self.actor = system_actor("mcp")
@@ -173,7 +176,14 @@ class McpSession:
     def _tool_assay(self, args: dict[str, Any]) -> str:
     
         compounds = [str(c) for c in args["compounds"]]
+        unapproved = [c for c in compounds if c not in self.approved]
+        if not compounds or unapproved:
+            return json.dumps({"status": "refused", "reason": "not in a set a person approved (PROEF_MCP_APPROVED)",
+                               "candidates": unapproved})
         concs = args.get("concentrations") or ["0.5uM", "2uM", "10uM", "40uM"]
+        from proef.protocol_design import sanitize_protocol
+        ladder = sanitize_protocol({"concentrations": concs})
+        concs = ladder["concentrations"] if ladder else ["0.5uM", "2uM", "10uM", "40uM"]
         from proef.adapters.lab.simulator import parse_concentration_um
         from proef.core.contracts import (
             Envelope, ProtocolOp, ProtocolStep, ProtocolSubmission,
@@ -218,6 +228,11 @@ class McpSession:
 
     def _tool_capabilities(self, args: dict[str, Any]) -> str:
         return json.dumps(self.gateway.capabilities(), indent=1)
+
+
+def _approved_from_env() -> set[str]:
+    import os
+    return {c.strip() for c in os.environ.get("PROEF_MCP_APPROVED", "").split(",") if c.strip()}
 
 
 def _gate_from_env() -> Any:

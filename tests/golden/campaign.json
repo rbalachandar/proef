@@ -214,6 +214,7 @@
       "proxy_of": null,
       "threshold": 2.0
      },
+     "criteria_source": "prediction",
      "design": {
       "assay_type": "binding",
       "concentrations": [],
@@ -248,6 +249,7 @@
       "proxy_of": null,
       "threshold": 5.0
      },
+     "criteria_source": "prediction",
      "design": {
       "assay_type": "binding",
       "concentrations": [],
@@ -282,6 +284,7 @@
       "proxy_of": null,
       "threshold": 8.0
      },
+     "criteria_source": "prediction",
      "design": {
       "assay_type": "binding",
       "concentrations": [],
@@ -316,6 +319,7 @@
       "proxy_of": null,
       "threshold": 11.0
      },
+     "criteria_source": "prediction",
      "design": {
       "assay_type": "binding",
       "concentrations": [],
@@ -350,6 +354,7 @@
       "proxy_of": null,
       "threshold": 90.0
      },
+     "criteria_source": "prediction",
      "design": {
       "assay_type": "binding",
       "concentrations": [],
@@ -1655,6 +1660,7 @@
       "proxy_of": null,
       "threshold": 2.0
      },
+     "criteria_source": "prediction",
      "design": {
       "assay_type": "binding",
       "concentrations": [],
@@ -1689,6 +1695,7 @@
       "proxy_of": null,
       "threshold": 5.0
      },
+     "criteria_source": "prediction",
      "design": {
       "assay_type": "binding",
       "concentrations": [],
@@ -1723,6 +1730,7 @@
       "proxy_of": null,
       "threshold": 8.0
      },
+     "criteria_source": "prediction",
      "design": {
       "assay_type": "binding",
       "concentrations": [],
@@ -1757,6 +1765,7 @@
       "proxy_of": null,
       "threshold": 11.0
      },
+     "criteria_source": "prediction",
      "design": {
       "assay_type": "binding",
       "concentrations": [],
@@ -1791,6 +1800,7 @@
       "proxy_of": null,
       "threshold": 90.0
      },
+     "criteria_source": "prediction",
      "design": {
       "assay_type": "binding",
       "concentrations": [],

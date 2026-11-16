@@ -152,7 +152,7 @@ def test_halt_stops_the_agent_facing_mcp_surface(tmp_path, monkeypatch):
     monkeypatch.setattr(G, "SOPS_FILE", tmp_path / "sops.json")
     from proef.mcp_server import McpSession
 
-    s = McpSession()
+    s = McpSession(approved={"CCO"})
     call = lambda n, a: json.loads(s.handle(
         {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
          "params": {"name": n, "arguments": a}}

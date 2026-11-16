@@ -46,11 +46,12 @@ README and diagrams updated for what changed, and a ROADMAP box ticked. Phases a
 - [x] Every toolkit and MCP call is a `tool_invocation` ledger record (tool, argument hash, result hash, status, refused).
 - [x] Adversarial tests in `tests/test_toolkit_guarantees.py` (16 tests). Three guards were mutation-checked: removing
       each one fails its tests.
-- [ ] Render `tool_call` records in the diary and the campaign activity feed (recorded, not yet shown).
-- [ ] `HypothesisTracker.propose` still defaults the criterion from the caller's `predicted_value`, or 0.0, when no
-      criteria are passed. No tool path reaches it any more, but a direct caller can. Make criteria explicit (see below).
-- [ ] MCP `run_assay` has no plan-approval step. It only reaches the simulated lab and is labelled as such. The
-      approval model for external MCP clients belongs with the Phase 4 state machine.
+- [x] `tool_call` records render in the diary and the campaign activity feed (kind `tool`).
+- [x] `HypothesisTracker.propose` no longer invents `ic50 <= 0.0`. With no gate and no prediction the criterion is a
+      recorded placeholder, a verdict on it abstains, and the proposal record states its `criteria_source` (explicit,
+      prediction, placeholder; the program's gate replaces it in memory). Raising an error was tried and broke the
+      portfolio flows that propose before the gate is assigned.
+- [x] MCP `run_assay` needs candidates a person approved (`PROEF_MCP_APPROVED`) and bounds the ladder.
 
 #### Phase 0 hole review (what was found, and how)
 
@@ -64,7 +65,11 @@ Found by reading the toolkit as an adversary, then by writing each attack as a t
 6. Caught by the existing tests, not by an attack: wrapping the executors for the ledger initially broke positional
    calls. A reminder to run the old suite after every guard.
 
-Open follow-up from this review: item 7 above, and a second reader for the toolkit before Phase 3 gives a model more tools.
+7. Found while closing the open items: the protein-design adapter built an ipTM criterion and never passed it.
+8. Found by the full suite after the guards went in: two older tests (golden campaign, MCP halt) depended on the
+   old behaviour. The golden diff was only the new `criteria_source` key.
+
+Open follow-up: a second reader for the toolkit before Phase 3 gives a model more tools.
 
 ### Phase 1: domain packs as data
 - [ ] Move the assay-to-metric mapping and the prompt examples out of `hypothesis_agent.py` into the modality pack.

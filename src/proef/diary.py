@@ -153,6 +153,12 @@ def build_diary_html(records: list[Any], branch: str) -> str:
                 head,
                 lane.get("statement") or d.get("metric", ""),
                 " · ".join(bits), cls=_bucket or "tested"))
+        elif ev == "tool_invocation" and d.get("kind") == "tool_call":
+            shared.append(_entry(
+                f"tool call: {d.get('tool', '?')}",
+                "REFUSED" if d.get("refused") else str(d.get("status") or "done").upper(),
+                f"by {r.actor.id} · args {d.get('args_hash', '')} · result {d.get('result_hash', '')}",
+                cls="gate" if d.get("refused") else ""))
         elif ev == "gate_decision":
             counts["gates"] += 1
             approved = d.get("approved", d.get("pass", d.get("match")))

@@ -201,7 +201,7 @@ def test_mcp_tool_calls():
     from proef.mcp_server import McpSession
 
     from proef.core.hypothesis import SuccessCriteria
-    s = McpSession(gate=SuccessCriteria(metric="ic50_um", direction="min", threshold=20.0))
+    s = McpSession(gate=SuccessCriteria(metric="ic50_um", direction="min", threshold=20.0), approved={"CCO"})
     call = lambda n, a: s.handle({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
                                   "params": {"name": n, "arguments": a}})["result"]["content"][0]["text"]
     gen = json.loads(call("generate_candidates", {"target": "KRAS_G12C", "n": 2}))

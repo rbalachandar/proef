@@ -165,6 +165,7 @@ class ProteinDesignLabAdapter:
                 assay_type="protein_binder",
                 predicted=f"ipTM ≥ {iptm_gate}",
                 predicted_value=d.get("plddt"),
+                criteria=criteria,
                 rationale="BindCraft design (predicted_by: bindcraft, "
                           "protein-design adapter)",
                 branch_id=f"problem/{problem.problem_id}",

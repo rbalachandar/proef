@@ -110,9 +110,9 @@ def test_every_tool_call_is_a_ledger_record_including_refusals():
 
 # ---- the MCP surface (external clients such as Claude Desktop) ----
 
-def _mcp(gate=None):
+def _mcp(gate=None, approved=None):
     from proef.mcp_server import McpSession
-    s = McpSession(gate=gate)
+    s = McpSession(gate=gate, approved=approved)
 
     def call(name, args):
         import json
@@ -145,7 +145,7 @@ def test_mcp_gate_can_come_from_the_environment(monkeypatch):
 
 
 def test_mcp_calls_are_on_the_ledger_and_the_lab_is_labelled_simulated():
-    s, call = _mcp(GATE)
+    s, call = _mcp(GATE, approved={"CCO"})
     out = call("run_assay", {"compounds": ["CCO"], "assay": "binding"})
     assert "simulated" in out["lab"]
     calls = [r for r in s.store.branch_records("mcp-session") if (r.decision or {}).get("kind") == "tool_call"]
@@ -169,3 +169,87 @@ def test_a_gateway_without_governance_is_refused():
     out = ex["submit_assay"](compounds=["A"], assay_type="binding")
     assert out["status"] == "refused" and "governance" in out["reason"]
     assert not [r for r in store.branch_records("t") if r.event_type == EventType.lab_run]
+
+
+# ---- the tracker itself: no invented thresholds ----
+
+def test_a_placeholder_criterion_abstains_it_never_refutes_against_zero():
+    """With no gate and no prediction the old default registered `ic50 <= 0.0`, so any measurement was a refutation."""
+    from proef.core.contracts import Envelope
+    from proef.core.hypothesis import HypothesisTracker
+    tk, ex, store = _tk(approved={"A"})
+    t = HypothesisTracker(store, system_actor())
+    h = t.propose("s", "A", "binding", "p", branch_id="t")
+    rec = next(r for r in store.branch_records("t") if r.event_type == EventType.hypothesis_proposed)
+    assert rec.decision["criteria_source"] == "placeholder"
+    run = ex["submit_assay"](compounds=["A"], assay_type="binding")["run_id"]
+    t.verdict(h, tk.gateway.results(Envelope(experiment_branch_id="t"), run))
+    assert h.status == "inconclusive"
+    v = [r for r in store.branch_records("t") if r.event_type in (
+        EventType.hypothesis_validated, EventType.hypothesis_invalidated, EventType.hypothesis_inconclusive)]
+    assert v and v[-1].decision["criteria_preregistered"] is False
+
+
+def test_the_programs_gate_replaces_a_placeholder_before_judging():
+    from proef.autoloop import _assign_criteria
+    from proef.core.hypothesis import HypothesisTracker
+    t = HypothesisTracker(SqliteProvenanceStore(), system_actor())
+    h = t.propose("s", "A", "binding", "p", branch_id="b")
+    _assign_criteria([h], GATE)
+    assert h.criteria.threshold == 20.0 and h.metadata["criteria_source"] == "gate"
+
+
+def test_the_record_says_whether_the_criterion_came_from_a_gate_or_a_prediction():
+    from proef.core.hypothesis import HypothesisTracker
+    store = SqliteProvenanceStore()
+    t = HypothesisTracker(store, system_actor())
+    t.propose("s", "A", "binding", "p", criteria=GATE, branch_id="b")
+    t.propose("s", "B", "binding", "p", predicted_value=3.0, branch_id="b")
+    src = {r.decision["criteria_source"] for r in store.branch_records("b") if r.event_type == EventType.hypothesis_proposed}
+    assert src == {"explicit", "prediction"}   # a bare proposal is "placeholder": see the test above
+
+
+def test_protein_design_hypotheses_are_registered_against_the_iptm_gate():
+    """Found in review: the adapter built an ipTM criterion and never passed it, so binders were registered against a
+    threshold derived from the model's pLDDT, in an IC50 metric."""
+    from proef.adapters.lab.protein_design import ProteinDesignLabAdapter
+    from tests.test_protein_design import _make_tracker
+    tr, prob = _make_tracker()
+    ProteinDesignLabAdapter(mock=True, seed=7, min_plddt=0.5).run_design_cycle(
+        tr, prob, target_sequence="M" * 120, n_attempts=30, screening_budget=5, iptm_gate=0.5)
+    recs = [r for r in tr.store.branch_records(f"problem/{prob.problem_id}") if r.event_type == EventType.hypothesis_proposed]
+    assert recs and all(r.decision["criteria"]["metric"] == "iptm" and r.decision["criteria"]["threshold"] == 0.5
+                        for r in recs)
+
+
+# ---- the ledger shows tool calls ----
+
+def test_tool_calls_show_in_the_activity_feed_and_the_diary():
+    from proef.api.v1.campaigns import activity_items
+    from proef.diary import build_diary_html
+    _, ex, store = _tk()
+    ex["submit_assay"](compounds=["A"], assay_type="binding")
+    recs = store.branch_records("t")
+    items = activity_items(recs)
+    assert any(i.kind == "tool" and "submit_assay" in i.text and "refused" in i.text for i in items)
+    html = build_diary_html(recs, "t")
+    assert "tool call: submit_assay" in html and "REFUSED" in html
+
+
+def test_mcp_will_not_run_an_assay_on_a_candidate_no_person_approved(monkeypatch):
+    monkeypatch.delenv("PROEF_MCP_APPROVED", raising=False)
+    s, call = _mcp(GATE)
+    out = call("run_assay", {"compounds": ["CCO"], "assay": "binding"})
+    assert out["status"] == "refused" and out["candidates"] == ["CCO"]
+    assert not [r for r in s.store.branch_records("mcp-session") if r.event_type == EventType.lab_run]
+    s2, call2 = _mcp(GATE, approved={"A"})
+    assert call2("run_assay", {"compounds": ["A", "B"], "assay": "binding"})["candidates"] == ["B"]
+
+
+def test_mcp_approval_can_come_from_the_environment_and_ladders_are_bounded(monkeypatch):
+    monkeypatch.setenv("PROEF_MCP_APPROVED", "A, B")
+    s, call = _mcp(GATE)
+    assert s.approved == {"A", "B"}
+    out = call("run_assay", {"compounds": ["A"], "assay": "binding", "concentrations": ["99999uM", "5uM"]})
+    pts = {p[0] for p in out["results"]["A"]["points"]}
+    assert 99999 not in pts

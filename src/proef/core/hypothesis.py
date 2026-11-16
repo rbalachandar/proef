@@ -231,7 +231,8 @@ class HypothesisTracker:
                     predicted=d.get("predicted", ""),
                     criteria=SuccessCriteria(**d["criteria"]),
                     problem_id=branch_id.split("/", 1)[-1],
-                    family=d.get("family") or None)
+                    family=d.get("family") or None,
+                    metadata={"criteria_source": d.get("criteria_source", "explicit")})
                 t.hypotheses[hid] = h
             elif ev in verdict_events and hid in t.hypotheses:
                 h = t.hypotheses[hid]
@@ -466,11 +467,15 @@ class HypothesisTracker:
                 design: ExperimentDesign | None = None,
                 branch_id: str | None = None, **meta: Any) -> Hypothesis:
         env = Envelope(experiment_branch_id=branch_id or f"hyp/{round_no}")
+        criteria_source = "explicit"
         if criteria is None:
             # derive explicit criteria from the point prediction (min-direction:
-            # IC50-style assays). Callers should override for max-direction.
+            # IC50-style assays). Callers should override for max-direction. The record says where the
+            # criterion came from. With no gate and no prediction it is a PLACEHOLDER: the program's gate is expected
+            # to replace it before any data, and a verdict on a placeholder abstains, never judges against 0.0.
+            criteria_source = "prediction" if predicted_value is not None else "placeholder"
             criteria = SuccessCriteria(metric="ic50_um", direction="min",
-                                       threshold=predicted_value or 0.0)
+                                       threshold=predicted_value if predicted_value is not None else 0.0)
         if design is None:
             design = ExperimentDesign(assay_type=assay_type)
         h = Hypothesis(
@@ -493,13 +498,14 @@ class HypothesisTracker:
             round=round_no,
             criteria=criteria,
             design=design,
-            metadata=meta,
+            metadata={**meta, "criteria_source": criteria_source},
         )
         self.hypotheses[h.hypothesis_id] = h
         self.store.append(self._record(env, EventType.hypothesis_proposed, h,
                                        decision={"statement": statement,
                                                  "predicted": predicted,
                                                  "criteria": h.criteria.model_dump(),
+                                                 "criteria_source": criteria_source,
                                                  "design": h.design.model_dump(),
                                                  "rationale": rationale,
                                                  "mechanism": mechanism,
@@ -555,7 +561,8 @@ class HypothesisTracker:
                 threshold: float | None = None) -> Hypothesis:
         """Assess against the pre-declared criteria. QC-failed or missing-evidence
         runs yield 'inconclusive', never a silent invalidate."""
-        preregistered = h.criteria is not None
+        placeholder = (h.metadata or {}).get("criteria_source") == "placeholder"
+        preregistered = h.criteria is not None and not placeholder
         if threshold is not None and h.criteria is None:
             h.criteria = SuccessCriteria(metric="ic50_um", threshold=threshold)
         criteria = h.criteria or SuccessCriteria(metric="value", threshold=threshold or 0.0)
@@ -593,6 +600,8 @@ class HypothesisTracker:
             h.status = "inconclusive"
         elif value is None:
             h.status = "inconclusive"  # no usable evidence (right-censored etc.)
+        elif placeholder:
+            h.status = "inconclusive"  # nothing was registered to judge against: abstain, never refute against 0.0
         else:
             h.status = criteria.classify(value, ci)
         event = {

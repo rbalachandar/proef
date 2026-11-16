@@ -669,6 +669,7 @@ def _assign_criteria(selected, _crit) -> None:
     if _crit is not None:
         for h in selected:
             h.criteria = criteria_for_assay(h.assay_type, _crit)
+            h.metadata = {**(h.metadata or {}), "criteria_source": "gate"}
 
 
 def _collect_round(monitor, agent, selected, adaptive, cfg, terminal) -> None:

@@ -171,9 +171,9 @@ class ProblemTree(BaseModel):
                 else "partial"
         elif hit:
             node.status = "partial"
-        elif miss:
-            node.status = "failed"
-        else:
+        elif miss and vals <= {"invalidated", "refuted"}:
+            node.status = "failed"        # every judged candidate was refuted
+        else:                             # refuted mixed with abstained: not enough to call the leaf failed
             node.status = "inconclusive"
 
     def rollup(self) -> dict[str, str]:

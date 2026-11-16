@@ -334,8 +334,11 @@ def test_abstention_is_not_failure():
     assert t.nodes[a.id].status == "inconclusive"
     assert t.nodes[b.id].status == "inconclusive"
     assert t.rollup()[t.root.id] == "inconclusive"
-    # one honest refutation among abstentions -> failed (a miss IS evidence)
+    # a refutation beside an abstention is not enough to call the leaf failed: the abstained candidate may still pass
     t.set_leaf_status(a.id, {"C-1": "inconclusive", "C-2": "refuted"})
+    assert t.nodes[a.id].status == "inconclusive"
+    # every judged candidate refuted -> failed, and that rolls up
+    t.set_leaf_status(a.id, {"C-1": "refuted", "C-2": "refuted"})
     assert t.nodes[a.id].status == "failed"
     assert t.rollup()[t.root.id] == "failed"
     # preliminary hit alone still achieves the leaf (single-method, pending

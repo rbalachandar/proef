@@ -273,7 +273,7 @@ def _summary_of(card, gate_label: str | None = None,
                 margin=v.get("margin") or None,
                 extrapolation=bool(v.get("extrapolation")))
     return S.HypothesisSummary(
-        id=card["key"], candidate=card.get("candidate"),
+        id=card["key"], candidate=card.get("candidate"), family=card.get("family"),
         head=card.get("head") or card["key"],
         statement=card.get("statement") or "",
         state=_norm(card["state"]), stage=card.get("stage") or "",

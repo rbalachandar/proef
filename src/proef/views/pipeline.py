@@ -277,6 +277,7 @@ def pipeline_cards(recs) -> list[dict]:
         cards.append({
             "key": hid,
             "candidate": cand,
+            "family": hp.get("family"),
             "head": str(head),
             "statement": _card_statement(hp, head),
             "rationale": hp.get("rationale"),

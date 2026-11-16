@@ -15,6 +15,9 @@ export function ResultsTable({ hyps: input, gate, onOpen, selected, sub }: {
 }) {
   const hyps = [...input].sort((a, b) => (ORDER[a.state] ?? 9) - (ORDER[b.state] ?? 9) || (a.round ?? 99) - (b.round ?? 99))
   const unit = gate.unit ?? unitOf(gate.label)
+  // a compound proposed under more than one mechanism appears as more than one row: say which is which
+  const repeats = new Set(Object.entries(input.reduce<Record<string, number>>((m, h) => ({ ...m, [h.candidate ?? h.head]: (m[h.candidate ?? h.head] ?? 0) + 1 }), {})).filter(([, n]) => n > 1).map(([c]) => c))
+  const note = (h: Hyp) => sub?.(h) ?? (repeats.has(h.candidate ?? h.head) && h.family ? h.family : undefined)
   return (
     <div className="grid grid-cols-[minmax(150px,200px)_1fr_minmax(130px,170px)]">
       <div className="px-4 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-muted">Candidate</div>
@@ -27,7 +30,7 @@ export function ResultsTable({ hyps: input, gate, onOpen, selected, sub }: {
         {hyps.map((h) => (
           <button key={h.id} onClick={() => onOpen(h)} style={{ height: ROW_H }}
             className={cn('flex w-full items-center gap-2 border-b border-line px-4 text-left hover:bg-sunken', selected === h.id && 'bg-sunken')}>
-            <span className="min-w-0 flex-1 leading-tight"><span className="num block truncate text-sm font-medium">{h.head}</span>{sub?.(h) && <span className="block truncate text-[11px] text-faint">{sub(h)}</span>}</span>
+            <span className="min-w-0 flex-1 leading-tight"><span className="num block truncate text-sm font-medium">{h.head}</span>{note(h) && <span className="block truncate text-[11px] text-faint" title={repeats.has(h.candidate ?? h.head) ? 'the same compound under more than one mechanism' : undefined}>{note(h)}</span>}</span>
             <StateChip state={h.state as State} />
           </button>
         ))}

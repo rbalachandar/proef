@@ -2477,6 +2477,18 @@
       "title": "Evidence Runs",
       "type": "array"
      },
+     "family": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "the mechanistic family this hypothesis belongs to",
+      "title": "Family"
+     },
      "gate_label": {
       "anyOf": [
        {
@@ -2635,6 +2647,18 @@
        }
       ],
       "title": "Candidate"
+     },
+     "family": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "the mechanistic family this hypothesis belongs to",
+      "title": "Family"
      },
      "gate_label": {
       "anyOf": [
@@ -3394,6 +3418,14 @@
       "default": 0,
       "title": "N Hypotheses",
       "type": "integer"
+     },
+     "warnings": {
+      "default": [],
+      "items": {
+       "$ref": "#/components/schemas/PlanWarning"
+      },
+      "title": "Warnings",
+      "type": "array"
      }
     },
     "title": "Plan",
@@ -3603,6 +3635,42 @@
      "hypothesis_id"
     ],
     "title": "PlanVariant",
+    "type": "object"
+   },
+   "PlanWarning": {
+    "description": "A deterministic check on the plan, shown before approval.",
+    "properties": {
+     "candidate": {
+      "title": "Candidate",
+      "type": "string"
+     },
+     "families": {
+      "default": [],
+      "items": {
+       "type": "string"
+      },
+      "title": "Families",
+      "type": "array"
+     },
+     "hypothesis_ids": {
+      "default": [],
+      "items": {
+       "type": "string"
+      },
+      "title": "Hypothesis Ids",
+      "type": "array"
+     },
+     "kind": {
+      "const": "duplicate_compound",
+      "title": "Kind",
+      "type": "string"
+     }
+    },
+    "required": [
+     "kind",
+     "candidate"
+    ],
+    "title": "PlanWarning",
     "type": "object"
    },
    "ProgramCreate": {

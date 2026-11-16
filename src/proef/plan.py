@@ -41,7 +41,23 @@ def build_plan(portfolio, family_info: dict | None, family_scores: dict | None) 
             "hypothesis_id": h.hypothesis_id, "candidate": h.candidate, "statement": h.statement,
             "predicted": h.predicted, "rationale": h.rationale, "assay": h.assay_type,
             "protocol": describe((h.metadata or {}).get("protocol"))})
-    return {"families": list(fams.values()), "n_hypotheses": len(portfolio)}
+    return {"families": list(fams.values()), "n_hypotheses": len(portfolio), "warnings": duplicate_compounds(portfolio)}
+
+
+def duplicate_compounds(portfolio) -> list[dict]:
+    """Compounds that appear under more than one family. Each such hypothesis would be tested on its own, so the same
+    compound can be measured twice (a wasted run), and the gate metric cannot tell the two mechanisms apart. Deterministic,
+    so a person sees it before approving, whether or not a critic model happens to notice."""
+    by: dict[str, dict] = {}
+    for h in portfolio:
+        key = (h.candidate or "").strip().lower()
+        if not key:
+            continue
+        e = by.setdefault(key, {"candidate": h.candidate, "families": [], "hypothesis_ids": []})
+        if (h.family or "ungrouped") not in e["families"]:
+            e["families"].append(h.family or "ungrouped")
+        e["hypothesis_ids"].append(h.hypothesis_id)
+    return [{"kind": "duplicate_compound", **e} for e in by.values() if len(e["hypothesis_ids"]) > 1]
 
 
 def web_plan_approver(inbox, poll_secs: float = 2.0, timeout_secs: float = 24 * 3600,

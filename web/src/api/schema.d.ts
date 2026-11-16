@@ -1697,6 +1697,11 @@ export interface components {
              * @default []
              */
             evidence_runs: string[];
+            /**
+             * Family
+             * @description the mechanistic family this hypothesis belongs to
+             */
+            family?: string | null;
             /** Gate Label */
             gate_label?: string | null;
             /** Head */
@@ -1741,6 +1746,11 @@ export interface components {
         HypothesisSummary: {
             /** Candidate */
             candidate?: string | null;
+            /**
+             * Family
+             * @description the mechanistic family this hypothesis belongs to
+             */
+            family?: string | null;
             /** Gate Label */
             gate_label?: string | null;
             /** Head */
@@ -2068,6 +2078,11 @@ export interface components {
              * @default 0
              */
             n_hypotheses: number;
+            /**
+             * Warnings
+             * @default []
+             */
+            warnings: components["schemas"]["PlanWarning"][];
         };
         /**
          * PlanCritique
@@ -2200,6 +2215,29 @@ export interface components {
              * @default
              */
             statement: string;
+        };
+        /**
+         * PlanWarning
+         * @description A deterministic check on the plan, shown before approval.
+         */
+        PlanWarning: {
+            /** Candidate */
+            candidate: string;
+            /**
+             * Families
+             * @default []
+             */
+            families: string[];
+            /**
+             * Hypothesis Ids
+             * @default []
+             */
+            hypothesis_ids: string[];
+            /**
+             * Kind
+             * @constant
+             */
+            kind: "duplicate_compound";
         };
         /** ProgramCreate */
         ProgramCreate: {

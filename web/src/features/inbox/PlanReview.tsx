@@ -38,6 +38,15 @@ export function PlanReview({ item, compact }: { item: Item; compact?: boolean })
         </div>
       </div>
 
+      {!!item.plan.warnings?.length && (
+        <div role="note" className="mt-3 border border-warn/50 bg-warn-soft px-3 py-2 text-[13px] text-warn">
+          <b className="font-medium">Same compound under more than one family.</b>{' '}
+          {item.plan.warnings.map((w, i) => (
+            <span key={w.candidate}>{i > 0 && '; '}<span className="num">{w.candidate}</span> ({w.families.join(', ')})</span>
+          ))}
+          . Each hypothesis is tested separately, so the compound can be measured more than once. Remove the ones that are not needed.
+        </div>
+      )}
       {item.plan.critique && (
         <div className="mt-3 rounded-lg border border-line bg-sunken px-3 py-2 text-[13px]">
           <div className="mb-1 text-xs font-medium text-muted" title="A second model reviews the plan first. Advisory only: it cannot remove, change or approve anything.">

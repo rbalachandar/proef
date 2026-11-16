@@ -72,6 +72,7 @@ class Review(BaseModel):
 class HypothesisSummary(BaseModel):
     id: str
     candidate: str | None = None
+    family: str | None = Field(None, description="the mechanistic family this hypothesis belongs to")
     head: str
     statement: str
     state: State
@@ -189,8 +190,17 @@ class PlanCritique(BaseModel):
     notes: list[PlanNote] = []
 
 
+class PlanWarning(BaseModel):
+    """A deterministic check on the plan, shown before approval."""
+    kind: Literal["duplicate_compound"]
+    candidate: str
+    families: list[str] = []
+    hypothesis_ids: list[str] = []
+
+
 class Plan(BaseModel):
     """What a model proposed, shown to a person before anything reaches the lab."""
+    warnings: list[PlanWarning] = []
     families: list[PlanFamily] = []
     n_hypotheses: int = 0
     label: str | None = Field(None, description="e.g. 'after round 1' for a re-plan")

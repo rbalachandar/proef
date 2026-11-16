@@ -398,3 +398,29 @@ def test_each_round_explains_its_own_selection_even_after_a_plan_removal(tmp_pat
     for r in rounds:
         assert {p["candidate"] for p in r["why"]["picks"]} == set(r["candidates"]), \
             f"round {r['n']} tested {r['candidates']} but its explanation says it picked {[p['candidate'] for p in r['why']['picks']]}"
+
+
+def test_the_plan_warns_when_one_compound_is_proposed_under_two_families():
+    from types import SimpleNamespace as NS
+    from proef.plan import build_plan, duplicate_compounds
+    def h(i, cand, fam):
+        return NS(hypothesis_id=i, candidate=cand, family=fam, mechanism="m", refutation_condition="r", citation="", citation_status="",
+                  statement="s", predicted="p", rationale="r", assay_type="binding", metadata={})
+    port = [h("a", "erlotinib", "atp_site"), h("b", "Erlotinib ", "covalent"), h("c", "gefitinib", "atp_site"), h("d", "afatinib", "covalent")]
+    warn = duplicate_compounds(port)
+    assert [(w["candidate"], w["families"], w["hypothesis_ids"]) for w in warn] == [("erlotinib", ["atp_site", "covalent"], ["a", "b"])], \
+        "case and spacing differences are the same compound"
+    assert build_plan(port, {}, {})["warnings"] == warn
+    assert duplicate_compounds(port[2:]) == [], "no warning when every compound appears once"
+
+
+def test_the_replan_setting_survives_the_launcher_into_the_campaign_config():
+    """Found in a live run: build_cfg kept a fixed set of keys and dropped `replan`, so the workbench's checkbox did nothing."""
+    from proef.api.launch import build_cfg
+    from proef.cli import _campaign_from_doc
+    doc = {"objective": "find IC50<=20", "gate_value": 20, "rounds": 2, "autonomy": "gate"}
+    assert build_cfg({**doc, "replan": True})["replan"] is True
+    assert "replan" not in build_cfg(doc)
+    assert "replan" not in build_cfg({**doc, "replan": True, "candidates": "A,B"}), "a candidate list has no model to re-plan"
+    assert _campaign_from_doc(build_cfg({**doc, "replan": True})).replan is True
+    assert _campaign_from_doc(build_cfg(doc)).replan is False

@@ -1,7 +1,7 @@
 PY := $(shell [ -x .venv/bin/python ] && echo .venv/bin/python || echo python3)
 UVICORN := $(PY) -m uvicorn
 
-.PHONY: reset-data test api api-dev web-dev web-build install
+.PHONY: reset-data test run api api-dev web-dev web-build install
 
 install:            ## python package + web deps (in ./.venv — make targets use it)
 	@test -d .venv || python3 -m venv .venv
@@ -14,9 +14,12 @@ test:               ## full python suite
 reset-data:         ## back up then wipe local provenance + workbench state
 	./scripts/reset_data.sh
 
-api:                ## backend + built SPA on :8000
+run:                ## start Proef: backend + built SPA on :8000 (PORT=... to change)
 	cd web && npm run build
 	PYTHONPATH=src $(UVICORN) proef.api.app:app --port $(or $(PORT),8000)
+
+api:                ## alias of run, kept for older docs and habits
+	@$(MAKE) --no-print-directory run
 
 api-dev:            ## backend only (auto-reload)
 	PYTHONPATH=src $(UVICORN) proef.api.app:app --port 8000 --reload

@@ -112,7 +112,7 @@ natural-sequence behavior); Boltz is known-optimistic on designed binders
 
 ```sh
 .venv/bin/python case-studies/08-proteinbase-entry/seed_workbench.py  # idempotent
-make api   # -> http://localhost:8000
+make run   # -> http://localhost:8000
 ```
 
 Program card **CS08 PD-L1 Designs** renders with verdict `partial`, one

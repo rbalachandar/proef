@@ -988,7 +988,7 @@ Gap analysis against our evals/funnel/governance:
 ## Session bootstrap
 ```sh
 make test-unit                      # fast lane (target absent — use pytest -k)
-make api                            # web app (:8000)
+make run                            # web app (:8000)
 git log --oneline -10               # recent context
 ```
 Key files: `Overview.py` (router UI), `src/proef/webview.py` (shared

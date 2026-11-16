@@ -20,7 +20,7 @@ with a FastAPI + React workbench as the scientist surface.
 .venv/bin/python -m pytest -q          # all tests (352 green as of Oct 10 — trust
                                           # audits wave 1-2; see docs/ROADMAP S-T3/S-T4)
 make test                              # same suite via the Makefile
-make api                               # backend + built SPA on :8000
+make run                               # backend + built SPA on :8000
 make api-dev                           # backend only, auto-reload
 make web-dev                           # Vite SPA on :5173 (proxies /api)
 python -m proef.cli campaign auto --template dose-response-screen \

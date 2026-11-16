@@ -20,7 +20,7 @@ pip install -e ".[sandbox-agentenv]"  # AgentENV fork/snapshot sandboxes
 ```sh
 proef connect scan /path/to/reader_share   # what instrument is this?
 proef read results.csv --csv out.csv --html report.html   # analyze an export
-make api            # the web app: workspace, launches, live agents (:8000)
+make run            # the web app: workspace, launches, live agents (:8000)
 #   → "Analyze data": upload an instrument export (optional plate layout),
 #     confirm the interpretation (controls, normalization, gate), run,
 #     review — calls with CIs, abstentions and refusals kept honest,

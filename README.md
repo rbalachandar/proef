@@ -28,7 +28,7 @@ pip install proef
 proef demo            # the abstain-and-refute cascade, on the simulated lab
 ```
 
-The workbench needs the `api` extra and, from a checkout, `make api`. See [Installation](#installation).
+The workbench needs the `api` extra and, from a checkout, `make run`. See [Installation](#installation).
 
 ## What it does
 
@@ -89,7 +89,7 @@ From a checkout (this README tracks `main`; the published package may lag it):
 ```sh
 make install       # python package + web deps into ./.venv
 make test          # the offline test suite
-make api           # workbench on :8000 (API + built SPA)
+make run           # workbench on :8000 (API + built SPA)
 ```
 
 ## CLI
@@ -129,7 +129,7 @@ proef campaign plan --objective "potent AND selective AND soluble" \
         --model anthropic --run-budget 20   # decompose into a guarded problem tree
 proef campaign run examples/workflow.yml  # tournament + assay on the configured lab
 proef campaign reproduce <branch>         # replay a recorded experiment, diff verdicts
-make api                               # the web workbench on :8000 (API + SPA)
+make run                               # the web workbench on :8000 (API + SPA)
 
 # audit and govern
 proef diary <branch>                      # campaign as a lab-notebook narrative
@@ -364,16 +364,13 @@ instrument the campaign refuses rather than falling back to simulation
 
 ### The scientist's workbench
 
-`make api` serves the web workbench (React + FastAPI), all local, no accounts, no cloud:
-
-- **Programs:** each program's progress against its pre-registered gate, with what is pending decision on top. **Decisions** is the full queue of plan and submission approvals and abstention reviews.
-- **Decisions:** approve or decline gated lab submissions, and review abstentions (follow up, accept as inconclusive, or drop). Every decision is sealed in the ledger under the decider's name.
-- **Campaign cockpit:** every estimate drawn with its 95% interval against the gate, why each batch was chosen (and what was refused), who did what (agents and people, with full traces), and an independent reviewer. A candidate whose interval straddles the gate is shown as **abstained**, never as a coin-flip verdict.
-- **Evidence behind a verdict:** the recorded dose–response curves re-read from the run files, the plate's QC, and how the number was derived.
-- **Analyze:** two kinds of file. A **dose–response plate** (a plate-reader export) gets curves with IC50 and its interval, plate QC, and honest abstentions, and warns when a call rests on an inferred top plateau. A **table of measurements** (one row per reading: sample, value, repeated for replicates; conductivity, solubility, yield, a pH reading) gets the mean and a 95% interval per sample against the gate, by the same rule: an interval that straddles the gate abstains, and fewer than 3 readings earn no call. A table has no plate, so there is no Z′ and the page says so. The kind is detected from the columns, or chosen by hand. A decision is recorded beside the computed call, and attach the analysis to a campaign as supporting evidence. **Submit results** on a hand-run campaign takes either kind.
-- **Manual plate run:** start a hand-run campaign, whose gate is registered on each candidate before any data. Run the plate, then **Submit results**: the CSV is judged by those pre-registered criteria, and the submission is sealed before anything is judged.
-- **Evidence and Lab:** verify the whole ledger, anchor it outside this machine, and export a campaign's record. Instruments are labelled simulated, real, or hardware-validated, and the page shows what agents may do alone, what needs a person, the SOP sign-offs and the stop switch.
-- **Try it:** `proef demo` runs the abstain-and-refute cascade; `make sample` seeds a sample workspace.
+- **Programs:** each program's progress against its pre-registered gate, with what is pending a decision on top. Pause a program or a single campaign at any level.
+- **Decisions:** the queue of plan and submission approvals and abstention reviews. Approve, decline, follow up, accept as inconclusive or drop. Every decision is sealed in the ledger under the decider's name.
+- **Campaign:** every estimate drawn with its 95% interval against the gate, why each batch was chosen (and what was refused), who did what, and an independent reviewer. A candidate whose interval straddles the gate shows as **abstained**, never as a coin-flip verdict. Select a candidate for its evidence: the dose-response curves re-read from the run files, the plate QC and how the number was derived.
+- **Analyze:** drop in a **dose-response plate** (curves, IC50 with its interval, plate QC, a warning when a call rests on an inferred top plateau) or a **table of measurements** (one row per reading, such as conductivity, solubility or yield: mean and 95% interval per sample). Both are judged by the same rule: an interval that straddles the gate abstains, and fewer than 3 readings make no call. The kind is detected from the columns. The result can be attached to a campaign as supporting evidence.
+- **Manual run:** start a hand-run campaign with its gate registered before any data, run the plate, then **Submit results**. The submission is sealed before anything is judged.
+- **Lab and ledger:** verify the whole ledger, anchor it outside this machine and export a campaign's record. Instruments are labelled simulated, real or hardware-validated, and the page shows what agents may do alone, what needs a person and the SOP sign-offs.
+- **Try it:** `proef demo` runs the abstain-and-refute cascade. `make sample` seeds a sample workspace.
 
 ### From a problem to a verdict: how research runs
 

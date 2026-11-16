@@ -1,7 +1,7 @@
 """Approval inbox — the scientist's button, backed by an append-only log.
 
 Autonomy `gate` mode: every lab submission writes a request here and waits for
-an operator decision. the workbench (`make api`) renders the inbox as a web page with
+an operator decision. the workbench (`make run`) renders the inbox as a web page with
 Approve/Deny buttons; decisions append to the same log. Both sides are
 multi-writer-safe (append-only events, folded on read).
 """

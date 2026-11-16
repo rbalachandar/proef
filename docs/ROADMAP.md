@@ -753,6 +753,25 @@ protocols (Make on rig X, Test on reader Y — a plan, not a choice).
   making bo-ei a UI default would oversell it (the whole point of the
   culture).
 
+### S-T7 — Domain tools: priors from specialist models (opened Nov 2026)
+- **Design:** [`docs/DOMAIN-TOOLS.md`](DOMAIN-TOOLS.md). The model proposes tools and endpoints, code validates, a
+  person approves, code runs them, and the fixed rule judges the measured result. A prediction is a prior, never a verdict.
+- [ ] Registry contract (endpoint, unit, input, modality, applicability domain, uncertainty, version) + one reference tool
+- [ ] Validation step in `build_plan`; "prediction" column and in-domain badge in plan review
+- [ ] Move the assay-to-metric mapping and prompt examples into the modality pack (no per-domain forks of the hypothesis code)
+- [ ] Model-proposed tool choice, validated and shown for approval
+- [ ] Prediction versus measurement view on a finished campaign
+- [ ] Real-data check on a case study before anything ranks on predictions
+
+### S-T8 — LLM orchestration inside code-enforced guarantees (opened Nov 2026)
+- **Plan:** [`docs/LLM-ORCHESTRATION.md`](LLM-ORCHESTRATION.md) (phases 0 to 5, cross-phase checklist). Builds on S-T7.
+- [~] Phase 0: toolkit holes closed (`record_verdict` removed, gate on `propose_hypothesis`, approval + governance on `submit_assay`), every call on the ledger, 16 adversarial tests. Open: render `tool_call` in diary/activity, explicit criteria on `HypothesisTracker.propose`, MCP approval model (see the plan's hole review)
+- [ ] Phase 1: domain packs as data
+- [ ] Phase 2: menu-based choice of instrument and tools, validated, shown in plan review
+- [ ] Phase 3: model-driven discretionary decisions inside the current loop
+- [ ] Phase 4: tool-calling orchestrator inside a state machine, replayable
+- [ ] Phase 5: evals and a real-data study before any default changes
+
 ## T0 — Uncertainty-aware verdicts (epistemic integrity)
 - [x] Fit IC50 with a confidence interval — Hill grid fit + residual bootstrap
   (deterministic seed), `labread.fit_ic50_ci`; CI stored on compounds as

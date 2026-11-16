@@ -104,21 +104,14 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
         },
     },
     {
-        "name": "record_verdict",
-        "description": "Record a validated/invalidated/inconclusive verdict for "
-                       "a hypothesis based on evidence. The event type follows "
-                       "the verdict, and an inconclusive verdict is recorded "
-                       "as such — never silently as an invalidation.",
+        "name": "request_analysis",
+        "description": "Ask the engine to judge a finished run for a hypothesis. The engine applies the pre-registered "
+                       "criteria to the measured data and records the verdict itself. The model cannot supply or edit "
+                       "a verdict. Refused when the hypothesis has no registered gate or the run is not its own.",
         "input_schema": {
             "type": "object",
-            "properties": {
-                "candidate": {"type": "string"},
-                "verdict": {"type": "string",
-                            "enum": ["validated", "confirmed", "invalidated",
-                                     "refuted", "inconclusive"]},
-                "evidence": {"type": "string"},
-            },
-            "required": ["candidate", "verdict", "evidence"],
+            "properties": {"candidate": {"type": "string"}, "run_id": {"type": "string"}},
+            "required": ["candidate", "run_id"],
         },
     },
     {
@@ -143,7 +136,13 @@ class AgentToolkit:
     """
 
     def __init__(self, lab_gateway, store, actor, tpp=None,
-                 branch_id: str = "agentic-toolkit"):
+                 branch_id: str = "agentic-toolkit", gate=None, approved=()):
+        """`gate`: the program's pre-registered SuccessCriteria (a person fixed it). `approved`: candidates a person
+        approved in a plan. Both default to nothing, so the lab tools fail closed until a person supplies them."""
+        self.gate = gate
+        self.approved = set(approved)
+        self._hyps: dict[str, Any] = {}
+        self._tracker = None
         self.gateway = lab_gateway
         self.store = store
         self.actor = actor
@@ -177,13 +176,43 @@ class AgentToolkit:
         return self._retro
 
     def executors(self) -> dict[str, Callable]:
+        return {name: self._recorded(name, fn) for name, fn in self._raw_executors().items()}
+
+    def _recorded(self, name: str, fn: Callable) -> Callable:
+        """Every tool call is a ledger record: tool, argument hash, result hash, actor. Refusals are recorded too."""
+        def call(*args, **kwargs):
+            logged = {"args": list(args), **kwargs}
+            try:
+                out = fn(*args, **kwargs)
+            except Exception as exc:  # noqa: BLE001 - recorded, then re-raised to the caller
+                self._log(name, logged, {"error": str(exc)[:200]})
+                raise
+            self._log(name, logged, out)
+            return out
+        return call
+
+    def _log(self, name: str, args: dict, out: Any) -> None:
+        import hashlib
+        if self.store is None:
+            return
+
+        def h(x: Any) -> str:
+            return hashlib.sha256(json.dumps(x, sort_keys=True, default=str).encode()).hexdigest()[:16]
+
+        status = out.get("status") if isinstance(out, dict) else None
+        self.store.append(record_for(
+            Envelope(experiment_branch_id=self.branch), EventType.tool_invocation, self.actor,
+            decision={"kind": "tool_call", "tool": name, "args_hash": h(args), "result_hash": h(out),
+                      "status": status, "refused": status in ("refused", "rejected")}))
+
+    def _raw_executors(self) -> dict[str, Callable]:
         return {
             "predict_admet": self._tool_admet,
             "check_synthesis": self._tool_synthesis,
             "propose_hypothesis": self._tool_hypothesis,
             "submit_assay": self._tool_submit,
             "check_results": self._tool_results,
-            "record_verdict": self._tool_verdict,
+            "request_analysis": self._tool_analysis,
             "query_tpp": self._tool_tpp,
             "rank_variants": self._tool_rank_variants,
         }
@@ -221,24 +250,51 @@ class AgentToolkit:
                            f"{best.lead_time_days} d, ~${best.cost_usd:.0f}"),
                 "data_origin": best.data_origin}
 
+    def _refuse(self, tool: str, reason: str, **extra) -> dict:
+        return {"status": "refused", "tool": tool, "reason": reason, **extra}
+
     def _tool_hypothesis(self, statement: str, candidate: str,
                          assay_type: str, predicted: str) -> dict:
+        """A model's `predicted` is a prediction. The criterion is the program's gate, never the model's number."""
+        if self.gate is None:
+            return self._refuse("propose_hypothesis", "no program gate is registered, so a verdict could not be judged "
+                                "by a pre-registered rule. A person registers the gate first")
+        from proef.autoloop import criteria_for_assay
         from proef.core.hypothesis import HypothesisTracker
-        tracker = HypothesisTracker(self.store, self.actor)
-        h = tracker.propose(statement=statement, candidate=candidate,
-                            assay_type=assay_type, predicted=predicted)
-        return {"hypothesis_id": h.hypothesis_id, "status": "recorded"}
+        from proef.hypothesis_agent import clean_candidate
+        if self._tracker is None:
+            self._tracker = HypothesisTracker(self.store, self.actor)
+        name = clean_candidate(candidate)
+        h = self._tracker.propose(statement=statement, candidate=name, assay_type=assay_type, predicted=predicted,
+                                  criteria=criteria_for_assay(assay_type, self.gate), branch_id=self.branch)
+        self._hyps[name] = h
+        return {"hypothesis_id": h.hypothesis_id, "status": "recorded", "candidate": name,
+                "gate": {"metric": h.criteria.metric, "threshold": h.criteria.threshold}}
 
     def _tool_submit(self, compounds: list[str], assay_type: str,
                      concentrations: list[str] | None = None) -> dict:
-        concs = concentrations or ["0.5uM", "2uM", "10uM", "40uM"]
+        """Lab submission. Only candidates a person approved in a plan may go, the ladder is bounded, and the safety
+        gateway still checks every submission."""
+        from proef.hypothesis_agent import clean_candidate
+        if getattr(self.gateway, "governance", None) is None:
+            self._log_refusal("submit_assay", "the gateway has no governance (halt, authorization)")
+            return self._refuse("submit_assay", "the lab gateway has no governance bundle, so the halt switch and "
+                                "authorization would not apply. Build it with governance=execution_governance()")
+        names = [clean_candidate(c) for c in compounds]
+        unapproved = [c for c in names if c not in self.approved]
+        if not names or unapproved:
+            self._log_refusal("submit_assay", f"not in an approved plan: {', '.join(unapproved) or 'no compounds'}")
+            return self._refuse("submit_assay", "not in a plan a person approved", candidates=unapproved)
+        from proef.protocol_design import sanitize_protocol
+        ladder = sanitize_protocol({"concentrations": concentrations or []})
+        concs = ladder["concentrations"] if ladder else ["0.5uM", "2uM", "10uM", "40uM"]
         protocol = ProtocolSubmission(
             envelope=Envelope(experiment_branch_id=self.branch),
             title=f"agent assay ({assay_type})",
             assay_type=assay_type,
             steps=[ProtocolStep(seq=1, op=ProtocolOp.dispense, params={"volume_ul": 50})],
             samples=[SampleSpec(sample_id=c, kind=SampleKind.compound, concentration=cc)
-                     for c in compounds for cc in concs]
+                     for c in names for cc in concs]
             + [SampleSpec(sample_id="ctrl-neg", kind=SampleKind.buffer, concentration="10uM")],
             reagents=[ReagentSpec(name="assay-buffer", amount="5 mL", bsl_level=1)],
         )
@@ -246,8 +302,17 @@ class AgentToolkit:
         if rejection:
             return {"status": "rejected", "reason": rejection}
         self._runs[run_id] = protocol
+        self.store.append(record_for(
+            protocol.envelope, EventType.gate_decision, self.actor,
+            decision={"kind": "covered_by_plan", "title": protocol.title, "candidate": ", ".join(names),
+                      "reason": "within the plan a person approved"}))
         return {"run_id": run_id, "status": "submitted",
-                "compounds": compounds, "next": "call check_results when ready"}
+                "compounds": names, "next": "call check_results when ready"}
+
+    def _log_refusal(self, tool: str, reason: str) -> None:
+        self.store.append(record_for(
+            Envelope(experiment_branch_id=self.branch), EventType.gate_decision, self.actor,
+            decision={"kind": "tool_refused", "tool": tool, "reason": reason}))
 
     def _tool_results(self, run_id: str) -> dict:
         if run_id not in self._runs:
@@ -262,25 +327,22 @@ class AgentToolkit:
         return {"run_id": run_id, "status": result.status.value,
                 "z_prime": result.qc.z_prime, "measurements": measurements}
 
-    def _tool_verdict(self, candidate: str, verdict: str, evidence: str) -> dict:
-        from proef.core.contracts import EventType
-        event = {
-            "validated": EventType.hypothesis_validated,
-            "confirmed": EventType.hypothesis_validated,
-            "invalidated": EventType.hypothesis_invalidated,
-            "refuted": EventType.hypothesis_invalidated,
-            "inconclusive": EventType.hypothesis_inconclusive,
-        }.get(verdict, EventType.hypothesis_tested)
-        self.store.append(record_for(
-            Envelope(experiment_branch_id=self.branch),
-            event,
-            self.actor,
-            decision={"candidate": candidate, "verdict": verdict,
-                      "evidence": evidence[:500],
-                      "declared_by": "agent (free-text evidence; not a "
-                                     "tool-verified fit)"},
-        ))
-        return {"recorded": True, "candidate": candidate, "verdict": verdict}
+    def _tool_analysis(self, candidate: str, run_id: str) -> dict:
+        """The engine judges. The model names a candidate and a run and reads the outcome. It cannot write one."""
+        from proef.hypothesis_agent import clean_candidate
+        name = clean_candidate(candidate)
+        h = self._hyps.get(name)
+        if h is None or h.criteria is None:
+            return self._refuse("request_analysis", "no hypothesis with a registered gate for this candidate")
+        protocol = self._runs.get(run_id)
+        if protocol is None or name not in {sp.sample_id for sp in protocol.samples}:
+            return self._refuse("request_analysis", "that run is not this candidate's own")
+        result = self.gateway.results(Envelope(experiment_branch_id=self.branch), run_id)
+        self._tracker.attach_test(h, protocol, run_id)
+        self._tracker.verdict(h, result)
+        return {"status": "judged", "candidate": name, "verdict": h.status, "observed": h.observed_value,
+                "ci": list(h.observed_ci) if h.observed_ci else None, "recorded_by": "engine",
+                "gate": {"metric": h.criteria.metric, "threshold": h.criteria.threshold}}
 
     def _tool_tpp(self, phase: str = "hit") -> dict:
         if not self.tpp:

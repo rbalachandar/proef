@@ -140,7 +140,7 @@ proef why char-ridge train.csv CCCCCO     # attribution panel: per-prediction dr
 proef eval --all                          # scored task suite + leaderboard
 proef eval --suite epistemics,models      # run tiers separately
 proef fixtures verify <study-dir>         # byte-reproducible case-study data
-proef mcp                                 # MCP server: drive Proef from Claude/Cursor
+proef mcp                                 # MCP server: drive Proef from Claude/Cursor (set PROEF_MCP_GATE="ic50_um<=20" to allow hypotheses)
 proef new-adapter lab my_robot            # scaffold a tested LabAdapter
 proef skills list                         # discovered Agent Skills (theirs and ours)
 ```

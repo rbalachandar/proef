@@ -653,20 +653,22 @@ def _resolve_series(store, problem, actor, flywheel, say) -> None:
             f"{c['reason']}")
 
 
+def criteria_for_assay(assay_type: str, crit):
+    """The pre-registered criterion a hypothesis on this assay is judged by: the program's gate, in the assay's own metric.
+    One place, so a hypothesis created any way (agent, plan, toolkit, MCP) is judged by the same rule."""
+    from proef.adapters.lab.simulator import DOSE_RESPONSE_ASSAYS
+    from proef.core.hypothesis import SuccessCriteria
+    if assay_type in DOSE_RESPONSE_ASSAYS:
+        # IC50-style assay: the Hill fit produces ic50_um and lower-is-better, whatever the constraint is named
+        return SuccessCriteria(metric="ic50_um", direction="min", threshold=float(crit.threshold))
+    return crit.model_copy()
+
+
 def _assign_criteria(selected, _crit) -> None:
     """Thread the pre-registered gate into each hypothesis of the round."""
     if _crit is not None:
-        from proef.adapters.lab.simulator import DOSE_RESPONSE_ASSAYS
-        from proef.core.hypothesis import SuccessCriteria
         for h in selected:
-            if h.assay_type in DOSE_RESPONSE_ASSAYS:
-                # IC50-style assay: the Hill fit produces ic50_um and
-                # lower-is-better, whatever the constraint is named
-                h.criteria = SuccessCriteria(
-                    metric="ic50_um", direction="min",
-                    threshold=float(_crit.threshold))
-            else:
-                h.criteria = _crit.model_copy()
+            h.criteria = criteria_for_assay(h.assay_type, _crit)
 
 
 def _collect_round(monitor, agent, selected, adaptive, cfg, terminal) -> None:

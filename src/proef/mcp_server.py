@@ -80,7 +80,9 @@ def _fit_ic50(points):
 class McpSession:
     """Request/response handler, separated from the stdio loop for testability."""
 
-    def __init__(self) -> None:
+    def __init__(self, gate: Any = None) -> None:
+        """`gate`: the program's pre-registered SuccessCriteria, or PROEF_MCP_GATE like "ic50_um<=20". With none, a
+        client cannot register a hypothesis: a verdict would have no pre-registered rule to be judged by."""
         from proef.adapters.lab.simulator import SimulatorLab
         from proef.adapters.store.sqlite import SqliteProvenanceStore
         from proef.adapters.models.openai_compat import OpenAICompatProvider
@@ -89,6 +91,7 @@ class McpSession:
         from proef.core.registry import Registry
         from proef.core.safety import LabGateway, SafetyEngine
 
+        self.gate = gate if gate is not None else _gate_from_env()
         self.branch = "mcp-session"
         self.store = SqliteProvenanceStore()
         self.actor = system_actor("mcp")
@@ -131,6 +134,25 @@ class McpSession:
     # ------------------------------------------------------------ tools
 
     def _call_tool(self, name: str, args: dict[str, Any]) -> dict[str, Any]:
+        out = self._dispatch(name, args)
+        self._log_call(name, args, out["content"][0]["text"])
+        return out
+
+    def _log_call(self, name: str, args: dict[str, Any], text: str) -> None:
+        import hashlib
+        from proef.core.contracts import Envelope, EventType
+        from proef.core.interfaces import record_for
+        h = lambda x: hashlib.sha256(str(x).encode()).hexdigest()[:16]  # noqa: E731
+        try:
+            status = json.loads(text).get("status")
+        except (ValueError, AttributeError):
+            status = None
+        self.store.append(record_for(
+            Envelope(experiment_branch_id=self.branch), EventType.tool_invocation, self.actor,
+            decision={"kind": "tool_call", "tool": name, "args_hash": h(json.dumps(args, sort_keys=True)),
+                      "result_hash": h(text), "status": status, "refused": status == "refused"}))
+
+    def _dispatch(self, name: str, args: dict[str, Any]) -> dict[str, Any]:
         text = {
             "generate_candidates": self._tool_generate,
             "run_assay": self._tool_assay,
@@ -179,17 +201,35 @@ class McpSession:
                 (parse_concentration_um(m.well.split("-")[-1]), m.value))
         report = {c: {"ic50_um": (_fit_ic50(pts) if pts else None), "points": pts}
                   for c, pts in by.items()}
-        return json.dumps({"run_id": run_id, "results": report}, indent=1)
+        return json.dumps({"run_id": run_id, "lab": "simulated (virtual lab)", "results": report}, indent=1)
 
     def _tool_hypothesis(self, args: dict[str, Any]) -> str:
+        if self.gate is None:
+            return json.dumps({"status": "refused", "reason": "no program gate is registered (set PROEF_MCP_GATE, "
+                               "for example ic50_um<=20), so a verdict could not be judged by a pre-registered rule"})
+        from proef.autoloop import criteria_for_assay
         h = self.tracker.propose(
             statement=args["statement"], candidate=args["candidate"],
             assay_type=args["assay_type"], predicted=args["predicted"],
+            criteria=criteria_for_assay(str(args["assay_type"]), self.gate), branch_id=self.branch,
         )
-        return json.dumps({"hypothesis_id": h.hypothesis_id, "status": h.status})
+        return json.dumps({"hypothesis_id": h.hypothesis_id, "status": h.status,
+                           "gate": {"metric": h.criteria.metric, "threshold": h.criteria.threshold}})
 
     def _tool_capabilities(self, args: dict[str, Any]) -> str:
         return json.dumps(self.gateway.capabilities(), indent=1)
+
+
+def _gate_from_env() -> Any:
+    import os
+    import re
+    raw = os.environ.get("PROEF_MCP_GATE", "").strip()
+    m = re.fullmatch(r"([A-Za-z_][\w]*)\s*(<=|>=|<|>)\s*([0-9.eE+-]+)", raw)
+    if not m:
+        return None
+    from proef.core.hypothesis import SuccessCriteria
+    return SuccessCriteria(metric=m.group(1), direction="min" if m.group(2) in ("<=", "<") else "max",
+                           threshold=float(m.group(3)))
 
 
 def _error(rid: Any, code: int, message: str) -> dict[str, Any]:

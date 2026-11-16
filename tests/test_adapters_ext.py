@@ -200,7 +200,8 @@ def test_mcp_session_initialize_and_tools():
 def test_mcp_tool_calls():
     from proef.mcp_server import McpSession
 
-    s = McpSession()
+    from proef.core.hypothesis import SuccessCriteria
+    s = McpSession(gate=SuccessCriteria(metric="ic50_um", direction="min", threshold=20.0))
     call = lambda n, a: s.handle({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
                                   "params": {"name": n, "arguments": a}})["result"]["content"][0]["text"]
     gen = json.loads(call("generate_candidates", {"target": "KRAS_G12C", "n": 2}))
@@ -1307,7 +1308,9 @@ def test_agent_toolkit_tool_execution(tmp_path):
 
     store = SqliteProvenanceStore()
     gateway = LabGateway(SimulatorLab(seed=1), SafetyEngine(), store, system_actor())
-    tk = AgentToolkit(gateway, store, system_actor(), branch_id="tk-test")
+    from proef.core.hypothesis import SuccessCriteria
+    tk = AgentToolkit(gateway, store, system_actor(), branch_id="tk-test",
+                      gate=SuccessCriteria(metric="ic50_um", direction="min", threshold=20.0))
     executors = tk.executors()
 
     # ADMET
@@ -1334,8 +1337,10 @@ def test_agent_toolkit_submit_and_results(tmp_path):
     from proef.toolkit import AgentToolkit
 
     store = SqliteProvenanceStore()
-    gateway = LabGateway(SimulatorLab(seed=1), SafetyEngine(), store, system_actor())
-    tk = AgentToolkit(gateway, store, system_actor(), branch_id="tk-lab")
+    from proef.governance import execution_governance
+    gateway = LabGateway(SimulatorLab(seed=1), SafetyEngine(), store, system_actor(),
+                         governance=execution_governance(), approver=lambda t: True)
+    tk = AgentToolkit(gateway, store, system_actor(), branch_id="tk-lab", approved={"CCO"})
     r = tk._tool_submit(compounds=["CCO"], assay_type="binding",
                         concentrations=["10uM"])
     assert r["status"] == "submitted" and "run_id" in r

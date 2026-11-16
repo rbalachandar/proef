@@ -72,10 +72,30 @@ Found by reading the toolkit as an adversary, then by writing each attack as a t
 Open follow-up: a second reader for the toolkit before Phase 3 gives a model more tools.
 
 ### Phase 1: domain packs as data
-- [ ] Move the assay-to-metric mapping and the prompt examples out of `hypothesis_agent.py` into the modality pack.
-- [ ] Candidate representation (SMILES, sequence, composition) declared by the pack.
-- [ ] A materials pack and a protein/sequence pack as the first two non-chemistry packs, with tests that a hypothesis in
-      each domain gets the right metric and gate.
+- [x] The dose-response assay list has ONE definition (`modality.DOSE_RESPONSE`). The hypothesis agent, the plan, the
+      toolkit, MCP, the campaign loop and the simulator all read it through the pack (`metric_for_assay`,
+      `criteria_for_assay(assay, gate, modality)`). The agent's own hardcoded copy is gone.
+- [x] Prompt wording comes from the pack: role, mechanism hint, candidate kind and example. The default pack renders the
+      exact text used before, so recorded prompts and the golden snapshot did not change.
+- [x] Candidate representation is declared by the pack (`candidate_kind`: compound, sequence, composition or sample).
+- [x] The assay a hand-listed candidate is tested by (`default_assay`) moved from `launch.py` into the pack.
+- [x] Materials and biologic packs carry their own data. `tests/test_domain_packs.py` (12 tests) shows a hypothesis in
+      each domain gets the right metric and the program's gate, and that prompts carry no drug-discovery wording for a
+      materials program. Four guards mutation-checked.
+- [x] `CampaignConfig.modality`, carried by `build_cfg` and the CLI (the `replan` lesson: a new key has to be carried on
+      purpose).
+
+#### Phase 1 hole review
+1. An unknown modality fell back to small molecule silently. A typo such as "materials" gave a materials program
+   drug-discovery wording and dose-response rules. The API now refuses it (422 with the valid list), stores the pack's
+   own name, and the engine refuses it too.
+2. The workbench hardcodes the modality options. A test now fails if the list differs from the packs.
+3. `launch.py` had the same domain rule as the agent (small molecule means binding, else custom), a second leak. Moved.
+4. `build_cfg` would have dropped `modality`, as it did `replan`. Carried and tested.
+5. Pack text is code, not user input, so it is not an injection path. Re-check when packs become user-supplied.
+6. Not changed, and worth a decision: a biologic or agrochemical candidate list still defaults to the `custom` assay
+   (property read), as before. Whether those should default to a dose-response assay needs real-data evidence, so the
+   values were moved, not changed.
 
 ### Phase 2: menu-based choice of instrument and tools
 - [ ] Registry contract for prediction tools (see DOMAIN-TOOLS): endpoint, unit, input, modality, domain, uncertainty,

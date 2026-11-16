@@ -380,6 +380,7 @@ def _campaign_from_doc(cfg_doc: dict) -> "CampaignConfig":
                                          ["0.5uM", "2uM", "10uM", "40uM"])),
         budget=(ResourceBudget(**cfg_doc["budget"]) if cfg_doc.get("budget") else None),
         replan=bool(cfg_doc.get("replan", False)),
+        modality=(cfg_doc.get("modality") or None),
         max_families=cfg_doc.get("max_families", 3),
         max_variants_per_family=cfg_doc.get("max_variants_per_family", 3),
         dose_design=cfg_doc.get("dose_design", "fixed"),

@@ -766,7 +766,7 @@ protocols (Make on rig X, Test on reader Y — a plan, not a choice).
 ### S-T8 — LLM orchestration inside code-enforced guarantees (opened Nov 2026)
 - **Plan:** [`docs/LLM-ORCHESTRATION.md`](LLM-ORCHESTRATION.md) (phases 0 to 5, cross-phase checklist). Builds on S-T7.
 - [x] Phase 0 (done): toolkit holes closed (`record_verdict` removed, gate on `propose_hypothesis`, approval + governance on `submit_assay`), every call on the ledger, 16 adversarial tests. Tracker placeholder criterion, `tool_call` in diary/feed and MCP approval also done (see the plan's hole review)
-- [ ] Phase 1: domain packs as data
+- [x] Phase 1 (done): domain packs as data. One dose-response definition, prompt wording and default assay in the pack, unknown modalities refused, 12 tests
 - [ ] Phase 2: menu-based choice of instrument and tools, validated, shown in plan review
 - [ ] Phase 3: model-driven discretionary decisions inside the current loop
 - [ ] Phase 4: tool-calling orchestrator inside a state machine, replayable

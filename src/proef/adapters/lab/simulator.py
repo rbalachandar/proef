@@ -55,7 +55,7 @@ ASSAY_PROFILE: dict[str, tuple[float, str, float]] = {
     "custom": (50.0, "signal", 10.0),
 }
 
-DOSE_RESPONSE_ASSAYS = {"binding", "enzymatic", "cytotoxicity", "counterscreen"}
+from proef.modality import DOSE_RESPONSE as DOSE_RESPONSE_ASSAYS  # noqa: E402  one definition, in the modality pack
 
 
 def parse_concentration_um(conc: str | None, default_um: float = 10.0) -> float:

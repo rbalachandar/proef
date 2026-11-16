@@ -68,6 +68,9 @@ clause, a confidence and a citation. Domain knowledge leaks into code in three p
 A domain pack is then data: assay types and their metrics, safety rule names, prompt examples, default tools. A new
 domain is a new pack, not a code change.
 
+Status: the first three are done (S-T8 Phase 1). The assay-to-metric rule, prompt wording, candidate kind and default assay
+are fields of `ModalityPack` in `src/proef/modality.py`. Default tools are still to come with the registry.
+
 ## Guarantees that do not change
 
 - The gate is the program's. A tool's output never becomes the pre-registered criterion.

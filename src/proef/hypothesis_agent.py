@@ -26,7 +26,7 @@ from proef.core.hypothesis import (
 from proef.core.interfaces import record_for
 from proef.protocol_design import sanitize_protocol
 
-PROMPT = """You are the hypothesis lead of a drug-discovery program.
+PROMPT = """You are the hypothesis lead of a {role}.
 
 PROBLEM
 objective: {objective}
@@ -56,7 +56,7 @@ Reply ONLY with JSON:
   {{"family": "short-family-id",
     "parent_statement": "falsifiable mechanistic claim",
     "kind": "mechanistic",
-    "mechanism": "the CAUSAL story — molecules, binding, pathway; not 'it fits'",
+    "mechanism": "the CAUSAL story — {mechanism_hint}; not 'it fits'",
     "refutation_condition": "the ONE observation that kills this family",
     "predicted_observables": ["what else must be true if this holds"],
     "citation": "PMID or DOI grounding the rationale ('' if none — never invent)",
@@ -65,7 +65,7 @@ Reply ONLY with JSON:
     "variables": ["what you tune across variants"],
     "variants": [
       {{"statement": "falsifiable variant prediction",
-        "candidate": "the compound or sample name only, e.g. erlotinib, with no prefix such as 'proposed'",
+        "candidate": "the {candidate_kind} or sample name only, e.g. {candidate_example}, with no prefix such as 'proposed'",
         "assay_type": "binding",
         "predicted": "human-readable prediction",
         "predicted_value": 20.0,
@@ -94,6 +94,7 @@ def propose_families_with_agent(
     score_fn: Callable[[dict[str, Any]], float] | None = None,
     notify: Callable[[str], None] | None = None,
     findings: str | None = None,
+    modality: str | None = None,
 ) -> tuple[list[Hypothesis], dict[str, float]]:
     """max_total_hypotheses: hard cap on hypotheses this generation may add.
     existing_keys: (candidate, statement) pairs already tried — duplicates the
@@ -119,7 +120,11 @@ def propose_families_with_agent(
                           "designing):\n" + skill_guidance[:3000])
     else:
         guidance_block = ""
+    from proef.modality import pack_or_default
+    pack = pack_or_default(modality)
     prompt = PROMPT.format(
+        role=pack.prompt_role, mechanism_hint=pack.mechanism_hint,
+        candidate_kind=pack.candidate_kind, candidate_example=pack.candidate_example,
         objective=problem.objective,
         context=problem.context or "-",
         constraints=json.dumps([c.model_dump() for c in problem.constraints]),
@@ -196,14 +201,13 @@ def propose_families_with_agent(
             # or a model could move the gate by predicting a number. Every variant is judged against the gate a person fixed.
             if _gate is None:
                 _spec_criteria = None
-            elif _assay == "ic50_um" or _assay in (
-                    "binding", "enzymatic", "cytotoxicity", "counterscreen"):
-                # dose-response assay: the fit produces ic50_um, lower is better
-                _spec_criteria = {"metric": "ic50_um", "direction": "min", "threshold": float(_gate["threshold"])}
             else:
-                # property assay: read in the program's metric/direction
-                _spec_criteria = {"metric": _gate["metric"], "direction": _gate["direction"],
-                                  "threshold": float(_gate["threshold"])}
+                # which assays are dose-response fits is domain data in the modality pack, shared with the plan
+                from proef.autoloop import criteria_for_assay
+                _c = criteria_for_assay(_assay, SuccessCriteria(
+                    metric=_gate["metric"], direction=_gate["direction"], threshold=float(_gate["threshold"])),
+                    modality)
+                _spec_criteria = {"metric": _c.metric, "direction": _c.direction, "threshold": _c.threshold}
             spec = {
                 "predicted_by": {"source": "llm",
                                  "model": str(getattr(model, "model_version",

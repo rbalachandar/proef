@@ -106,14 +106,14 @@ proef connect describe <device>           # interview the operator into an agent
 proef watch <outbox>                      # agent notices device outputs as they land
 
 # run campaigns
-proef templates                           # campaign presets — no JSON needed
+proef templates                           # campaign presets, no JSON needed
 proef campaign auto --template dose-response-screen --field compounds=C1,C2,C3
 proef campaign auto campaign.json --dose-design adaptive   # Bayesian sequential dosing
                                        # (typically 3 wells, not 4)
 proef campaign auto examples/campaign.json --acquisition bo-ei --dry-run
                                        # EI batch selection: shows the next batch +
                                        # every refusal (AD vetoes, diversity,
-                                       # budget) — submits nothing
+                                       # budget), submits nothing
 proef campaign select campaign.json       # the same what-would-run preview from a
                                        # config; no state written
 proef campaign plan --objective "potent AND selective AND soluble" \
@@ -164,7 +164,7 @@ limitations.
 
 ## Evaluation suite
 
-`proef eval` runs scored tasks against seeded ground truth — deterministic,
+`proef eval` runs scored tasks against seeded ground truth, deterministic,
 offline, and run in CI. A score below 1.0 is kept as reported: an honest
 abstention is graded down, not counted as a pass. The latest full run is 25
 tasks, mean 0.947, all passing ([`evals/leaderboard.md`](evals/leaderboard.md));
@@ -175,13 +175,13 @@ CI fails if any score drops below the pass bar.
 | **epistemics** (15) | reasoning under uncertainty | hit recovery vs truth · verdict honesty (abstain where the CI straddles the gate) · confirmation coverage · falsifiability · adaptive dosing · EI acquisition (must honour the applicability-domain gate) · flywheel memory |
 | **models** (6) | baseline model quality | Lipophilicity, ESOL, HIV, Caco2, HIA, BBB on scaffold folds, frozen in-repo, against a random floor |
 | **reproductions** (2) | published-paper reruns | frozen data fixtures |
-| **agent** (2, opt-in) | end-to-end triage | workflows with one verifiable answer — exact refusal map, no refused compound tested, no wrong confirm, byte-exact reruns; graded deterministically, no LLM judge (`proef eval --suite agent`) |
+| **agent** (2, opt-in) | end-to-end triage | workflows with one verifiable answer, exact refusal map, no refused compound tested, no wrong confirm, byte-exact reruns; graded deterministically, no LLM judge (`proef eval --suite agent`) |
 
 ```
-epistemics — mean 0.969 · 15/15 tasks pass
+epistemics, mean 0.969 · 15/15 tasks pass
   hit-recovery         0.833  honest abstains credited 0.5, not 1.0
   acquisition-policy   0.875  EI batch beats gates+randomize on every pool
-  adaptive-dose        0.875  3 wells beat 4 — a genuine negative result
+  adaptive-dose        0.875  3 wells beat 4: a genuine negative result
   verdict-honesty      1.000  must abstain where the CI straddles the gate
 ```
 
@@ -233,7 +233,7 @@ proef read .data/inbox/<problem-id>/sim-42-001.csv
 
 proef read tests/data/instruments/biotek_1steptimer.csv
 # plate: biotek_1steptimer.csv [kinetic] | wells: 1536 | ... | reader: Synergy HTX (2206293D)
-# (a bare grid: no compound identity, no concentration series — reported as such)
+# (a bare grid: no compound identity, no concentration series, reported as such)
 
 proef read tests/data/instruments/tecan_ON1.csv --layout tests/data/instruments/plate_layout_96.csv
 # plate: tecan_ON1.csv [kinetic] | wells: 192 | ... | edge-effect -0.0 (OD600:600)
@@ -241,7 +241,7 @@ proef read tests/data/instruments/tecan_ON1.csv --layout tests/data/instruments/
 
 proef read tests/data/instruments/tecan_ON1.csv --normalize pct_inhibition
 # proef: error: cannot normalize to %inhibition: need >=2 blank AND >=2
-# full-inhibition control wells — raw values kept
+# full-inhibition control wells, raw values kept
 # (the refusal path: this plate has no control-class wells)
 ```
 
@@ -253,7 +253,7 @@ refuses when those are missing. Three genuine vendor exports ship in
 ```python
 from proef.labread import read_plate
 r = read_plate("my_results.csv")   # long/grid/xlsx/imaging evidence
-print(r)                           # IC50 table + Z' — no configuration
+print(r)                           # IC50 table + Z', no configuration
 svg = r.curve_svg("C-101")         # fitted dose–response curve
 ```
 
@@ -274,7 +274,7 @@ proef campaign auto --template dose-response-screen --field compounds=C1,C2,C3
 proef campaign auto campaign.json            # or a custom config
 ```
 
-<details><summary>campaign.json — an example problem statement</summary>
+<details><summary>campaign.json, an example problem statement</summary>
 
 ```json
 {
@@ -344,7 +344,7 @@ instrument the campaign refuses rather than falling back to simulation
 
 | autonomy | agent behavior |
 |---|---|
-| `observe` | reads, fits, recommends — submits nothing |
+| `observe` | reads, fits, recommends, submits nothing |
 | `gate` | proposes everything and waits for an Approve click: the plan (model-proposed hypotheses) or each lab submission (a hand-written candidate list) |
 | `act` | autonomous within the SafetyEngine, including confirmation assays |
 
@@ -407,14 +407,14 @@ Also: `proef diary <branch>` writes the record as a static lab-notebook HTML fil
 The decision layer is made of first-class objects:
 
 - **Target Product Profile**: the program defines winning in its own terms (objective, metric, unit, direction, gate); small-molecule programs can add phased criteria (hit → lead → candidate → clinical) in `proef.tpp`.
-- **Experiment Definition** — the full manifest: intervention, biological system, readout capabilities, denominators, expected intermediates.
-- **Readiness Review** — runs *before* the safety gate and can block an experiment that would be unsafe to *interpret* (missing denominator, mimetic vs authentic modification, unmeasured delivery variance).
-- **Program hierarchy** — Program ▸ Problem ▸ Hypothesis ▸ Experiment, with the gate inherited downward.
-- **Flywheel** — every verdict is remembered: failing mechanistic families are discounted later and the hypothesis agent is shown what the lab already ruled out.
+- **Experiment Definition**: the full manifest, covering intervention, biological system, readout capabilities, denominators, expected intermediates.
+- **Readiness Review**: runs *before* the safety gate and can block an experiment that would be unsafe to *interpret* (missing denominator, mimetic vs authentic modification, unmeasured delivery variance).
+- **Program hierarchy**: Program ▸ Problem ▸ Hypothesis ▸ Experiment, with the gate inherited downward.
+- **Flywheel**: every verdict is remembered, so failing mechanistic families are discounted later and the hypothesis agent is shown what the lab already ruled out.
 
 External database adapters: ChEMBL, Open Targets, PubMed. Benchmark datasets: MoleculeNet, TDC, DOCKSTRING ([`docs/benchmarks.md`](docs/benchmarks.md)).
 
-### How a campaign runs — who acts, and what Proef enforces
+### How a campaign runs: who acts, and what Proef enforces
 
 When `proef campaign auto` runs, this is what happens to one compound, step by
 step, and which layer is responsible at each point:
@@ -427,11 +427,11 @@ step, and which layer is responsible at each point:
 | 3b. Plan review | **A person**, after the **critic** agent's concerns | Removes hypotheses, approves or declines the plan. The model also designs each variant's dose ladder, validated and bounded | Seals the decision in the ledger under the decider's name. Approval covers that plan's lab submissions (`covered_by_plan`), and the safety gate still applies |
 | 4. Readiness review | **ExperimentDefinition** | Checks: is the readout capable? denominator present? synthesis feasible? | **Blocks** if the result would be uninterpretable |
 | 5. Safety gate | **SafetyEngine** | Checks reagents, BSL, step count, **toxicophores in sample structures**, dual-use text | **Refuses** with machine-readable reason + rule-set version |
-| 5b. Governance gate | **HaltSwitch + PauseRegistry + AuthorizationMatrix + SOP registry** — code the agent cannot reach | Checks the operator halt, any program or campaign pause (which holds submissions and releases them on resume), the autonomous/human/never column, and SOP sign-off for recurring work | Refuses outside the agent's reach; every decision recorded as provenance |
+| 5b. Governance gate | **HaltSwitch + PauseRegistry + AuthorizationMatrix + SOP registry**, code the agent cannot reach | Checks the operator halt, any program or campaign pause (which holds submissions and releases them on resume), the autonomous/human/never column, and SOP sign-off for recurring work | Refuses outside the agent's reach; every decision recorded as provenance |
 | 6. Lab execution | **LabAdapter** (simulator, Opentrons, PlateReaderShare) | Runs the assay, produces raw evidence | Records run ID, parameters, and raw output |
 | 7. Device event | **DeviceMonitor** | Notices the export appeared | Triggers agent analysis automatically |
 | 8. Analysis | **Analysis agent** + `labread` | Fits IC50s, checks QC, flags artifacts | Records measurements + QC flags as provenance |
-| 9. Verdict | **Analysis** against pre-registered criteria | VALIDATED / INVALIDATED / INCONCLUSIVE — a CI straddling the gate or a QC failure abstains | Records the verdict with evidence, criteria and confidence interval |
+| 9. Verdict | **Analysis** against pre-registered criteria | VALIDATED / INVALIDATED / INCONCLUSIVE, a CI straddling the gate or a QC failure abstains | Records the verdict with evidence, criteria and confidence interval |
 | 10. Audit | **ProvenanceStore** | Renders the full chain | `proef prove` verifies the hash chain; `proef anchor` makes it externally checkable |
 
 **After a round.** A person follows up on an abstention, accepts it or drops it. With **Re-plan after each round** on, the model proposes the next hypotheses from the results and a person approves them the same way. **Split into sub-problems** lets the model propose a tree of questions (capped by the program's split depth and sub-problem limits). The lab-run budget flows down by priority, each leaf runs as its own campaign, and a parent is achieved only when its required children are.
@@ -448,14 +448,14 @@ trustworthy science when composed through the Proef flow.
 
 Four things cut across the steps rather than sitting in one:
 
-- **Contamination control** — post-cutoff and never-published-variant probes
+- **Contamination control**: post-cutoff and never-published-variant probes
   run and are recorded, so a "no prior knowledge" claim is part of the audit
   trail.
-- **Memory** — the flywheel discounts failed mechanistic families in every
+- **Memory**: the flywheel discounts failed mechanistic families in every
   later portfolio, and the hypothesis agent is told what the lab already
   ruled out.
-- **Accountability** — hash-chained provenance plus Merkle anchoring.
-- **Measurement** — `proef eval`: a scored, deterministic task suite in CI (see
+- **Accountability**: hash-chained provenance plus Merkle anchoring.
+- **Measurement**: `proef eval` is a scored, deterministic task suite in CI (see
   [Evaluation suite](#evaluation-suite)).
 
 ## The virtual lab
@@ -463,10 +463,10 @@ Four things cut across the steps rather than sitting in one:
 Simulated devices at three fidelity tiers let the whole loop run offline, so
 every layer is testable before hardware is involved:
 
-- **Assay simulators** — seeded dose–response truth, replicates, interference artifacts, controls; plus DLS, ELISA, DSF, imaging, synthesis and bioprocess simulators, round-trip tested against the analysis adapters.
-- **Wire-level device simulators** — instrument protocols simulated from the manufacturer's published contract, with teeth: `ot2_sim` refuses header-less clients and wrong multipart fields; the EZO pH simulator reproduces datasheet quirks, and its calibration uncertainty flows into verdicts.
-- **Recording/playback** — real hardware sessions are recorded once and replay identically in CI.
-- **MCP practice mode** — external instrument servers run under `--simulate`, driven by the same adapter that will drive the hardware.
+- **Assay simulators**: seeded dose–response truth, replicates, interference artifacts, controls; plus DLS, ELISA, DSF, imaging, synthesis and bioprocess simulators, round-trip tested against the analysis adapters.
+- **Wire-level device simulators**: instrument protocols simulated from the manufacturer's published contract, with teeth: `ot2_sim` refuses header-less clients and wrong multipart fields; the EZO pH simulator reproduces datasheet quirks, and its calibration uncertainty flows into verdicts.
+- **Recording/playback**: real hardware sessions are recorded once and replay identically in CI.
+- **MCP practice mode**: external instrument servers run under `--simulate`, driven by the same adapter that will drive the hardware.
 
 Every simulator labels itself in its capabilities, and adapters whose live
 mode doesn't exist refuse rather than serve synthetic readings as instrument
@@ -553,46 +553,46 @@ Longer design notes: [`docs/architecture.md`](docs/architecture.md) and [`docs/f
 
 ## Architectural principles
 
-1. **Contract-first integration** — blocks communicate only through five versioned
+1. **Contract-first integration**: blocks communicate only through five versioned
    schemas; nothing else couples them.
-2. **Hardware behind an abstraction** — agents see the Instrument Abstraction Layer
+2. **Hardware behind an abstraction**: agents see the Instrument Abstraction Layer
    (IAL) only; a Virtual Lab Simulator is a drop-in stand-in for real robots.
-3. **State is snapshot-able** — every experiment branch runs in a sandbox that can be
+3. **State is snapshot-able**: every experiment branch runs in a sandbox that can be
    forked, paused at review gates, and replayed for audits.
-4. **Provenance is immutable** — every artifact carries full lineage (inputs, model
+4. **Provenance is immutable**: every artifact carries full lineage (inputs, model
    versions, prompts, instrument run IDs) in WORM storage.
-5. **Safety is non-bypassable** — a policy engine sits in the physical-action path,
+5. **Safety is non-bypassable**: a policy engine sits in the physical-action path,
    outside any agent's trust boundary.
-6. **Claims are measured** — every capability claim has a scored eval task behind
+6. **Claims are measured**: every capability claim has a scored eval task behind
    it; uncertainty is reported, not rounded away.
-7. **AI can only tighten the gate** — deterministic rules hold the safety floor,
+7. **AI can only tighten the gate**: deterministic rules hold the safety floor,
    model judgment may add flags or demand review but never clear a refusal,
-   and humans — not the model — promote adjudications into rules.
+   and humans, not the model, promote adjudications into rules.
 
 ## Contributing
 
 Start with [`docs/ADAPTERS.md`](docs/ADAPTERS.md) and
-`proef new-adapter` — every adapter scaffold is born with a passing test.
+`proef new-adapter` scaffolds an adapter, and every scaffold is born with a passing test.
 Interface changes go through an ADR; see
 [`docs/stability.md`](docs/stability.md). Apache-2.0.
 
 ## References & Sources
 
 The architecture draws on published work from teams operating in this space. The
-full review — what each system does, how it compares, and which learnings were
-folded into this design — is in [`docs/research-landscape.md`](docs/research-landscape.md).
+full review, what each system does, how it compares, and which learnings were
+folded into this design, is in [`docs/research-landscape.md`](docs/research-landscape.md).
 
 **Key sources:**
 
-- Google — [AI co-scientist](https://research.google/blog/accelerating-scientific-breakthroughs-with-an-ai-co-scientist/) ([paper](https://arxiv.org/abs/2502.18864)) · [AlphaFold 3](https://www.nature.com/articles/s41586-024-07487-w) · [Isomorphic Labs Drug Design Engine](https://www.isomorphiclabs.com/articles/the-isomorphic-labs-drug-design-engine-unlocks-a-new-frontier) · [Bioresilience approach](https://www.isomorphiclabs.com/articles/our-approach-to-bioresilience)
-- Anthropic — [Claude for Life Sciences](https://www.anthropic.com/news/claude-for-life-sciences) · [Model Hardware Standard](https://www.anthropic.com/news/model-hardware-standard-research-preview)
-- Cradle Bio — [Platform](https://www.cradle.bio/platform) · [Series B / wet-lab expansion](https://techcrunch.com/2024/11/26/cradle-builds-out-its-protein-design-ai-platform-and-wet-lab-with-73m-in-new-funding/)
-- FutureHouse — [Robin multi-agent system](https://www.futurehouse.org/research-announcements)
-- Lila Sciences — [Agent-driven science on NVIDIA BioNeMo](https://www.lilasciences.com/news/building-the-agent-driven-era-of-science-with-nvidia-bionemo-agent-toolkit)
-- Helical — [Virtual AI lab / Helix-mRNA FM](https://www.helical.bio/)
-- Coscientist (CMU) — [Autonomous chemical research with LLMs + robotics, Nature 2023](https://www.nature.com/articles/s41586-023-06792-0)
-- OpenAI + Retro Biosciences — [GPT-4b micro protein engineering, MIT Tech Review](https://www.technologyreview.com/2024/12/09/1108188/openai-model-for-protein-engineering-gpt-4b-micro-retro-biosciences/)
-- Chai Discovery — [chai-1/chai-2 structure & antibody models](https://www.chaidiscovery.com/)
-- OpenSandbox — [production sandbox runtime](https://github.com/opensandbox-group/OpenSandbox) — supported Sandbox adapter target (gVisor/Kata/Firecracker, egress control, K8s)
-- Scientific Agent Skills (K-Dense) — [163 validated scientific agent skills](https://github.com/K-Dense-AI/scientific-agent-skills) — complementary knowledge layer; Proef tools are exposed via MCP and the Agent Skills standard · [LabMCP](https://github.com/K-Dense-AI/lab-instrument-mcps) — 32 lab-instrument MCP servers (Opentrons, SiLA 2, balances, pumps, spectrometers…) each manual-derived with a simulator for every instrument and a community hardware-verification program; the candidate device-transport layer for ROADMAP S-T4 (Proef keeps governance; per-instrument manuals stay upstream)
-- OpenAI — [GPT-Rosalind & Rosalind Workbench](https://openai.com/gpt-rosalind/) ([announcement](https://developers.openai.com/blog/rosalind-workbench)) — closed vertical competitor; see [positioning analysis](docs/research-landscape.md#rosalind-what-it-changes-and-where-proef-stands)
+- Google: [AI co-scientist](https://research.google/blog/accelerating-scientific-breakthroughs-with-an-ai-co-scientist/) ([paper](https://arxiv.org/abs/2502.18864)) · [AlphaFold 3](https://www.nature.com/articles/s41586-024-07487-w) · [Isomorphic Labs Drug Design Engine](https://www.isomorphiclabs.com/articles/the-isomorphic-labs-drug-design-engine-unlocks-a-new-frontier) · [Bioresilience approach](https://www.isomorphiclabs.com/articles/our-approach-to-bioresilience)
+- Anthropic: [Claude for Life Sciences](https://www.anthropic.com/news/claude-for-life-sciences) · [Model Hardware Standard](https://www.anthropic.com/news/model-hardware-standard-research-preview)
+- Cradle Bio: [Platform](https://www.cradle.bio/platform) · [Series B / wet-lab expansion](https://techcrunch.com/2024/11/26/cradle-builds-out-its-protein-design-ai-platform-and-wet-lab-with-73m-in-new-funding/)
+- FutureHouse: [Robin multi-agent system](https://www.futurehouse.org/research-announcements)
+- Lila Sciences: [Agent-driven science on NVIDIA BioNeMo](https://www.lilasciences.com/news/building-the-agent-driven-era-of-science-with-nvidia-bionemo-agent-toolkit)
+- Helical: [Virtual AI lab / Helix-mRNA FM](https://www.helical.bio/)
+- Coscientist (CMU): [Autonomous chemical research with LLMs + robotics, Nature 2023](https://www.nature.com/articles/s41586-023-06792-0)
+- OpenAI + Retro Biosciences: [GPT-4b micro protein engineering, MIT Tech Review](https://www.technologyreview.com/2024/12/09/1108188/openai-model-for-protein-engineering-gpt-4b-micro-retro-biosciences/)
+- Chai Discovery: [chai-1/chai-2 structure & antibody models](https://www.chaidiscovery.com/)
+- OpenSandbox: [production sandbox runtime](https://github.com/opensandbox-group/OpenSandbox), supported Sandbox adapter target (gVisor/Kata/Firecracker, egress control, K8s)
+- Scientific Agent Skills (K-Dense): [163 validated scientific agent skills](https://github.com/K-Dense-AI/scientific-agent-skills), complementary knowledge layer; Proef tools are exposed via MCP and the Agent Skills standard · [LabMCP](https://github.com/K-Dense-AI/lab-instrument-mcps), 32 lab-instrument MCP servers (Opentrons, SiLA 2, balances, pumps, spectrometers…) each manual-derived with a simulator for every instrument and a community hardware-verification program; the candidate device-transport layer for ROADMAP S-T4 (Proef keeps governance; per-instrument manuals stay upstream)
+- OpenAI: [GPT-Rosalind & Rosalind Workbench](https://openai.com/gpt-rosalind/) ([announcement](https://developers.openai.com/blog/rosalind-workbench)), closed vertical competitor; see [positioning analysis](docs/research-landscape.md#rosalind-what-it-changes-and-where-proef-stands)

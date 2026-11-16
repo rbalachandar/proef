@@ -69,6 +69,7 @@ class CampaignConfig:
                                               # the hypothesis prompt (P: skills)
     max_families: int = 3
     max_variants_per_family: int = 3
+    modality: str | None = None            # selects the domain pack (assays, prompt wording); None = small molecule
     replan: bool = False                   # after each round the model proposes the next hypotheses from the results
     critic_model: Any = None               # a second model that critiques the plan before the person reads it (advisory)
     plan_covers_submissions: bool = True   # an approved plan also approves its own lab submissions
@@ -282,6 +283,7 @@ def _propose_and_score(cfg, tracker, problem, store, flywheel, say):
         remaining_runs = max(0, budget.max_total_runs - used)
         portfolio, family_scores = propose_families_with_agent(
             tracker, cfg.problem, cfg.model, candidates=cfg.candidates,
+            modality=cfg.modality,
             max_families=cfg.max_families,
             max_variants_per_family=cfg.max_variants_per_family,
             max_total_hypotheses=max(0, budget.max_hypotheses_total
@@ -322,7 +324,7 @@ def _propose_and_score(cfg, tracker, problem, store, flywheel, say):
     return portfolio, score_fn
 
 
-def _declare_criteria(problem, lab, portfolio):
+def _declare_criteria(problem, lab, portfolio, modality=None):
     """The pre-registered gate (SuccessCriteria) + the acquisition log-axis flag."""
     # metric-aware criteria: the problem's primary hard constraint is the
     # pre-registered gate — thread it into every hypothesis so verdicts
@@ -345,9 +347,9 @@ def _declare_criteria(problem, lab, portfolio):
             # ic50_um; forcing property mode here would export flat
             # plates that Hill-fits then decode as fake nano-molar hits
             # (Oct-2026 review: eval drift caught exactly this)
-            from proef.adapters.lab.simulator import DOSE_RESPONSE_ASSAYS
-            _dose_campaign = any((h.assay_type or "binding")
-                                 in DOSE_RESPONSE_ASSAYS for h in portfolio)
+            from proef.modality import metric_for_assay
+            _dose_campaign = any(metric_for_assay(h.assay_type or "binding", modality)
+                                 for h in portfolio)
             if not _dose_campaign:
                 lab.set_property_gate(_crit.metric, _crit.direction,
                                       _crit.threshold)
@@ -356,8 +358,8 @@ def _declare_criteria(problem, lab, portfolio):
     # live on the LOG scale (predicted_sd is a fold uncertainty, not µM) —
     # the constraint NAME ("potency") tells you nothing about the scale,
     # the assay type does. Property campaigns rank linearly.
-    from proef.adapters.lab.simulator import DOSE_RESPONSE_ASSAYS as _DRA
-    _acq_log = (any((h.assay_type or "binding") in _DRA for h in portfolio)
+    from proef.modality import metric_for_assay as _mfa
+    _acq_log = (any(_mfa(h.assay_type or "binding", modality) for h in portfolio)
                 or (_crit is not None and _crit.metric == "ic50_um"))
     return _crit, _acq_log
 
@@ -653,22 +655,23 @@ def _resolve_series(store, problem, actor, flywheel, say) -> None:
             f"{c['reason']}")
 
 
-def criteria_for_assay(assay_type: str, crit):
+def criteria_for_assay(assay_type: str, crit, modality: str | None = None):
     """The pre-registered criterion a hypothesis on this assay is judged by: the program's gate, in the assay's own metric.
-    One place, so a hypothesis created any way (agent, plan, toolkit, MCP) is judged by the same rule."""
-    from proef.adapters.lab.simulator import DOSE_RESPONSE_ASSAYS
+    One place, so a hypothesis created any way (agent, plan, toolkit, MCP) is judged by the same rule. Which assays are
+    dose-response fits is domain data in the modality pack, not a list in this code."""
     from proef.core.hypothesis import SuccessCriteria
-    if assay_type in DOSE_RESPONSE_ASSAYS:
+    from proef.modality import metric_for_assay
+    if metric_for_assay(assay_type, modality):
         # IC50-style assay: the Hill fit produces ic50_um and lower-is-better, whatever the constraint is named
         return SuccessCriteria(metric="ic50_um", direction="min", threshold=float(crit.threshold))
     return crit.model_copy()
 
 
-def _assign_criteria(selected, _crit) -> None:
+def _assign_criteria(selected, _crit, modality: str | None = None) -> None:
     """Thread the pre-registered gate into each hypothesis of the round."""
     if _crit is not None:
         for h in selected:
-            h.criteria = criteria_for_assay(h.assay_type, _crit)
+            h.criteria = criteria_for_assay(h.assay_type, _crit, modality)
             h.metadata = {**(h.metadata or {}), "criteria_source": "gate"}
 
 
@@ -736,6 +739,10 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
                  notify: Callable[[str], None] | None = None,
                  sandbox: Any = None) -> CampaignReport:
     """Start-to-finish: problem -> portfolio -> filter -> test -> verdict -> confirm."""
+    if cfg.modality:
+        from proef.modality import PACKS, get_pack
+        if get_pack(cfg.modality) is None:   # never a silent fall-back to small molecule
+            raise ValueError(f"unknown modality {cfg.modality!r}. Choose one of: {', '.join(PACKS)}")
     actor = system_actor(cfg.actor_name)
     from proef.flywheel import Flywheel
     flywheel = cfg.flywheel if cfg.flywheel is not None else Flywheel()
@@ -784,7 +791,7 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
     })
     portfolio, score_fn = _propose_and_score(
         cfg, tracker, problem, store, flywheel, say)
-    _crit, _acq_log = _declare_criteria(problem, lab, portfolio)
+    _crit, _acq_log = _declare_criteria(problem, lab, portfolio, cfg.modality)
 
     # announce the branch for live streaming: the API watcher maps the
     # campaign id to this problem branch the moment it exists, so the
@@ -867,7 +874,7 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
                     decision=acq_sel.decision_payload()))
             say(f"round {round_no}: nothing selected — stopping")
             break
-        _assign_criteria(selected, _crit)
+        _assign_criteria(selected, _crit, cfg.modality)
         say(f"round {round_no}: testing "
             f"{[h.candidate for h in selected]} "
             f"({len(remaining)} candidates remain)")
@@ -973,7 +980,8 @@ def _replan(cfg, tracker, problem, store, actor, flywheel, tested, round_no, say
             max_families=cfg.max_families, max_variants_per_family=cfg.max_variants_per_family,
             max_total_hypotheses=room,
             existing_keys={(h.candidate, h.statement) for h in tracker.hypotheses.values()},
-            skill_guidance=cfg.skill_guidance, flywheel=flywheel, notify=say, findings=findings)
+            skill_guidance=cfg.skill_guidance, flywheel=flywheel, notify=say, findings=findings,
+            modality=cfg.modality)
     except Exception as exc:  # noqa: BLE001 - a failed re-plan must not abort the campaign
         say(f"re-plan failed ({type(exc).__name__}): continuing with the existing plan")
         return []

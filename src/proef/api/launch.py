@@ -45,11 +45,13 @@ def build_cfg(doc: dict) -> dict:
             cfg[key] = int(doc[key])
     if doc.get("budget"):
         cfg["budget"] = dict(doc["budget"])
+    if doc.get("modality"):
+        cfg["modality"] = str(doc["modality"])   # selects the domain pack: assays, prompt wording
     candidates = [c.strip() for c in (doc.get("candidates") or "").split(",")
                   if c.strip()]
     if candidates:
-        modality = (doc.get("modality") or "").lower()
-        assay = "binding" if modality in ("", "small molecule") else "custom"
+        from proef.modality import pack_or_default
+        assay = pack_or_default(doc.get("modality")).default_assay   # domain data in the pack, not a rule here
         cfg["hypotheses"] = [{
             "statement": f"{c} achieves {metric} {cmp_} {gval:g} {unit}".strip(),
             "candidate": c, "assay_type": assay,

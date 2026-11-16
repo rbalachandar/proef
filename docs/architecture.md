@@ -18,6 +18,8 @@ even then.
 
 ## Engine
 
+- **Modality packs** (`modality.py`) hold domain knowledge as data: which assays are dose-response fits, prompt wording,
+  candidate kind, default assay. The hypothesis code does not fork per domain.
 - **Hypothesis agent** proposes families of hypotheses from the problem. Each has a mechanism, a "refuted if" clause, a
   confidence and a checked citation. It is shown what the lab already ruled out (`flywheel.py`).
 - **Critic** reads the plan before the person does and raises concerns. It is advisory and cannot change or approve anything.

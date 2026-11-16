@@ -519,6 +519,17 @@ class ProgramCreate(BaseModel):
         """A unit typed as 'mS/cm.' must not carry the sentence's full stop into every gate label."""
         return v.strip().rstrip(".").strip() if isinstance(v, str) else v
 
+    @field_validator("modality")
+    @classmethod
+    def _known_modality(cls, v):
+        """An unknown modality must not fall back to small molecule silently: a typo ("materials") would give a
+        materials program drug-discovery wording and dose-response rules. Case-insensitive, stored as the pack's name."""
+        from proef.modality import PACKS, get_pack
+        pack = get_pack(v)
+        if pack is None:
+            raise ValueError(f"unknown modality {v!r}. Choose one of: {', '.join(PACKS)}")
+        return pack.name
+
 
 class SubProblem(BaseModel):
     """One independently testable question a model split the objective into."""

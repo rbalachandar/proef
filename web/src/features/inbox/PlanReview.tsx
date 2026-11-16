@@ -38,15 +38,32 @@ export function PlanReview({ item, compact }: { item: Item; compact?: boolean })
         </div>
       </div>
 
-      {!!item.plan.warnings?.length && (
-        <div role="note" className="mt-3 border border-warn/50 bg-warn-soft px-3 py-2 text-[13px] text-warn">
-          <b className="font-medium">Same compound under more than one family.</b>{' '}
-          {item.plan.warnings.map((w, i) => (
-            <span key={w.candidate}>{i > 0 && '; '}<span className="num">{w.candidate}</span> ({w.families.join(', ')})</span>
-          ))}
-          . Each hypothesis is tested separately, so the compound can be measured more than once. Remove the ones that are not needed.
-        </div>
-      )}
+      {(() => {
+        const ws = item.plan.warnings ?? []
+        const dup = ws.filter((w) => w.kind === 'duplicate_compound')
+        const again = ws.filter((w) => w.kind === 'already_tested')
+        const note = 'mt-3 border border-warn/50 bg-warn-soft px-3 py-2 text-[13px] text-warn'
+        return <>
+          {!!dup.length && (
+            <div role="note" className={note}>
+              <b className="font-medium">Same compound under more than one family.</b>{' '}
+              {dup.map((w, i) => (
+                <span key={w.candidate}>{i > 0 && ', '}<span className="num">{w.candidate}</span> ({w.families.join(', ')})</span>
+              ))}
+              . One measurement judges all of them, so removing one changes the claim, not the lab cost.
+            </div>
+          )}
+          {!!again.length && (
+            <div role="note" className={note}>
+              <b className="font-medium">Already tested in this campaign.</b>{' '}
+              {again.map((w, i) => (
+                <span key={w.candidate}>{i > 0 && ', '}<span className="num">{w.candidate}</span> ({w.verdict}{w.prior_family ? `, ${w.prior_family}` : ''})</span>
+              ))}
+              . Approving measures it again.
+            </div>
+          )}
+        </>
+      })()}
       {item.plan.critique && (
         <div className="mt-3 rounded-lg border border-line bg-sunken px-3 py-2 text-[13px]">
           <div className="mb-1 text-xs font-medium text-muted" title="A second model reviews the plan first. Advisory only: it cannot remove, change or approve anything.">

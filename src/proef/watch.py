@@ -1,18 +1,18 @@
-"""Lab awareness — agents notice device outputs instead of being pointed at them.
+"""Lab awareness, agents notice device outputs instead of being pointed at them.
 
 Three pieces:
 
-1. `DeviceMonitor`  — watches an instrument "outbox"/inbox directory (the
+1. `DeviceMonitor` , watches an instrument "outbox"/inbox directory (the
    universal convention: every real instrument exports a file when a run
    completes) and emits `LabEvent`s as files appear.
-2. `AutoAnalysisAgent` — consumes those events: reads the result
+2. `AutoAnalysisAgent`, consumes those events: reads the result
    (read_plate), updates any hypotheses whose candidate was measured,
    records diary entries into provenance, and queues decisions for the
    scientist. Humans never shuttle files.
-3. `proef watch <inbox>` — runs the loop.
+3. `proef watch <inbox>`, runs the loop.
 
 The same event interface later maps 1:1 to real push sources (instrument
-webhooks, queue depth on the LabGateway, device SDKs) — inbox watching is the
+webhooks, queue depth on the LabGateway, device SDKs), inbox watching is the
 lowest-common-denominator that works with every existing instrument.
 """
 from __future__ import annotations
@@ -92,7 +92,7 @@ class AutoAnalysisAgent:
 
     `notify` is how the scientist hears about it (console, MCP message, chat...).
     If `gateway` is provided, recommendations with a clear next experiment are
-    AUTO-SUBMITTED through the safety gateway — closing the loop: the agent
+    AUTO-SUBMITTED through the safety gateway, closing the loop: the agent
     designs and runs the orthogonal confirmation assay itself, still inside the
     SafetyEngine's trust boundary.
     """
@@ -276,7 +276,7 @@ class AutoAnalysisAgent:
                     "replicates_at_gate_dose": n_top},
             metric=crit.metric,
             method=("property readout: replicate mean at top dose" if ci else
-                    "property readout at highest dose (single reading — no "
+                    "property readout at highest dose (single reading, no "
                     "variance estimate)"),
             ci="replicate bootstrap 95%" if ci else None,
             criteria_metric=crit.metric, criteria_direction=crit.direction,
@@ -498,7 +498,7 @@ class AutoAnalysisAgent:
         a second curve: overlapping 95% intervals (fallback: within 3x when
         a CI is missing) -> the preliminary call is re-tested against the
         pre-registered gate on the SECOND read. Bad QC or a PHYSICAL plate
-        failure yields inconclusive — and every confirmation outcome,
+        failure yields inconclusive, and every confirmation outcome,
         including the property-metric ones, is provenance-recorded with the
         comparison and the rule used."""
         from proef.labread import QC_ZPRIME_FLOOR, read_plate, replicate_ci
@@ -729,7 +729,7 @@ class AutoAnalysisAgent:
         """Close the loop: design + safety-submit the orthogonal confirmation.
 
         Orthogonal means a DIFFERENT method: the confirmation assay is
-        chosen from the hypothesis's own assay type — an enzymatic primary
+        chosen from the hypothesis's own assay type, an enzymatic primary
         is confirmed by binding, not by repeating enzymatic (P1-1)."""
         from proef.core.contracts import (
             Envelope, ProtocolOp, ProtocolStep, ProtocolSubmission,

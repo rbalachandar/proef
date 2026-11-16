@@ -1,4 +1,4 @@
-"""/api/v1/system — global status for the top bar and trust strip."""
+"""/api/v1/system, global status for the top bar and trust strip."""
 from __future__ import annotations
 
 import time

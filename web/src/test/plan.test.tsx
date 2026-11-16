@@ -26,6 +26,14 @@ describe('plan review', () => {
     expect(note).toHaveTextContent('erlotinib (atp_site, covalent)')
   })
 
+  it('says when a compound was already tested in an earlier round, and what the verdict was', () => {
+    wrap(<PlanReview item={{ id: 'x', title: 't', ts: 1, plan: plan([{ kind: 'already_tested', candidate: 'gefitinib', families: ['new'], verdict: 'invalidated', prior_family: 'atp_site' }]) }} />)
+    const note = screen.getByRole('note')
+    expect(note).toHaveTextContent('Already tested in this campaign')
+    expect(note).toHaveTextContent('gefitinib (invalidated, atp_site)')
+    expect(note).not.toHaveTextContent('Same compound')
+  })
+
   it('shows no warning when every compound appears once', () => {
     wrap(<PlanReview item={{ id: 'x', title: 't', ts: 1, plan: plan([]) }} />)
     expect(screen.queryByRole('note')).toBeNull()

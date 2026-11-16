@@ -48,6 +48,7 @@ PACKS: dict[str, ModalityPack] = {
         test_assays=("binding dose-response", "immunogenicity",
                      "aggregation", "thermal stability"),
         safety_rule_names=("sequence_screen", "durc_screen"),
+        default_assay="binding",   # its first test assay is a binding dose-response, the one the virtual lab runs
         prompt_role="biologics-discovery program", candidate_kind="sequence", candidate_example="binder-017",
         mechanism_hint="sequence, fold, interface, epitope",
         notes="Design = sequences + structure models; Make = "
@@ -83,6 +84,7 @@ PACKS: dict[str, ModalityPack] = {
         production_action="synthesized",
         test_assays=("organism dose-response", "phytotoxicity"),
         safety_rule_names=("toxicophores", "durc_screen"),
+        default_assay="cytotoxicity",   # an organism dose-response: the standard Hill-fit engine applies unchanged
         notes="same chemical DMTA; Test targets organisms, not humans — "
               "the standard dose-response engine (SimulatorLab, Hill "
               "fits, CIs) applies unchanged")

@@ -1,7 +1,7 @@
-"""/api/v1/evidence — can I defend this record?
+"""/api/v1/evidence, can I defend this record?
 
 The ledger (every record re-hashed on demand), the external anchor (a Merkle
-root of the whole ledger — meaningful only once it is published outside this
+root of the whole ledger, meaningful only once it is published outside this
 system's control), and per-campaign exports (report, lab notebook, ELN CSV).
 """
 from __future__ import annotations

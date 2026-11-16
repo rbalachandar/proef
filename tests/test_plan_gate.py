@@ -424,3 +424,30 @@ def test_the_replan_setting_survives_the_launcher_into_the_campaign_config():
     assert "replan" not in build_cfg({**doc, "replan": True, "candidates": "A,B"}), "a candidate list has no model to re-plan"
     assert _campaign_from_doc(build_cfg({**doc, "replan": True})).replan is True
     assert _campaign_from_doc(build_cfg(doc)).replan is False
+
+
+def test_a_replan_review_says_which_round_it_follows_and_the_grammar_is_right(tmp_path):
+    """Found in the live re-plan run: the second review looked identical to the first and read '1 hypotheses in 1 family'."""
+    from proef.approvals import ApprovalInbox
+    box = ApprovalInbox(str(tmp_path / "approvals.json"))
+    approve = web_plan_approver(box, poll_secs=0.01, timeout_secs=0.05)
+    plan = {"n_hypotheses": 1, "families": [{"id": "f", "variants": []}], "label": "after round 1"}
+    approve(plan, "prob-x")          # times out and denies: only the request matters here
+    titles = [v["title"] for v in box.state().values()]
+    assert titles == ["[problem/prob-x] Approve the research plan (after round 1): 1 hypothesis in 1 family"], titles
+    approve({"n_hypotheses": 2, "families": [{"id": "f"}], "label": None}, "prob-y")
+    assert any(t == "[problem/prob-y] Approve the research plan: 2 hypotheses in 1 family" for t in
+               (v["title"] for v in box.state().values()))
+
+
+def test_a_replan_that_proposes_an_already_tested_compound_is_flagged_with_its_verdict():
+    """Found in the live re-plan run: round 2 proposed gefitinib again under a new family, and nothing said it already had a verdict."""
+    from types import SimpleNamespace as NS
+    from proef.plan import build_plan
+    new = [NS(hypothesis_id="n1", candidate="gefitinib", family="competition", statement="s", predicted="", rationale="",
+              assay_type="binding", metadata={}, mechanism="", refutation_condition="", citation="", citation_status="")]
+    tested = [NS(candidate="gefitinib", family="atp_site", status="invalidated")]
+    w = build_plan(new, {}, {}, tested=tested)["warnings"]
+    assert w == [{"kind": "already_tested", "candidate": "gefitinib", "families": ["competition"], "hypothesis_ids": ["n1"],
+                  "verdict": "invalidated", "prior_family": "atp_site"}]
+    assert build_plan(new, {}, {})["warnings"] == [], "the first plan has no earlier rounds to compare with"

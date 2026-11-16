@@ -1,0 +1,77 @@
+"""One compound proposed under two families is measured ONCE, and every hypothesis on it is judged from that plate.
+Before: each hypothesis submitted its own run (same sample name), the first plate judged both, and the second run was
+paid for and never read."""
+import json
+
+from proef.adapters.lab.simulator import SimulatorLab
+from proef.adapters.store.sqlite import SqliteProvenanceStore
+from proef.autoloop import CampaignConfig, run_campaign
+from proef.core.contracts import EventType, ToolResult
+from proef.core.hypothesis import Constraint, ProblemStatement
+from proef.flywheel import Flywheel
+
+
+def _variant(c, stmt):
+    return {"statement": stmt, "candidate": c, "assay_type": "binding", "predicted": "<=20",
+            "predicted_value": 20.0, "rationale": "r"}
+
+
+PLAN = {"families": [
+    {"family": "hinge", "parent_statement": "hinge binders", "kind": "mechanistic", "mechanism": "m",
+     "refutation_condition": "r", "confidence": 0.8, "variants": [_variant("H1", "H1 binds (hinge)"), _variant("H2", "H2 binds")]},
+    {"family": "covalent", "parent_statement": "covalent binders", "kind": "mechanistic", "mechanism": "m",
+     "refutation_condition": "r", "confidence": 0.5, "variants": [_variant("H1", "H1 binds (covalent)")]}]}
+
+
+class Scripted:
+    name, model_version, model = "scripted", "s-1", "scripted-1"
+
+    def generate(self, inv, prompt, **kw):
+        return ToolResult(envelope=inv.envelope.model_copy(), invocation_id=inv.invocation_id, status="succeeded",
+                          output={"text": json.dumps(PLAN)}, model_version=self.model_version)
+
+    def predict(self, inv, kind, payload):
+        raise NotImplementedError
+
+
+def _run(tmp_path):
+    store = SqliteProvenanceStore(str(tmp_path / "prov.db"))
+    cfg = CampaignConfig(
+        problem=ProblemStatement(objective="find IC50<=20", constraints=[
+            Constraint(name="potency", description="IC50 <= 20 uM", kind="hard", limit=20.0, unit="uM")]),
+        hypothesis_source="agent", model=Scripted(), autonomy="act", k=4, rounds=1, seed=1,
+        inbox=str(tmp_path / "inbox"), poll_secs=0.05, flywheel=Flywheel(":memory:"))
+    msgs = []
+    report = run_campaign(cfg, SimulatorLab(seed=3), store, approver=lambda t: True, notify=msgs.append)
+    return report, store, store.branch_records(f"problem/{report.problem_id}"), msgs
+
+
+def test_a_compound_proposed_twice_gets_one_lab_run(tmp_path):
+    report, store, recs, msgs = _run(tmp_path)
+    runs = [r for r in recs if r.event_type == EventType.lab_run]
+    titles = [(r.decision or {}).get("title", "") for r in runs]
+    assert sum(t == "test-H1" for t in titles) == 1, titles     # the test of H1 ran once, not twice
+    assert "auto-confirmation-H1" in titles, "the orthogonal confirmation is a separate, deliberate run"
+    assert any("sharing run" in m for m in msgs)
+
+
+def test_every_hypothesis_on_the_shared_compound_is_judged_from_that_one_run(tmp_path):
+    report, store, recs, _ = _run(tmp_path)
+    test_runs = {(r.decision or {}).get("run_id") for r in recs
+                 if r.event_type == EventType.lab_run and (r.decision or {}).get("title") == "test-H1"}
+    shared = [r for r in recs if (r.decision or {}).get("kind") == "shared_measurement"]
+    assert len(shared) == 1 and len(shared[0].decision["hypotheses"]) == 2
+    assert test_runs == {shared[0].decision["run_id"]}, "both H1 hypotheses point at the one run that was paid for"
+    h1_verdicts = [r for r in recs if r.event_type in (
+        EventType.hypothesis_validated, EventType.hypothesis_invalidated, EventType.hypothesis_inconclusive)
+        and (r.decision or {}).get("evidence_run_id") == shared[0].decision["run_id"]]
+    assert len(h1_verdicts) >= 2, "each hypothesis on the compound got its own verdict record from that run"
+
+
+def test_the_run_budget_is_not_spent_on_the_duplicate(tmp_path):
+    from proef.autoloop import ResourceBudget
+    _, store, recs, _ = _run(tmp_path)
+    used = ResourceBudget().lab_runs_used(store, recs[0].envelope.experiment_branch_id.split("/", 1)[-1])
+    names = {(r.decision or {}).get("title", "") for r in recs if r.event_type == EventType.lab_run}
+    assert used == len([r for r in recs if r.event_type == EventType.lab_run])
+    assert len(names) == len([r for r in recs if r.event_type == EventType.lab_run]), "no repeated run title"

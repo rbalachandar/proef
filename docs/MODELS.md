@@ -149,7 +149,7 @@ citation check: 10.1016/S0092-8674(02)00942-6=invalid, 10.1158/2159-8290.CD-14-0
 WARNING: 1 fabricated/unresolvable citation(s) penalized in portfolio scoring
 agent proposed 4 variant hypotheses
 round 1: testing ['COV-C797-OSI-01', 'REVQ-GEF-01'] (2 candidates remain)
-[agent] hypothesis ... (REVQ-GEF-01): VALIDATED (preliminary — pending orthogonal confirmation) — IC50 7.079 uM ...
+[agent] hypothesis ... (REVQ-GEF-01): VALIDATED (preliminary, pending orthogonal confirmation), IC50 7.079 uM ...
 [agent] gate honesty: COV-C797-OSI-01 methods agree but a borderline CI straddles threshold 20.0 -> inconclusive
 ```
 

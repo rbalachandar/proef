@@ -113,7 +113,7 @@ export interface paths {
         put?: never;
         /**
          * Review
-         * @description A human disposition, beside the computed call — never overwriting it.
+         * @description A human disposition, beside the computed call, never overwriting it.
          */
         post: operations["review_api_v1_analyses__aid__review_post"];
         delete?: never;
@@ -203,7 +203,7 @@ export interface paths {
         };
         /**
          * Get Agents
-         * @description Who acted in this campaign — each agent/service/person with what it did.
+         * @description Who acted in this campaign, each agent/service/person with what it did.
          */
         get: operations["get_agents_api_v1_campaigns__eid__agents_get"];
         put?: never;
@@ -1978,7 +1978,7 @@ export interface components {
         };
         /**
          * NextStep
-         * @description A rule-based recommendation — deterministic, always available, no model needed.
+         * @description A rule-based recommendation, deterministic, always available, no model needed.
          */
         NextStep: {
             /**
@@ -2235,9 +2235,16 @@ export interface components {
             hypothesis_ids: string[];
             /**
              * Kind
-             * @constant
+             * @enum {string}
              */
-            kind: "duplicate_compound";
+            kind: "duplicate_compound" | "already_tested";
+            /** Prior Family */
+            prior_family?: string | null;
+            /**
+             * Verdict
+             * @description already_tested: the verdict an earlier round reached on this compound
+             */
+            verdict?: string | null;
         };
         /** ProgramCreate */
         ProgramCreate: {

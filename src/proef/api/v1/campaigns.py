@@ -1,4 +1,4 @@
-"""/api/v1/campaigns — the campaign cockpit's data.
+"""/api/v1/campaigns, the campaign cockpit's data.
 
 Everything here is a pure adaptation of the existing read-models in
 `proef.views` into the typed v1 contract (see schemas.py); no engine logic
@@ -702,7 +702,7 @@ def get_provenance(eid: str, limit: int = Query(500, ge=1, le=5000),
 
 @router.get("/{eid}/agents", response_model=list[S.AgentSummary])
 def get_agents(eid: str) -> list[S.AgentSummary]:
-    """Who acted in this campaign — each agent/service/person with what it did."""
+    """Who acted in this campaign, each agent/service/person with what it did."""
     _, _, _, _, recs = _load(eid)
     by: dict[str, dict] = {}
     for r in recs:

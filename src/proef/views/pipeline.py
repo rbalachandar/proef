@@ -15,7 +15,7 @@ def pipeline_data(recs) -> dict:
     """The computation behind the Hypothesis Pipeline: maps of
     proposed/filtered/tested/refused hypotheses plus run attribution.
     Verdicts are payload-driven and RECENCY-WINS: the last verdict-bearing
-    record for a hypothesis is its state — a confirmation that refutes (or
+    record for a hypothesis is its state, a confirmation that refutes (or
     abstains) supersedes the preliminary call it reviewed, on every surface.
     Port of the bookkeeping half of webview._pipeline_body."""
     proposed: dict[str, dict] = {}
@@ -156,7 +156,7 @@ def _tested_by_candidate(tested: dict) -> dict:
 
 
 def _merge_verdict(verd: dict, verd_c: dict) -> dict:
-    """Whichever record is MORE RECENT wins on status — the candidate-keyed
+    """Whichever record is MORE RECENT wins on status, the candidate-keyed
     round roll-up may postdate the hid-keyed readout, and vice versa (a
     confirmation record is hid-keyed and terminal). The terminal verdict
     wins on STATUS; the preliminary readout's observed/CI is kept when the
@@ -178,7 +178,7 @@ def _merge_verdict(verd: dict, verd_c: dict) -> dict:
 
 def _card_state(v, *, hid, cand, sel, refused, run_map, unit_lbl, observed,
                 ci_txt, margin, ad_chip) -> tuple[str, str]:
-    """(state, stage text) for one card — the pipeline state machine."""
+    """(state, stage text) for one card, the pipeline state machine."""
     obs_txt = (f" — {unit_lbl} {observed}{ci_txt}"
                if observed is not None else "")
     paren = (f" ({unit_lbl} {observed}{ci_txt})"
@@ -188,16 +188,16 @@ def _card_state(v, *, hid, cand, sel, refused, run_map, unit_lbl, observed,
     if v == "validated":
         return "validated", "validated (preliminary)" + obs_txt + margin
     if v == "inconclusive":
-        return "inconclusive", ("inconclusive — CI straddles the threshold"
+        return "inconclusive", ("inconclusive, CI straddles the threshold"
                                 + paren + ad_chip)
     if v in ("refuted", "invalidated"):
         return "refuted", "refuted" + paren + margin
     if refused.get(str(cand)):
-        return "refused", "refused by gate — " + refused[str(cand)][:70]
+        return "refused", "refused by gate, " + refused[str(cand)][:70]
     if run_map.get(hid):
         return "in_lab", "in lab"
     if sel and sel.get("selected"):
-        return "selected", "selected — awaiting submission"
+        return "selected", "selected, awaiting submission"
     if sel:
         return "not_selected", "not selected"
     return "proposed", "proposed"
@@ -224,7 +224,7 @@ def _card_statement(hp: dict, head) -> str:
     # the label is often a truncation of the statement itself —
     # strip any leading duplication before cosmetics
     if stmt.startswith(str(head)):
-        stmt = stmt[len(str(head)):].strip(" —-·:")
+        stmt = stmt[len(str(head)):].strip(" , -·:")
     return re.sub(rf"^{re.escape(str(head))}\s*(\([^)]*\))?\s*[—-]\s*",
                   "", stmt) or head   # statement was the label itself
 
@@ -259,7 +259,7 @@ def pipeline_cards(recs) -> list[dict]:
         margin = _ci_margin(ci, (hp.get("criteria") or {}).get("threshold"))
         ad_chip = ""
         if verd.get("extrapolation"):
-            ad_chip = (" · stamped extrapolation — value came from a model "
+            ad_chip = (" · stamped extrapolation, value came from a model "
                        "beyond its applicability domain")
             margin += ad_chip
         observed = verd.get("observed")
@@ -271,7 +271,7 @@ def pipeline_cards(recs) -> list[dict]:
         _pb = hp.get("predicted_by")
         if isinstance(_pb, dict) and (_pb.get("ad") or {}).get("extrapolation"):
             _pb = {**_pb, "note": ("prediction came from a model OUTSIDE its "
-                                   "applicability domain — treated as a "
+                                   "applicability domain, treated as a "
                                    "question to test, never as evidence")}
         gate_lbl, _evd = _gate_label(hp, verd)
         cards.append({
@@ -308,7 +308,7 @@ def pipeline_cards(recs) -> list[dict]:
 def _sandbox_summary(recs) -> dict | None:
     """The sandbox receipt (S-T3 #4): if the experiment ran inside a
     sandbox, the chain says which, with what policy, how many sealed
-    ops — None (rendered as nothing) when it didn't."""
+    ops, None (rendered as nothing) when it didn't."""
     info = None
     for r in recs:
         d = r.decision or {}
@@ -335,7 +335,7 @@ def _sandbox_summary(recs) -> dict | None:
 def _rounds_with_verdicts(recs) -> list[dict]:
     """Rounds with tested candidates AND the round's verdict map (from
     the round-N-complete stage markers). When a round was chosen by a
-    batch-acquisition policy, its Selection rides along as `selection` —
+    batch-acquisition policy, its Selection rides along as `selection` , 
     the "why this plate" answer for the workbench."""
     rounds = [{"round": n, "candidates": c, "verdicts": {}}
               for n, c in round_markers(recs)]

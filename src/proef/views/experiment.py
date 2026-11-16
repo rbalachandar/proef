@@ -37,7 +37,7 @@ def _branch_records(branch: str | None, provenance_db) -> list:
 
 
 def _eliminated(recs) -> list[dict]:
-    """Graveyard: hypotheses the portfolio filter rejected, with reasons —
+    """Graveyard: hypotheses the portfolio filter rejected, with reasons , 
     elimination is evidence too, and the scientist should audit it."""
     id2cand: dict[str, str] = {}
     for r in recs:

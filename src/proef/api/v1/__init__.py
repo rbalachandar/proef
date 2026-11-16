@@ -1,4 +1,4 @@
-"""Workbench API v1 — a resource model over the engine's read-models."""
+"""Workbench API v1, a resource model over the engine's read-models."""
 from fastapi import APIRouter
 
 from proef.api.v1.analyses import router as analyses_router

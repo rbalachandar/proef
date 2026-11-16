@@ -1,4 +1,4 @@
-"""/api/v1/inbox — everything pending a human decision, in one queue.
+"""/api/v1/inbox, everything pending a human decision, in one queue.
 
 Two kinds of item: APPROVALS (a lab submission paused at the gate) and REVIEWS
 (a candidate whose interval straddles the gate and that nobody has decided on

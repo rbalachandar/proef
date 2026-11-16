@@ -1,4 +1,4 @@
-"""/api/v1/lab — what hardware exists (real vs simulated) and what the agents may do."""
+"""/api/v1/lab, what hardware exists (real vs simulated) and what the agents may do."""
 from __future__ import annotations
 
 import time

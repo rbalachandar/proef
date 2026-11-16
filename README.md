@@ -301,10 +301,10 @@ proef campaign auto campaign.json            # or a custom config
 [22:31:41] round 1: testing ['C-103', 'C-101'] (1 candidates remain)
 [22:31:41] started lab run sim-42-001 for C-103 on simulator (4 doses × 3 replicates)
 [22:31:42] [agent] reading instrument output sim-42-001.csv (device finished the measurement)
-[22:31:42] [agent] hypothesis hyp-92fa273f (C-103): VALIDATED (preliminary — pending orthogonal confirmation) — IC50 5.296 uM (95% CI 3.382–6.541) vs threshold 20.0
+[22:31:42] [agent] hypothesis hyp-92fa273f (C-103): VALIDATED (preliminary, pending orthogonal confirmation), IC50 5.296 uM (95% CI 3.382–6.541) vs threshold 20.0
 [22:31:42] [agent] sending orthogonal confirmation assay for C-103 (safety-approved) -> run sim-42-003
 [22:31:44] [agent] orthogonal confirmation for C-103: primary 5.30 vs secondary 6.37 µM (ratio 1.2x, rule ci-overlap) -> CONFIRMED
-[22:31:44] reviewer: no findings — analysis consistent
+[22:31:44] reviewer: no findings, analysis consistent
 [22:31:44] CAMPAIGN COMPLETE prob-fe6dcecd: C-103=confirmed, C-101=confirmed
 {"problem": "prob-fe6dcecd", "selected": ["C-103", "C-101"],
  "verdicts": {"C-103": "confirmed", "C-101": "confirmed"}}

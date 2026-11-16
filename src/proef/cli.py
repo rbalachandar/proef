@@ -1,4 +1,4 @@
-"""`proef` CLI — boring on purpose (P1).
+"""`proef` CLI, boring on purpose (P1).
 
     proef campaign run workflow.yml    # execute a workflow against configured adapters
     proef demo                # guided first run on the virtual lab
@@ -143,7 +143,7 @@ def cmd_prove(args: argparse.Namespace) -> int:
           f"({len(records)} records, hashes recomputed from payload)")
     if not prev_ok or problems:
         print("  note: a consistent rewrite of payload+column+links is only "
-              "caught by an EXTERNAL anchor — run `proef anchor --verify`")
+              "caught by an EXTERNAL anchor, run `proef anchor --verify`")
         return 1
     if args.html:
         from proef.report import write_report
@@ -224,7 +224,7 @@ def cmd_demo(args: argparse.Namespace) -> int:
 
     from proef.demo import EXPECTED, run_demo
 
-    print("Proef demo — a scripted campaign on the REAL machinery. "
+    print("Proef demo, a scripted campaign on the REAL machinery. "
           "All numbers SIMULATED; the discipline is production.")
     rep = run_demo(db_path=args.db, html_path=args.html, echo=not args.quiet)
     print()
@@ -232,13 +232,13 @@ def cmd_demo(args: argparse.Namespace) -> int:
         print("  * " + line)
     ok = rep["verdicts"] == EXPECTED
     print(f"\nverdicts: {rep['verdicts']} "
-          f"({'the two moments landed' if ok else 'UNEXPECTED — demo drift?'})")
+          f"({'the two moments landed' if ok else 'UNEXPECTED, demo drift?'})")
     print(f"provenance: {rep['records']} hash-chained records on "
           f"'{rep['branch']}' in {rep['db']} · chain verified: "
           f"{'OK' if rep['chain_ok'] else 'PROBLEMS'}")
     if args.html:
         print(f"diary: {args.html}")
-    print("next: proef read <your-plate.csv> — the same verdict machinery runs "
+    print("next: proef read <your-plate.csv>, the same verdict machinery runs "
           "on YOUR data (try tests/data/instruments/ exports)")
     if args.json:
         print(_json.dumps({k: v for k, v in rep.items() if k != "lines"},
@@ -332,7 +332,7 @@ def cmd_ingest(args: argparse.Namespace) -> int:
           f"imported · {len(rep['skipped'])} note(s)/skip(s) · "
           f"sha256 {rep['sha256'][:12]}")
     if rep["checksum_match"] is False:
-        print("  !! EDITED AFTER EXPORT — .sha256 seal mismatch; values "
+        print("  !! EDITED AFTER EXPORT, .sha256 seal mismatch; values "
               "imported UNSEALED, verify against the ELN system of record")
     elif rep["checksum_match"] is True:
         print("  seal verified (.sha256 sidecar matches the CSV)")
@@ -411,7 +411,7 @@ def _campaign_doc_from_args(args) -> dict | None:
 def cmd_select(args) -> int:
     """Preview the EI batch WITHOUT submitting anything: the same observe
     path a real campaign runs through, so 'what would run' is the real
-    policy answer — every pick with its acquisition arithmetic, every
+    policy answer, every pick with its acquisition arithmetic, every
     refusal with the named gate. `--acquisition bo-ei` (default) is the
     policy under review."""
     from proef.adapters.lab.simulator import SimulatorLab
@@ -574,7 +574,7 @@ def cmd_eval(args: argparse.Namespace) -> int:
         skipped = r.notes.startswith("SKIPPED")
         mark = "⏭ " if skipped else ("✅" if r.passed else "❌")
         print(f"{mark} {r.task_id:24s} "
-              f"{'—' if skipped else f'score={r.score:.3f}'}  "
+              f"{', ' if skipped else f'score={r.score:.3f}'}  "
               f"({r.metrics.get('duration_s')}s)  {r.notes}")
 
     if not results:
@@ -604,7 +604,7 @@ def cmd_eval(args: argparse.Namespace) -> int:
         rows = "\n".join(
             f"| {r.task_id} | {r.score:.3f} | "
             f"{'⏭' if r.notes.startswith('SKIPPED') else ('✅' if r.passed else '❌')} | "
-            f"{r.metrics.get('duration_s', '—')}s | {r.notes} |" for r in rs)
+            f"{r.metrics.get('duration_s', ', ')}s | {r.notes} |" for r in rs)
         sections += (f"\n### {suite} — mean "
                      f"{sum(x.score for x in rs) / len(rs):.3f}\n\n"
                      f"| task | score | pass | time | notes |\n"
@@ -626,7 +626,7 @@ def cmd_anchor(args: argparse.Namespace) -> int:
         res = verify(args.db, args.root)
         ok = res["match"]
         print(f"current root: {res['current_root'][:16]}…  "
-              f"anchored: {(res['anchored_root'] or '—')[:16]}…  "
+              f"anchored: {(res['anchored_root'] or ', ')[:16]}…  "
               f"records: {res['records']}  -> {'MATCH' if ok else 'MISMATCH'}")
         if res.get("content_tampered"):
             print("  ⚠ CONTENT TAMPERED: stored hashes do not match what the "
@@ -731,7 +731,7 @@ def cmd_plan(args: argparse.Namespace) -> int:
     print(tree.render())
     print("run allocation:", tree.allocation())
     if not args.run:
-        print("(dry plan — add --run to execute the leaves)")
+        print("(dry plan, add --run to execute the leaves)")
         return 0
     from proef.adapters.lab.simulator import SimulatorLab
     from proef.adapters.store.sqlite import SqliteProvenanceStore
@@ -1049,7 +1049,7 @@ def _register_flow(sub, csub) -> None:
     sel = csub.add_parser(
         "select",
         help="preview the EI batch (picks + every refusal) without "
-             "submitting anything — the what-would-run probe for "
+             "submitting anything, the what-would-run probe for "
              "acquisition policies")
     sel.add_argument("config", nargs="?", default=None)
     sel.add_argument("--template", default=None, help="preset template name")
@@ -1079,7 +1079,7 @@ def _register_governance(sub, csub) -> None:
                      help="recompute and compare against the latest anchor")
     anc.add_argument("--root", help="explicit root to verify against")
     anc.add_argument("--publish-cmd",
-                     help="command (split like a shell line, run WITHOUT a shell — "
+                     help="command (split like a shell line, run WITHOUT a shell, "
                           "no pipes/&&) receiving the anchor JSON on stdin, "
                           "e.g. 'gh gist create -'. Wrap pipelines in a "
                           "script. An anchor that is never published to "
@@ -1129,7 +1129,7 @@ def _register_governance(sub, csub) -> None:
     matp.set_defaults(func=cmd_materials_run)
     pl.add_argument("--modality", default="",
                     help="optional: small molecule, biologic, cell therapy, "
-                         "mRNA, agrochemical, material — words the Make "
+                         "mRNA, agrochemical, material, words the Make "
                          "step and selects the pack")
     pl.add_argument("--rounds", type=int, default=0,
                     help="DMTA rounds per leaf (0 = auto: hypotheses / k)")
@@ -1147,7 +1147,7 @@ def _register_tools(sub, csub) -> None:
     """modalities, campaign reproduce, eval, templates, skills, campaign
     sweep, taste."""
     modp = sub.add_parser("modalities",
-                          help="registered DMTA modality packs — how "
+                          help="registered DMTA modality packs, how "
                                "Design/Make/Test/Analyze specialize")
     modp.set_defaults(func=cmd_modalities)
     rep = csub.add_parser("reproduce",

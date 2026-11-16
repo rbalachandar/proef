@@ -1,4 +1,4 @@
-"""POST /api/v1/campaigns/{id}/results — a person submits a measured plate to a campaign.
+"""POST /api/v1/campaigns/{id}/results, a person submits a measured plate to a campaign.
 
 The honest way to close the loop for a hand-run experiment: the file is judged
 by the SAME verdict code a live campaign uses (pre-registered criteria, CI veto,

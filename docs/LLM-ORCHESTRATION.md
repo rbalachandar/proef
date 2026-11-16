@@ -93,9 +93,12 @@ Open follow-up: a second reader for the toolkit before Phase 3 gives a model mor
 3. `launch.py` had the same domain rule as the agent (small molecule means binding, else custom), a second leak. Moved.
 4. `build_cfg` would have dropped `modality`, as it did `replan`. Carried and tested.
 5. Pack text is code, not user input, so it is not an injection path. Re-check when packs become user-supplied.
-6. Not changed, and worth a decision: a biologic or agrochemical candidate list still defaults to the `custom` assay
-   (property read), as before. Whether those should default to a dose-response assay needs real-data evidence, so the
-   values were moved, not changed.
+6. Fixed afterwards: biologic and agrochemical candidate lists defaulted to the `custom` property read, against the packs'
+   own notes (biologic runs are binding dose-responses, agrochemical uses the standard dose-response engine). They now
+   default to `binding` and `cytotoxicity`.
+7. Found when fixing the duplicate-compound case: the campaign loop submitted one run per hypothesis, so a compound
+   proposed under two families was run twice and the second plate was never read. Now one measurement per
+   (candidate, assay), recorded as `shared_measurement`.
 
 ### Phase 2: menu-based choice of instrument and tools
 - [ ] Registry contract for prediction tools (see DOMAIN-TOOLS): endpoint, unit, input, modality, domain, uncertainty,

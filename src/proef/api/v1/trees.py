@@ -1,4 +1,4 @@
-"""/api/v1/programs/{slug}/decompose and /trees — a research tree: an objective split into sub-problems.
+"""/api/v1/programs/{slug}/decompose and /trees, a research tree: an objective split into sub-problems.
 
 A model PROPOSES the split (nothing is recorded). The person keeps the sub-problems that are real questions and
 may change each gate; starting the tree seals their decision in the ledger and launches one budgeted campaign per

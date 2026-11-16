@@ -1,4 +1,4 @@
-"""/api/v1/analyses — drop a plate file, see what the data says, and say what it is evidence for.
+"""/api/v1/analyses, drop a plate file, see what the data says, and say what it is evidence for.
 
 Thin typed wiring over `experiment_analysis` (all scientific decisions) and
 `analysis_store` (revisions, artifacts). Every step that changes something is
@@ -271,7 +271,7 @@ def run_analysis(aid: str, body: S.AnalysisRun, request: Request) -> S.AnalysisV
 
 @router.post("/{aid}/review", response_model=S.AnalysisView)
 def review(aid: str, body: S.AnalysisReviewIn, request: Request) -> S.AnalysisView:
-    """A human disposition, beside the computed call — never overwriting it."""
+    """A human disposition, beside the computed call, never overwriting it."""
     doc = _doc(aid)
     if doc.get("result") is None:
         raise _problem(409, "nothing-to-review", "Nothing to review", "run the analysis first")

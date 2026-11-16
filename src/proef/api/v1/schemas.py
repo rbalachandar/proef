@@ -1,4 +1,4 @@
-"""API v1 response models — the single source of truth for the workbench
+"""API v1 response models, the single source of truth for the workbench
 contract. The TypeScript client is GENERATED from the OpenAPI these produce."""
 from __future__ import annotations
 
@@ -192,10 +192,12 @@ class PlanCritique(BaseModel):
 
 class PlanWarning(BaseModel):
     """A deterministic check on the plan, shown before approval."""
-    kind: Literal["duplicate_compound"]
+    kind: Literal["duplicate_compound", "already_tested"]
     candidate: str
     families: list[str] = []
     hypothesis_ids: list[str] = []
+    verdict: str | None = Field(None, description="already_tested: the verdict an earlier round reached on this compound")
+    prior_family: str | None = None
 
 
 class Plan(BaseModel):
@@ -426,7 +428,7 @@ class ProgramResult(BaseModel):
 
 
 class NextStep(BaseModel):
-    """A rule-based recommendation — deterministic, always available, no model needed."""
+    """A rule-based recommendation, deterministic, always available, no model needed."""
     kind: Literal["inbox", "follow_up", "start", "expand", "milestone", "submit_results"]
     title: str
     detail: str = ""

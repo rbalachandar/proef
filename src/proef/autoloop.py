@@ -1,15 +1,15 @@
 """One-call campaign loop: problem in, verdicts out.
 
-`run_campaign()` assembles the full flow — problem, portfolio, filter,
-design/test, lab awareness, verdicts, confirmation — so it can be started
+`run_campaign()` assembles the full flow, problem, portfolio, filter,
+design/test, lab awareness, verdicts, confirmation, so it can be started
 manually by a scientist (one function call / `proef campaign auto`) or kicked off by an
 agent (the same function, called programmatically or via MCP).
 
 autonomy levels:
-  "act"      — agent runs everything, incl. auto-submitted confirmation assays
-  "gate"     — agent runs everything, but every lab submission needs the
+  "act"     , agent runs everything, incl. auto-submitted confirmation assays
+  "gate"    , agent runs everything, but every lab submission needs the
                operator's approver callback to return True first
-  "observe"  — agent only reads, fits and recommends; submits nothing
+  "observe" , agent only reads, fits and recommends; submits nothing
 """
 from __future__ import annotations
 
@@ -191,7 +191,7 @@ def _select_lab(cfg, lab, store, actor, approver, say):
                           "action": "campaign refused: no permitted "
                                     "instrument serves the declared need"}))
             raise ValueError(
-                "lab selection refused — no instrument in the operator-"
+                "lab selection refused, no instrument in the operator-"
                 f"declared pool serves {sorted(req.assay_types)}"
                 f"{sorted(req.readouts) and ['+ readouts: ' + str(sorted(req.readouts))]};"
                 f" refusals: {refusals}")
@@ -373,7 +373,7 @@ def _install_budget_gate(gateway, cfg, store, actor, say) -> None:
             used = cfg.budget.lab_runs_used(store, cfg.problem.problem_id or "")
             if used >= cfg.budget.max_total_runs:
                 say(f"BUDGET EXHAUSTED: {used}/{cfg.budget.max_total_runs} lab "
-                    "runs used — submission refused (recorded)")
+                    "runs used, submission refused (recorded)")
                 store.append(record_for(
                     Envelope(experiment_branch_id=f"problem/{cfg.problem.problem_id}"),
                     EventType.tool_invocation, actor,
@@ -467,7 +467,7 @@ def _make_candidate(h, protocol, cfg, store, say, synth_cache) -> bool:
                             f"[rules {RULES_VERSION}]: "
                             + "; ".join(f"{x['alert']} ({x['note']})"
                                         for x in _hits[:3])
-                            + " — screened before synthesis "
+                            + ", screened before synthesis "
                               "(gateway rule remains the backstop)"),
                         "action": "Make skipped; batch never "
                                   "spent"})
@@ -599,7 +599,7 @@ def _review_pass(cfg, store, problem, say) -> None:
             + "; ".join(f["detail"] for f in
                         review["findings"][:3]))
     else:
-        say("reviewer: no findings — analysis consistent")
+        say("reviewer: no findings, analysis consistent")
 
     # LLM advisory layer: only when a model was part of this campaign.
     # Its output is flags-only (schema-enforced) — advisory by construction
@@ -690,12 +690,12 @@ def _collect_round(monitor, agent, selected, adaptive, cfg, terminal) -> None:
             break
 
 
-def _plan_gate(cfg, tracker, portfolio, store, actor, say, label=None):
+def _plan_gate(cfg, tracker, portfolio, store, actor, say, label=None, tested=None):
     """Pause for the person's decision on the proposed plan. Returns (portfolio to run, declined?).
     Every outcome is recorded: approval, removals (with a reason) and decline."""
     from proef.plan import build_plan
     pid = cfg.problem.problem_id or "unnamed"
-    plan = build_plan(portfolio, getattr(tracker, "family_info", {}), getattr(tracker, "family_scores", {}))
+    plan = build_plan(portfolio, getattr(tracker, "family_info", {}), getattr(tracker, "family_scores", {}), tested=tested)
     if label:
         plan["label"] = label
     critic = cfg.critic_model
@@ -899,8 +899,25 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
             return CampaignReport(problem_id=problem.problem_id,
                                   selected=[h.candidate for h in selected])
 
-        # design + submit this round
+        # design + submit this round. ONE measurement per (candidate, assay): the same compound proposed under two
+        # families is measured once and every hypothesis on it is judged from that plate, not run twice with the same
+        # sample name and a second plate that nothing reads.
+        measured: dict[tuple[str, str], tuple[Any, str]] = {}
         for h in selected:
+            key = (h.candidate, h.assay_type or "binding")
+            if key in measured:
+                first_protocol, first_run = measured[key]
+                tracker.attach_test(h, first_protocol, first_run)
+                h.design.run_id = first_run
+                store.append(record_for(
+                    Envelope(experiment_branch_id=f"problem/{problem.problem_id}"),
+                    EventType.gate_decision, actor,
+                    decision={"kind": "shared_measurement", "candidate": h.candidate, "run_id": first_run,
+                              "hypotheses": [x.hypothesis_id for x in selected
+                                             if (x.candidate, x.assay_type or "binding") == key],
+                              "reason": "one compound, one measurement: every hypothesis on it is judged from this run"}))
+                say(f"{h.candidate} is proposed more than once: sharing run {first_run}, no second lab run")
+                continue
             protocol = _design_protocol(h, cfg, problem, adaptive, screen_conc)
             if not _make_candidate(h, protocol, cfg, store, say, synth_cache):
                 continue
@@ -912,6 +929,7 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
                 continue
             tracker.attach_test(h, protocol, run_id)
             h.design.run_id = run_id
+            measured[key] = (protocol, run_id)
             say(f"started lab run {run_id} for {h.candidate} on "
                 f"{getattr(lab, 'name', 'instrument')} "
                 f"({len(_doses(h, cfg)) if not adaptive else 1} dose"
@@ -991,7 +1009,7 @@ def _replan(cfg, tracker, problem, store, actor, flywheel, tested, round_no, say
         return []
     say(f"re-plan after round {round_no}: the model proposes {len(new)} more hypotheses")
     if cfg.plan_approver is not None:
-        new, declined = _plan_gate(cfg, tracker, new, store, actor, say, label=f"after round {round_no}")
+        new, declined = _plan_gate(cfg, tracker, new, store, actor, say, label=f"after round {round_no}", tested=tested)
         if declined:
             return []
     return new
@@ -1001,11 +1019,11 @@ def _acquisition_select(remaining, k, crit, tracker, say, round_no, seed=0,
                         metric_log=False):
     """BO-EI batch pick over the round's candidates. Posteriors are DECLARED
     by whoever produced the hypotheses (predicted_value + optional
-    predicted_sd + AD stamp in metadata) — never fabricated here. Every
+    predicted_sd + AD stamp in metadata), never fabricated here. Every
     refusal (no posterior, AD gate, diversity, budget) is returned for the
     provenance record, so 'why this plate' is answerable months later.
 
-    metric_log: True in dose-response campaigns — µM values live on the log
+    metric_log: True in dose-response campaigns, µM values live on the log
     scale and predicted_sd is a FOLD uncertainty, not an absolute µM
     spread. The constraint NAME never determines this; the assay type does.
 
@@ -1037,7 +1055,7 @@ def _acquisition_select(remaining, k, crit, tracker, say, round_no, seed=0,
                        seed=seed, round_no=round_no, max_per_family=1)
     for c in no_post:
         sel.refusals.append(_refusal_obj(
-            c, "no declared posterior (predicted_value missing) — "
+            c, "no declared posterior (predicted_value missing), "
                "acquisition needs a mean, never invents one"))
     selected = [by_cand[p.candidate] for p in sel.picks if p.candidate in by_cand]
     say(f"acquisition[{sel.policy}]: picked "
@@ -1067,7 +1085,7 @@ def _policy_select(cfg, remaining, tracker, say):
     elif hasattr(cfg.policy, "rank"):
         picks = [c for c, _ in cfg.policy.rank(cands, obs)[:cfg.k]]
     else:
-        say("policy has neither pick_batch nor rank — falling back to scores")
+        say("policy has neither pick_batch nor rank, falling back to scores")
         return tracker.select_portfolio(cfg.problem, remaining,
                                         cfg.score_fn or (lambda h: 0.5),
                                         k=cfg.k, max_per_family=1)

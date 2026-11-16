@@ -18,7 +18,7 @@
     "refutation_condition": "",
     "round": 1,
     "selected": true,
-    "stage": "inconclusive \u2014 CI straddles the threshold (IC50 (\u00b5M) 26.48 (95% CI 25.79\u201349.879))",
+    "stage": "inconclusive, CI straddles the threshold (IC50 (\u00b5M) 26.48 (95% CI 25.79\u201349.879))",
     "state": "inconclusive",
     "statement": "binds",
     "threshold": 2.0,
@@ -1884,7 +1884,7 @@
   "narrative": {
    "evidence": {
     "curves": [],
-    "empty_note": "No recorded plate files found for these runs \u2014 evidence curves unavailable (honestly shown, not simulated).",
+    "empty_note": "No recorded plate files found for these runs, evidence curves unavailable (honestly shown, not simulated).",
     "svg_fallback": false
    },
    "portfolio": [],

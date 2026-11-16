@@ -3183,7 +3183,7 @@
     "type": "object"
    },
    "NextStep": {
-    "description": "A rule-based recommendation \u2014 deterministic, always available, no model needed.",
+    "description": "A rule-based recommendation, deterministic, always available, no model needed.",
     "properties": {
      "action": {
       "enum": [
@@ -3661,9 +3661,35 @@
       "type": "array"
      },
      "kind": {
-      "const": "duplicate_compound",
+      "enum": [
+       "duplicate_compound",
+       "already_tested"
+      ],
       "title": "Kind",
       "type": "string"
+     },
+     "prior_family": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Prior Family"
+     },
+     "verdict": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "already_tested: the verdict an earlier round reached on this compound",
+      "title": "Verdict"
      }
     },
     "required": [
@@ -5513,7 +5539,7 @@
   },
   "/api/v1/analyses/{aid}/review": {
    "post": {
-    "description": "A human disposition, beside the computed call \u2014 never overwriting it.",
+    "description": "A human disposition, beside the computed call, never overwriting it.",
     "operationId": "review_api_v1_analyses__aid__review_post",
     "parameters": [
      {
@@ -5798,7 +5824,7 @@
   },
   "/api/v1/campaigns/{eid}/agents": {
    "get": {
-    "description": "Who acted in this campaign \u2014 each agent/service/person with what it did.",
+    "description": "Who acted in this campaign, each agent/service/person with what it did.",
     "operationId": "get_agents_api_v1_campaigns__eid__agents_get",
     "parameters": [
      {

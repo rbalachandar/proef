@@ -149,5 +149,11 @@ def test_the_assay_a_listed_candidate_is_tested_by_comes_from_the_pack():
     base = {"objective": "o", "gate_value": 1.0, "candidates": "A,B", "rounds": 1}
     assert {h["assay_type"] for h in build_cfg({**base})["hypotheses"]} == {"binding"}
     assert {h["assay_type"] for h in build_cfg({**base, "modality": "small molecule"})["hypotheses"]} == {"binding"}
-    for m in ("material", "biologic", "agrochemical"):
-        assert {h["assay_type"] for h in build_cfg({**base, "modality": m})["hypotheses"]} == {"custom"}, m
+    # the packs' own notes say biologic runs are binding dose-responses and agrochemical uses the standard
+    # dose-response engine, so they must not default to a property read ("custom"). Materials do read properties.
+    expect = {"material": "custom", "biologic": "binding", "agrochemical": "cytotoxicity", "cell therapy": "custom", "mRNA": "custom"}
+    for m, assay in expect.items():
+        assert {h["assay_type"] for h in build_cfg({**base, "modality": m})["hypotheses"]} == {assay}, m
+    from proef.modality import metric_for_assay
+    assert metric_for_assay(expect["biologic"], "biologic") == "ic50_um"
+    assert metric_for_assay(expect["agrochemical"], "agrochemical") == "ic50_um"

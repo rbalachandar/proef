@@ -1,4 +1,4 @@
-"""/api/v1/halt — the operator stop-condition, outside the agent's reach."""
+"""/api/v1/halt, the operator stop-condition, outside the agent's reach."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Request

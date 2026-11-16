@@ -1,9 +1,9 @@
-"""Campaign diary — provenance rendered as a lab notebook, not a log.
+"""Campaign diary, provenance rendered as a lab notebook, not a log.
 
 `proef diary <branch> --db campaign.db --html diary.html` turns the hash-chained
 records into a dated narrative a scientist actually reads:
 
-    Round 1 — hypothesis H4 (C-101 binds IC50<=20): proposed from covalent
+    Round 1, hypothesis H4 (C-101 binds IC50<=20): proposed from covalent
     warhead precedent; tested by run sim-…; VALIDATED (measured 8.9 uM).
     Gate approve_wetlab_protocol: APPROVED by scripted-scientist.
     ...
@@ -70,10 +70,10 @@ def build_diary_html(records: list[Any], branch: str) -> str:
             hid_to_cand[art_id] = cand
 
         if ev == "problem_defined":
-            cons = ", ".join(c.get("name", "?") for c in d.get("constraints", [])) or "—"
+            cons = ", ".join(c.get("name", "?") for c in d.get("constraints", [])) or ", "
             shared.append(_entry("problem", d.get("objective", ""),
                                  f"constraints: {cons} · success metric: "
-                                 f"{d.get('success_metric', '—')}"))
+                                 f"{d.get('success_metric', ', ')}"))
         elif ev == "hypothesis_proposed":
             stmt = (d.get("statement") or art.get("statement", "")) or ""
             counts["hypotheses"] += 1
@@ -86,7 +86,7 @@ def build_diary_html(records: list[Any], branch: str) -> str:
             if d.get("citation"):
                 _cs = d.get("citation_status", "unverified")
                 _tag = {"verified": "verified",
-                        "invalid": "UNVERIFIABLE — penalized",
+                        "invalid": "UNVERIFIABLE, penalized",
                         "check-failed": "? check failed (offline)"}.get(_cs, "")
                 bits.append(f"citation: {d['citation']}"
                             + (f" ({_tag})" if _tag else ""))
@@ -95,7 +95,7 @@ def build_diary_html(records: list[Any], branch: str) -> str:
             if d.get("refutation_condition"):
                 bits.append(f"refuted if: {d['refutation_condition']}")
             lane["entries"].append(_entry("hypothesis proposed", stmt,
-                                          " · ".join(bits) or "—"))
+                                          " · ".join(bits) or ", "))
         elif ev == "hypotheses_filtered":
             dec = d.get("decisions", [])
             sel = sum(1 for x in dec if x.get("selected"))
@@ -131,13 +131,13 @@ def build_diary_html(records: list[Any], branch: str) -> str:
             if _bucket:
                 counts[_bucket] += 1
             lane = _lane(art_id, hid_to_cand.get(art_id, cand or "?"), art.get("statement", ""))
-            bits = [f"observed {d.get('observed', '—')} µM",
-                    f"threshold {d.get('threshold', '—')}"]
+            bits = [f"observed {d.get('observed', ', ')} µM",
+                    f"threshold {d.get('threshold', ', ')}"]
             if d.get("observed_ci"):
                 lo, hi = d["observed_ci"]
                 bits.append(f"95% CI {lo}–{hi}")
             if _v == "inconclusive":
-                bits.append("CI straddles threshold — honest abstention")
+                bits.append("CI straddles threshold, honest abstention")
             if d.get("evidence_run_id"):
                 bits.append(f"evidence run `{d['evidence_run_id']}`")
             _conf = d.get("confirmation") or {}
@@ -148,7 +148,7 @@ def build_diary_html(records: list[Any], branch: str) -> str:
                     "invalidated": "HYPOTHESIS INVALIDATED"}.get(
                         _v, ev.replace("hypothesis_", "HYPOTHESIS ").upper())
             if _conf:
-                bits.append(f"agreement rule: {_conf.get('rule', '—')}")
+                bits.append(f"agreement rule: {_conf.get('rule', ', ')}")
             lane["entries"].append(_entry(
                 head,
                 lane.get("statement") or d.get("metric", ""),

@@ -1,4 +1,4 @@
-"""/api/v1/evals — the last `proef eval` leaderboard, with the honest sub-1.0
+"""/api/v1/evals, the last `proef eval` leaderboard, with the honest sub-1.0
 deductions surfaced (the harness refusing to overcredit its own agent).
 A read-model of the committed artifacts, not a live re-run."""
 from __future__ import annotations

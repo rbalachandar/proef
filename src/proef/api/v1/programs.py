@@ -1,4 +1,4 @@
-"""/api/v1/programs and /api/v1/today — programs as containers of campaigns.
+"""/api/v1/programs and /api/v1/today, programs as containers of campaigns.
 
 A PROGRAM is the scientific goal: a pre-registered gate (metric, direction,
 value) and a modality. A CAMPAIGN is one run that tries to meet it. A program
@@ -55,7 +55,7 @@ def _limits(doc: dict) -> S.Limits:
 
 
 def _digest(eid: str):
-    """(CampaignDigest, [hypotheses]) for one campaign — no chain verify."""
+    """(CampaignDigest, [hypotheses]) for one campaign, no chain verify."""
     ws, row, detail, branch, recs = _load(eid)
     reviews = _reviews(recs)
     hyps = [_summary_of(c, None, reviews) for c in testable(detail.get("cards"))]
@@ -82,7 +82,7 @@ def _best(hyps, direction: str, cid: str, title: str) -> S.BestResult | None:
 
 def _next_steps(p, digests, goal: S.Goal, gate: S.Gate,
                 unresolved: list[str]) -> list[S.NextStep]:
-    """What a sensible scientist would do next — from the evidence alone."""
+    """What a sensible scientist would do next, from the evidence alone."""
     from proef.api.v1.campaigns import pending_approvals, problem_id_for
     steps: list[S.NextStep] = []
     waiting = 0

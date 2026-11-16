@@ -8,7 +8,7 @@ from typing import Any
 def dmta_counts(recs) -> dict:
     """DMTA phase counts for a slice of provenance records. Test counts
     unique lab_run submissions (one submission = one run = one analyzed
-    export); Analyze counts verdict-bearing decisions, deduplicated —
+    export); Analyze counts verdict-bearing decisions, deduplicated , 
     a hypothesis earns ONE verdict: its latest. Port of
     webview._dmta_counts."""
     c = {"proposed": 0, "selected": 0, "submitted": 0, "refused": 0,
@@ -55,9 +55,9 @@ def dmta_counts(recs) -> dict:
 
 
 def verdict_tally(recs) -> dict[str, int]:
-    """Final verdicts — one per hypothesis (latest wins) — bucketed for
+    """Final verdicts, one per hypothesis (latest wins), bucketed for
     the workspace chips. CONFIRMED means orthogonal agreement was recorded;
-    a preliminary `validated` is NOT confirmed — it counts as preliminary.
+    a preliminary `validated` is NOT confirmed, it counts as preliminary.
     refuted = invalidated/refuted; inconclusive = abstention."""
     t = {"confirmed": 0, "preliminary": 0, "refuted": 0, "inconclusive": 0}
     final: dict[str, str] = {}
@@ -86,7 +86,7 @@ def verdict_tally(recs) -> dict[str, int]:
 def series_view(recs) -> list[dict[str, Any]]:
     """S-T1 chemotype/SAR series rollup for the workbench: per-series
     verdict counts + matched-pair SAR table. Grouping backend
-    (Murcko/family/exact-id) stamps itself — see proef.series."""
+    (Murcko/family/exact-id) stamps itself, see proef.series."""
     from proef.series import series_summary
     return series_summary(recs)
 

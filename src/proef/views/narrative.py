@@ -84,31 +84,31 @@ def _make(recs, out) -> None:
         if bio_qc:
             make["bio_qc"] = [{
                 "candidate": (r.decision or {}).get("candidate", "?"),
-                "lot": (r.decision or {}).get("lot", "—"),
+                "lot": (r.decision or {}).get("lot", ", "),
                 "aggregation_risk": (r.decision or {}).get(
-                    "aggregation_risk", "—"),
-                "t_half_h": (r.decision or {}).get("t_half_h", "—"),
+                    "aggregation_risk", ", "),
+                "t_half_h": (r.decision or {}).get("t_half_h", ", "),
                 "passed": bool((r.decision or {}).get("ok"))}
                 for r in bio_qc]
         if synth:
             make["synthesis"] = [{
                 "candidate": (r.decision or {}).get("candidate", "?"),
-                "lot": (r.decision or {}).get("lot", "—"),
-                "yield_pct": (r.decision or {}).get("yield_pct", "—"),
-                "purity": (r.decision or {}).get("purity", "—"),
+                "lot": (r.decision or {}).get("lot", ", "),
+                "yield_pct": (r.decision or {}).get("yield_pct", ", "),
+                "purity": (r.decision or {}).get("purity", ", "),
                 "passed": bool((r.decision or {}).get("ok"))}
                 for r in synth]
         make["no_synthesis_note"] = bool(runs and not synth)
         if runs:
             make["runs"] = [{
                 "run_id": (r.decision or {}).get("run_id"),
-                "title": ((r.decision or {}).get("title") or "—")[:48],
-                "assay": (r.decision or {}).get("assay", "—"),
-                "n_samples": (r.decision or {}).get("n_samples", "—"),
+                "title": ((r.decision or {}).get("title") or ", ")[:48],
+                "assay": (r.decision or {}).get("assay", ", "),
+                "n_samples": (r.decision or {}).get("n_samples", ", "),
                 "concentrations": (r.decision or {}).get(
                     "concentrations") or [],
-                "replicates": (r.decision or {}).get("replicates", "—"),
-                "n_controls": (r.decision or {}).get("n_controls", "—"),
+                "replicates": (r.decision or {}).get("replicates", ", "),
+                "n_controls": (r.decision or {}).get("n_controls", ", "),
                 "instrument": (r.decision or {}).get("instrument", "lab"),
                 "instrument_version": (r.decision or {}).get(
                     "instrument_version")}
@@ -148,7 +148,7 @@ def _verdicts(recs, out) -> dict:
                          "estimated": d.get("observed")}
             if has_ci:
                 row["ci95"] = ("–".join(str(x) for x in d["observed_ci"])
-                               if d.get("observed_ci") else "—")
+                               if d.get("observed_ci") else ", ")
             if d.get("threshold") is not None:
                 row["gate"] = criteria_label(
                     d.get("metric"), None,
@@ -274,7 +274,7 @@ def _evidence(recs, out, last, data_dir) -> None:
         "curves": items,          # FE renders these client-side
         "svg_fallback": bool(items),
         "empty_note": None if items else
-        "No recorded plate files found for these runs — evidence "
+        "No recorded plate files found for these runs, evidence "
         "curves unavailable (honestly shown, not simulated)."}
 
 

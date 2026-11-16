@@ -362,38 +362,9 @@ instrument the campaign refuses rather than falling back to simulation
 - **Adaptive dosing** (`--dose-design adaptive`) lets a Bayesian posterior pick each next concentration (3 adaptive wells beat a fixed 4-point series in `proef eval`).
 - **A `ResourceBudget`** (lab runs, hypotheses, confirmations, wall clock) is enforced at submission and generation time. `proef prove <problem-id> --html report.html` renders the whole chain as a shareable audit.
 
-### The scientist's workbench
+### Start research: a model proposes, a person approves
 
-- **Programs:** each program's progress against its pre-registered gate, with what is pending a decision on top. Pause a program or a single campaign at any level.
-- **Decisions:** the queue of plan and submission approvals and abstention reviews. Approve, decline, follow up, accept as inconclusive or drop. Every decision is sealed in the ledger under the decider's name.
-- **Campaign:** every estimate drawn with its 95% interval against the gate, why each batch was chosen (and what was refused), who did what, and an independent reviewer. A candidate whose interval straddles the gate shows as **abstained**, never as a coin-flip verdict. Select a candidate for its evidence: the dose-response curves re-read from the run files, the plate QC and how the number was derived.
-- **Analyze:** drop in a **dose-response plate** (curves, IC50 with its interval, plate QC, a warning when a call rests on an inferred top plateau) or a **table of measurements** (one row per reading, such as conductivity, solubility or yield: mean and 95% interval per sample). Both are judged by the same rule: an interval that straddles the gate abstains, and fewer than 3 readings make no call. The kind is detected from the columns. The result can be attached to a campaign as supporting evidence.
-- **Manual run:** start a hand-run campaign with its gate registered before any data, run the plate, then **Submit results**. The submission is sealed before anything is judged.
-- **Lab and ledger:** verify the whole ledger, anchor it outside this machine and export a campaign's record. Instruments are labelled simulated, real or hardware-validated, and the page shows what agents may do alone, what needs a person and the SOP sign-offs.
-- **Try it:** `proef demo` runs the abstain-and-refute cascade. `make sample` seeds a sample workspace.
-
-### From a problem to a verdict: how research runs
-
-1. **Create a program.** The problem, the **gate** (the success criterion, registered before any data), and **limits**:
-   rounds, lab runs, hypotheses, families, and how many go to the lab per round. A campaign may use less, never more.
-2. **Start research.** A language model reads the problem and proposes *families* of hypotheses. Each has a mechanism,
-   a "refuted if…" clause, the model's own confidence, and a citation that is checked (a fabricated DOI is flagged).
-3. **Review the plan.** Nothing reaches the lab until a person decides. Any hypothesis can be removed, or the plan declined. The decision,
-   what was removed and the note are sealed in the ledger under the decider's name.
-4. **The agent runs it.** The plan approval covers its own lab submissions (recorded as `covered_by_plan`; the safety gate still
-   applies). It runs the experiments, reads the
-   plates, and judges every result against the gate by a fixed rule: an interval that straddles the gate **abstains**.
-   Promising results are confirmed with an orthogonal assay.
-5. **A person decides what is left.** Follow up on an abstention, accept it, or drop it. "What next" suggests the next step,
-   and, with **Re-plan after each round** on, the model proposes the next hypotheses from the results. Those are approved
-   the same way. To start from several questions instead of one, **Split into sub-problems** lets the model propose a *tree*
-   (sub-problems can split again) and the real ones are kept and each gate is set. The program's **Split depth** and
-   **Sub-problems** limits cap the tree, the lab-run budget flows down it by priority, each leaf runs as its own campaign, and
-   the results roll up: a parent is achieved only when its required children are. A second agent, the **critic**, reads the plan
-   before the person does and raises concerns (advisory: it can't change or approve anything). The model also designs each variant's dose
-   ladder, validated and bounded, and shown in the plan.
-
-**Start research: the plan, reviewed before anything runs.** The model proposes families of hypotheses, each with a mechanism, the
+The model proposes families of hypotheses, each with a mechanism, the
 observation that would refute it, its own confidence, a citation check and a designed dose ladder. A second model critiques the
 plan. A person removes hypotheses, approves, or declines.
 
@@ -408,8 +379,7 @@ no claim, and the decision is queued for a person), one refuted.
 *A real run (`gpt-6-luna`) against the **simulated** lab. The simulator does not model the proposed chemistry, so the
 outcomes say nothing about real EGFR inhibitors; the example shows the flow and the record, not a scientific result.*
 
-There are three ways to run, chosen per campaign in the **New campaign** dialog. The experiment loop is the same code
-in all of them; they differ in who proposes the hypotheses and who runs the plate.
+A campaign runs one of three ways, chosen in the **New campaign** dialog. The loop is the same code in each. What differs is who proposes the hypotheses and who runs the plate.
 
 | | **Start research** | **Candidate list** | **Manual plate run** |
 |---|---|---|---|
@@ -418,13 +388,10 @@ in all of them; they differ in who proposes the hypotheses and who runs the plat
 | Who runs the experiment | the agent (simulated lab or instruments) | the agent | a person: submits the CSV |
 | Needs | a configured model | nothing: no key, works offline | nothing |
 | Replay | `proef campaign reproduce` replays the plan that was approved, in the same batches and order; the model is not re-asked, so a *fresh* run may propose different hypotheses | `proef campaign reproduce` replays it exactly | n/a |
-| Header | `LLM · <model> wrote N hypotheses` | `no LLM` | `no LLM` |
 
 **The model never decides a verdict**: its hypotheses are judged by the same fixed rule, against criteria registered before
 any data. What the model designs is the hypotheses and the assay type; the protocol (doses, replicates, controls) is code.
 "Approvals" is a separate setting: *Ask me first*, *Preview only*, or *Run on its own within the safety gate*.
-Splitting an objective into a tree of sub-problems is available in the engine (`proef campaign plan`) but not yet in the workbench.
-
 Start research works with any of three provider styles, selected from the environment:
 
 | `PROEF_LLM_API` | Endpoint | Typical use |
@@ -444,9 +411,9 @@ Full configuration, presets, what is recorded, and troubleshooting: [`docs/MODEL
 
 Also: `proef diary <branch>` writes the record as a static lab-notebook HTML file, and `proef read --csv out.csv` writes standardized results for Excel/GraphPad.
 
-### The DMTA cycle — scientific decision layer
+### Programs, experiments and readiness
 
-Proef models Design–Make–Test–Analyze as first-class objects:
+The decision layer is made of first-class objects:
 
 - **Target Product Profile**: the program defines winning in its own terms (objective, metric, unit, direction, gate); small-molecule programs can add phased criteria (hit → lead → candidate → clinical) in `proef.tpp`.
 - **Experiment Definition** — the full manifest: intervention, biological system, readout capabilities, denominators, expected intermediates.
@@ -466,6 +433,7 @@ step, and which layer is responsible at each point:
 | 1. Problem setup | **Problem definition** | Decomposes the objective into constraints | Records problem + constraints as the provenance root |
 | 2. Hypothesis proposal | **Hypothesis agent** using the `rdkit` **skill** | Generates analogs with SAR rationale | Validates schema, dedupes, records rationale; injects skill guidance |
 | 3. Portfolio filter | **Portfolio selector** | Scores + ranks, applies diversity cap | Records every accept/reject with reason |
+| 3b. Plan review | **A person**, after the **critic** agent's concerns | Removes hypotheses, approves or declines the plan. The model also designs each variant's dose ladder, validated and bounded | Seals the decision in the ledger under the decider's name. Approval covers that plan's lab submissions (`covered_by_plan`), and the safety gate still applies |
 | 4. Readiness review | **ExperimentDefinition** | Checks: is the readout capable? denominator present? synthesis feasible? | **Blocks** if the result would be uninterpretable |
 | 5. Safety gate | **SafetyEngine** | Checks reagents, BSL, step count, **toxicophores in sample structures**, dual-use text | **Refuses** with machine-readable reason + rule-set version |
 | 5b. Governance gate | **HaltSwitch + PauseRegistry + AuthorizationMatrix + SOP registry** — code the agent cannot reach | Checks the operator halt, any program or campaign pause (which holds submissions and releases them on resume), the autonomous/human/never column, and SOP sign-off for recurring work | Refuses outside the agent's reach; every decision recorded as provenance |
@@ -474,6 +442,8 @@ step, and which layer is responsible at each point:
 | 8. Analysis | **Analysis agent** + `labread` | Fits IC50s, checks QC, flags artifacts | Records measurements + QC flags as provenance |
 | 9. Verdict | **Analysis** against pre-registered criteria | VALIDATED / INVALIDATED / INCONCLUSIVE — a CI straddling the gate or a QC failure abstains | Records the verdict with evidence, criteria and confidence interval |
 | 10. Audit | **ProvenanceStore** | Renders the full chain | `proef prove` verifies the hash chain; `proef anchor` makes it externally checkable |
+
+**After a round.** A person follows up on an abstention, accepts it or drops it. With **Re-plan after each round** on, the model proposes the next hypotheses from the results and a person approves them the same way. **Split into sub-problems** lets the model propose a tree of questions (capped by the program's split depth and sub-problem limits). The lab-run budget flows down by priority, each leaf runs as its own campaign, and a parent is achieved only when its required children are.
 
 **Division of labor.** The intelligence comes from the models: the LLM derives
 the SAR hypothesis, the QSAR model makes the calibrated prediction. Proef

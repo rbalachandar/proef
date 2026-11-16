@@ -1,107 +1,71 @@
 # Architecture
 
+![Architecture](../diagrams/architecture.svg)
+
+Proef is a campaign engine with five pluggable interfaces, a set of gates that sit in front of every lab action, and one
+hash-chained ledger. A person is above the engine: nothing reaches the lab until a plan is approved, and the gates apply
+even then.
+
 ## Layers
 
-| Layer | Purpose | Blocks |
+| Layer | What it holds | Where it lives |
 |---|---|---|
-| L0 | Human & Governance | reviewer UI, approval gates, audit |
-| L1 | Orchestration | stage graph, agent routing, provenance, ledger |
-| L2 | Agent & Service Workforce | agents, models, lab execution, simulation |
-| L3 | Infrastructure | AgentENV sandboxes, control plane, storage |
+| People | plan review and decisions, pause and halt, authority and SOP sign-offs | `src/proef/api/v1/inbox.py`, `pauses.py`, `governance.py` · the web workbench in `web/src/` |
+| Engine | hypothesis agent and critic, plan gate and portfolio, analysis and verdict rule, programs and research trees | `hypothesis_agent.py`, `critic.py`, `plan.py`, `autoloop.py`, `watch.py`, `core/hypothesis.py`, `program.py`, `problem_tree.py` |
+| Gates | readiness review, safety engine, halt and pause, authorization | `readiness.py`, `core/safety.py`, `governance.py` |
+| Interfaces | `ModelProvider`, `BioTool`, `LabAdapter`, `Sandbox`, `ProvenanceStore` | `core/interfaces.py`, contracts in `core/contracts/`, adapters in `adapters/` |
+| Record | hash-chained ledger, anchoring, wizard registry | `adapters/store/sqlite.py`, `anchor.py`, `wizard_store.py`, `wizard_chain.py` |
 
-## Block A — Workflow & Orchestration (L1)
+## Engine
 
-*Independently buildable: pure software, no hardware/model deps.*
+- **Hypothesis agent** proposes families of hypotheses from the problem. Each has a mechanism, a "refuted if" clause, a
+  confidence and a checked citation. It is shown what the lab already ruled out (`flywheel.py`).
+- **Critic** reads the plan before the person does and raises concerns. It is advisory and cannot change or approve anything.
+- **Plan gate** (`plan.py`, `autoloop._plan_gate`) builds the plan, warns on problems such as one compound under two
+  families, and waits for a person. The approval is sealed, and it covers that plan's own lab submissions.
+- **Campaign loop** (`autoloop.run_campaign`) runs rounds: select, submit through the gates, read the results, judge,
+  and optionally re-plan from the results.
+- **Analysis** (`watch.py`, `fitting.py`, `analysis_profiles/`) fits curves or summarizes measurements with a 95% interval.
+- **Verdict rule** (`core/hypothesis.py`) compares the interval with the gate registered before any data. An interval that
+  straddles the gate abstains, and so does a QC failure.
+- **Programs and trees** (`program.py`, `problem_tree.py`) hold the gate and limits, split a question into sub-problems,
+  flow the lab-run budget down by priority and roll the leaf verdicts up.
 
-| Component | Responsibility |
+## Gates
+
+Four checks sit between an approved plan and a lab run. Any of them can stop the run, and each stop records its reason.
+
+1. **Readiness review** blocks an experiment whose result would be uninterpretable (missing denominator or controls).
+2. **Safety engine** applies the hard policy: reagents, biosafety level, toxicophores, dual-use text.
+3. **Halt and pause.** A global halt refuses. A paused program or campaign holds submissions and resumes later.
+4. **Authorization** decides what agents may do alone and checks SOP sign-offs.
+
+The gates are code the agent cannot reach. `LabGateway` in `core/safety.py` is the only path to a lab adapter.
+
+## Interfaces
+
+| Interface | Adapters today |
 |---|---|
-| **Stage Graph Engine** | Declarative DAG pipeline: Target ID → Hit Generation → Lead Optimization → Preclinical → Trial Design. Retry, branching, parallel fan-out |
-| **Agent Router** | Capability matching, assignment, load balancing of stages to agent instances |
-| **Human-in-the-Loop Gates** | Pause/resume points for scientist approval/redirect (maps to AgentENV sandbox pause/resume) |
-| **Provenance Store** | Immutable lineage for every artifact: inputs, model versions, prompts, lab run IDs (WORM) |
-| **Experiment Ledger** | In-flight experiment state: instrument claims, pending results, cost tracking |
+| `ModelProvider` | OpenAI-compatible (OpenAI, Ollama, vLLM), Anthropic |
+| `BioTool` | RDKit descriptors, ADMET, genomics scoring |
+| `LabAdapter` | simulator, imaging, recording and replay, plate reader share, Opentrons |
+| `Sandbox` | local, Docker, OpenSandbox, AgentENV |
+| `ProvenanceStore` | SQLite |
 
-**Interfaces out:** `StageTask` → agents; `ToolInvocation` → blocks B/C/D/E.
+Adapters are opt-in and interchangeable. The pydantic models in `core/contracts` are the source of truth.
 
-## Block B — Agent Workforce (L2)
+## Record
 
-*Independently buildable: sandbox-resident processes with the tool API contract.*
+Every proposal, decision, run and verdict is a record in a hash-chained SQLite ledger. Engine triggers refuse edits, and
+chain verification recomputes the hashes on read. `proef anchor` publishes a Merkle root so the chain is checkable outside
+the machine. `proef prove <problem-id>` renders the whole chain as an audit.
 
-| Agent | Role | Consumes | Produces |
-|---|---|---|---|
-| **Target Research Agent** | Disease biology analysis, target selection & triage | publications, omics DBs | target dossiers |
-| **Design Agent (Chemist)** | Generative/structure-based molecule design | target structures, property feedback | molecule candidates + rationale |
-| **Biology Agent** | Protein/antibody/therapeutic design | protein FMs, sequences | biologic candidates |
-| **Assay Planning Agent** | Candidates → executable wet-lab protocols | candidate library, lab capability catalog | protocols |
-| **Analysis Agent** | Interprets results, drives active learning loop | assay results, trial data | findings + next-round proposals |
-| **Trial Design Agent** | Patient stratification, endpoints, protocol simulation | historical trial data, population models | trial protocols & simulations |
+## Design principles
 
-Every agent runs in an **AgentENV sandbox**: forked per experiment branch, snapshotted
-at review gates.
+1. **Contract-first.** Five schemas couple the platform, nothing else.
+2. **Hardware behind an interface.** The simulator is a drop-in `LabAdapter` peer.
+3. **Reading a verdict is as sacred as computing it.** Verdicts are driven by the recorded payload.
+4. **Provenance is immutable.** Decisions and results are sealed before anything is judged.
+5. **Safety is not bypassable.** The gates are in the physical-action path.
 
-## Block C — Model & Knowledge Services (L2)
-
-*Independently buildable: inference/gateway services behind a tool API.*
-
-| Component | Purpose |
-|---|---|
-| **Bio FM Gateway** | One versioned inference API: protein structure, property prediction, generative chemistry, ADMET |
-| **Knowledge Base Service** | Literature RAG, patents, pathways, internal experiment history |
-| **Molecule/Sequence Registry** | Canonical candidate store with computed properties, similarity indexes |
-| **Evaluation Harness** | Benchmark suites (docking, retrosynthesis, ADMET panels) run on every candidate batch |
-
-## Block D — Lab Execution (L2/L3 boundary)
-
-*Independently buildable behind the IAL contract.*
-
-```mermaid
-flowchart LR
-    A["Assay Planning Agent"] -->|ProtocolSubmission| PC["Protocol Compiler"]
-    PC --> SE["Safety & Constraint Engine"]
-    SE -->|"reject"| A
-    SE -->|approved| Q["Lab State Manager<br/>(inventory · queue · chain-of-custody)"]
-    Q --> IAL["Instrument Abstraction Layer<br/>submit_protocol / get_status / fetch_results"]
-    IAL --> V["Virtual Lab Simulator"]
-    IAL --> H["Physical Instruments<br/>robots · plate readers · sequencers · cloud labs"]
-    V --> T["Telemetry Ingestor"]
-    H --> T
-    T -->|AssayResult| Prov["Provenance Store"]
-```
-
-| Component | Responsibility |
-|---|---|
-| **Instrument Abstraction Layer (IAL)** | Uniform API over heterogeneous instruments/cloud labs |
-| **Protocol Compiler** | Abstract protocol → instrument-specific scripts; capability validation |
-| **Safety & Constraint Engine** | Hard policy blocks outside agent trust boundary: reagent limits, biosafety levels, forbidden combos |
-| **Lab State Manager** | Inventory, scheduling queue, sample tracking / chain of custody |
-| **Telemetry Ingestor** | Raw instrument output → normalized `AssayResult` → Provenance Store |
-| **Virtual Lab Simulator** | Mock instruments + assay outcome simulation — zero-change swap to real hardware |
-
-## Block E — Simulation & Data Services (L2)
-
-*Independently buildable: computational assays substituting/complementing wet-lab.*
-
-- Molecular dynamics / docking farm (GPU batch)
-- In-silico assay simulation (backs the Virtual Lab Simulator)
-- Clinical trial simulation (population, dropout, adverse-event models)
-- Data platform: ELN/LIMS integration, assay QC, feature stores for active learning
-
-## Block F — Infrastructure (AgentENV, L3)
-
-*Exists; integration work only.*
-
-- **AgentENV server per node**: E2B-compatible sandboxes hosting agents; snapshot/fork
-  enables experiment branching and review-gate state capture
-- **Gateway + Scheduler**: multi-node scale-out, sandbox-to-node routing
-- **Artifact storage**: agent rootfs layers pre-loaded with tools (RDKit, BioPython,
-  FM clients); P2P artifact transport for large files (structures, trajectories)
-- **Custom extension hooks**: natural insertion point for lab callbacks (e.g., stop
-  hook checkpoints agent state when a batch completes)
-
-## Design Principles
-
-1. **Contract-first integration** — five schemas couple the platform, nothing else.
-2. **Hardware behind an abstraction** — Virtual Lab Simulator is a drop-in IAL peer.
-3. **State is snapshot-able** — fork/pause/resume/replay at every gate.
-4. **Provenance is immutable** — full lineage in WORM storage.
-5. **Safety is non-bypassable** — policy engine in the physical-action path.
+See [`flows.md`](flows.md) for the sequences and [`../README.md`](../README.md) for the product overview.

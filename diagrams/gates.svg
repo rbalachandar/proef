@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 506" width="1200" height="506" role="img" aria-label="The checks between an approved plan and a lab run">
+<title>The checks between an approved plan and a lab run</title>
+<rect width="1200" height="506" fill="#090c12"/>
+<text x="30" y="36" font-size="13.5" fill="#8f9ab0" font-weight="400" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">Between a plan and a lab run, four checks. Any of them can stop the run, and each stop records its reason.</text>
+<rect x="30" y="80" width="250" height="108" fill="#121926" stroke="#2a3550" stroke-width="1"/>
+<text x="44" y="105" font-size="14.5" fill="#e8ecf4" font-weight="600" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">Readiness review</text>
+<text x="44" y="127" font-size="12" fill="#8f9ab0" font-weight="400" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">is the result interpretable?</text>
+<text x="44" y="144" font-size="12" fill="#8f9ab0" font-weight="400" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">denominator, controls,</text>
+<text x="44" y="161" font-size="12" fill="#8f9ab0" font-weight="400" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">readout capability</text>
+<path d="M155 188 L155 244" stroke="#e8604c" stroke-width="1.4" fill="none"/>
+<polygon points="155.0,244.0 151.5,235.7 158.5,235.7" fill="#e8604c"/>
+<rect x="30" y="244" width="250" height="46" fill="#35150f" stroke="#e8604c" stroke-width="1"/>
+<text x="44" y="269" font-size="14.5" fill="#e8ecf4" font-weight="600" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">Blocked: redesign</text>
+<rect x="320" y="80" width="250" height="108" fill="#121926" stroke="#2a3550" stroke-width="1"/>
+<text x="334" y="105" font-size="14.5" fill="#e8ecf4" font-weight="600" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">Safety engine</text>
+<text x="334" y="127" font-size="12" fill="#8f9ab0" font-weight="400" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">reagents, biosafety level,</text>
+<text x="334" y="144" font-size="12" fill="#8f9ab0" font-weight="400" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">toxicophores in structures,</text>
+<text x="334" y="161" font-size="12" fill="#8f9ab0" font-weight="400" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">dual-use text</text>
+<path d="M282 134 L318 134" stroke="#5d6882" stroke-width="1.4" fill="none"/>
+<polygon points="318.0,134.0 309.7,137.5 309.7,130.5" fill="#5d6882"/>
+<path d="M445 188 L445 244" stroke="#e8604c" stroke-width="1.4" fill="none"/>
+<polygon points="445.0,244.0 441.5,235.7 448.5,235.7" fill="#e8604c"/>
+<rect x="320" y="244" width="250" height="46" fill="#35150f" stroke="#e8604c" stroke-width="1"/>
+<text x="334" y="269" font-size="14.5" fill="#e8ecf4" font-weight="600" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">Refused: rule-set version</text>
+<rect x="610" y="80" width="250" height="108" fill="#121926" stroke="#2a3550" stroke-width="1"/>
+<text x="624" y="105" font-size="14.5" fill="#e8ecf4" font-weight="600" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">Halt and pause</text>
+<text x="624" y="127" font-size="12" fill="#8f9ab0" font-weight="400" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">global halt refuses</text>
+<text x="624" y="144" font-size="12" fill="#8f9ab0" font-weight="400" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">a paused program or campaign</text>
+<text x="624" y="161" font-size="12" fill="#8f9ab0" font-weight="400" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">holds, then resumes</text>
+<path d="M572 134 L608 134" stroke="#5d6882" stroke-width="1.4" fill="none"/>
+<polygon points="608.0,134.0 599.7,137.5 599.7,130.5" fill="#5d6882"/>
+<path d="M735 188 L735 244" stroke="#e8604c" stroke-width="1.4" fill="none"/>
+<polygon points="735.0,244.0 731.5,235.7 738.5,235.7" fill="#e8604c"/>
+<rect x="610" y="244" width="250" height="46" fill="#35150f" stroke="#e8604c" stroke-width="1"/>
+<text x="624" y="269" font-size="14.5" fill="#e8ecf4" font-weight="600" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">Held or refused</text>
+<rect x="900" y="80" width="250" height="108" fill="#121926" stroke="#2a3550" stroke-width="1"/>
+<text x="914" y="105" font-size="14.5" fill="#e8ecf4" font-weight="600" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">Authorization</text>
+<text x="914" y="127" font-size="12" fill="#8f9ab0" font-weight="400" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">what agents may do alone</text>
+<text x="914" y="144" font-size="12" fill="#8f9ab0" font-weight="400" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">SOP sign-offs,</text>
+<text x="914" y="161" font-size="12" fill="#8f9ab0" font-weight="400" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">approver identity</text>
+<path d="M862 134 L898 134" stroke="#5d6882" stroke-width="1.4" fill="none"/>
+<polygon points="898.0,134.0 889.7,137.5 889.7,130.5" fill="#5d6882"/>
+<path d="M1025 188 L1025 244" stroke="#e8604c" stroke-width="1.4" fill="none"/>
+<polygon points="1025.0,244.0 1021.5,235.7 1028.5,235.7" fill="#e8604c"/>
+<rect x="900" y="244" width="250" height="46" fill="#35150f" stroke="#e8604c" stroke-width="1"/>
+<text x="914" y="269" font-size="14.5" fill="#e8ecf4" font-weight="600" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">Needs a person</text>
+<path d="M1150 134 L1176 134" stroke="#5d6882" stroke-width="1.4" fill="none"/>
+<text x="322" y="332" font-size="11.5" fill="#8f9ab0" font-weight="400" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">all four pass</text>
+<rect x="30" y="340" width="560" height="84" fill="#14233f" stroke="#5b8def" stroke-width="1"/>
+<text x="44" y="365" font-size="14.5" fill="#e8ecf4" font-weight="600" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">Lab adapter</text>
+<text x="44" y="387" font-size="12" fill="#8f9ab0" font-weight="400" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">simulator, plate reader share, Opentrons</text>
+<text x="44" y="404" font-size="12" fill="#8f9ab0" font-weight="400" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">raw files are kept as the evidence</text>
+<path d="M1154 134 L 1186 134 L 1186 316 L 310 316 L 310 340" stroke="#5d6882" stroke-width="1.4" fill="none"/>
+<rect x="620" y="340" width="550" height="84" fill="#33290d" stroke="#e0ac24" stroke-width="1"/>
+<text x="634" y="365" font-size="14.5" fill="#e8ecf4" font-weight="600" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">A plan approval covers its own submissions</text>
+<text x="634" y="387" font-size="12" fill="#8f9ab0" font-weight="400" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">recorded as covered_by_plan</text>
+<text x="634" y="404" font-size="12" fill="#8f9ab0" font-weight="400" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">the safety gate still applies to every one</text>
+<rect x="30" y="452" width="1140" height="34" fill="#14233f" stroke="#5b8def" stroke-width="1"/>
+<text x="46" y="474" font-size="12.5" fill="#e8ecf4" font-weight="400" font-family="-apple-system,'Segoe UI',Inter,Helvetica,Arial,sans-serif" text-anchor="start">Governance is code the agent cannot reach. A pause is scoped (program or campaign), and a halt is global.</text>
+</svg>

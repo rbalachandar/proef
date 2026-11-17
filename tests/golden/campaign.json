@@ -225,6 +225,7 @@
       "replicates": 1
      },
      "family": "",
+     "followup_of": null,
      "lab_check": null,
      "mechanism": "",
      "predicted": "2.0 uM",
@@ -233,6 +234,7 @@
      "predictions": null,
      "rationale": "",
      "refutation_condition": "",
+     "replicates": null,
      "smiles": "",
      "statement": "AD1 binds"
     }
@@ -262,6 +264,7 @@
       "replicates": 1
      },
      "family": "",
+     "followup_of": null,
      "lab_check": null,
      "mechanism": "",
      "predicted": "5.0 uM",
@@ -270,6 +273,7 @@
      "predictions": null,
      "rationale": "",
      "refutation_condition": "",
+     "replicates": null,
      "smiles": "",
      "statement": "H1 binds"
     }
@@ -299,6 +303,7 @@
       "replicates": 1
      },
      "family": "",
+     "followup_of": null,
      "lab_check": null,
      "mechanism": "",
      "predicted": "8.0 uM",
@@ -307,6 +312,7 @@
      "predictions": null,
      "rationale": "",
      "refutation_condition": "",
+     "replicates": null,
      "smiles": "",
      "statement": "H2 binds"
     }
@@ -336,6 +342,7 @@
       "replicates": 1
      },
      "family": "",
+     "followup_of": null,
      "lab_check": null,
      "mechanism": "",
      "predicted": "11.0 uM",
@@ -344,6 +351,7 @@
      "predictions": null,
      "rationale": "",
      "refutation_condition": "",
+     "replicates": null,
      "smiles": "",
      "statement": "H3 binds"
     }
@@ -373,6 +381,7 @@
       "replicates": 1
      },
      "family": "",
+     "followup_of": null,
      "lab_check": null,
      "mechanism": "",
      "predicted": "90.0 uM",
@@ -381,6 +390,7 @@
      "predictions": null,
      "rationale": "",
      "refutation_condition": "",
+     "replicates": null,
      "smiles": "",
      "statement": "M1 binds"
     }
@@ -1761,6 +1771,7 @@
       "replicates": 1
      },
      "family": "",
+     "followup_of": null,
      "lab_check": null,
      "mechanism": "",
      "predicted": "2.0 uM",
@@ -1769,6 +1780,7 @@
      "predictions": null,
      "rationale": "",
      "refutation_condition": "",
+     "replicates": null,
      "smiles": "",
      "statement": "AD1 binds"
     }
@@ -1798,6 +1810,7 @@
       "replicates": 1
      },
      "family": "",
+     "followup_of": null,
      "lab_check": null,
      "mechanism": "",
      "predicted": "5.0 uM",
@@ -1806,6 +1819,7 @@
      "predictions": null,
      "rationale": "",
      "refutation_condition": "",
+     "replicates": null,
      "smiles": "",
      "statement": "H1 binds"
     }
@@ -1835,6 +1849,7 @@
       "replicates": 1
      },
      "family": "",
+     "followup_of": null,
      "lab_check": null,
      "mechanism": "",
      "predicted": "8.0 uM",
@@ -1843,6 +1858,7 @@
      "predictions": null,
      "rationale": "",
      "refutation_condition": "",
+     "replicates": null,
      "smiles": "",
      "statement": "H2 binds"
     }
@@ -1872,6 +1888,7 @@
       "replicates": 1
      },
      "family": "",
+     "followup_of": null,
      "lab_check": null,
      "mechanism": "",
      "predicted": "11.0 uM",
@@ -1880,6 +1897,7 @@
      "predictions": null,
      "rationale": "",
      "refutation_condition": "",
+     "replicates": null,
      "smiles": "",
      "statement": "H3 binds"
     }
@@ -1909,6 +1927,7 @@
       "replicates": 1
      },
      "family": "",
+     "followup_of": null,
      "lab_check": null,
      "mechanism": "",
      "predicted": "90.0 uM",
@@ -1917,6 +1936,7 @@
      "predictions": null,
      "rationale": "",
      "refutation_condition": "",
+     "replicates": null,
      "smiles": "",
      "statement": "M1 binds"
     }

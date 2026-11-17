@@ -17,7 +17,7 @@ function ReviewRow({ item }: { item: Schemas['InboxItem'] }) {
           <Link className="ml-2 text-xs font-normal text-accent hover:underline" to={`/campaigns/${item.campaign_id}?h=${encodeURIComponent(item.hypothesis_id ?? '')}`}>open evidence</Link></div>
         <div className="mt-0.5 text-xs text-muted">{item.detail}</div>
         <div className="mt-0.5 text-[11px] text-faint">{item.campaign_title}</div>
-        <div className="mt-2"><ReviewControls campaignId={item.campaign_id!} hid={item.hypothesis_id!} candidate={item.candidate!} /></div>
+        <div className="mt-2"><ReviewControls campaignId={item.campaign_id!} hid={item.hypothesis_id!} candidate={item.candidate!} suggestion={item.suggestion} /></div>
       </div>
     </div>
   )

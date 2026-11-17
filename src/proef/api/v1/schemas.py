@@ -69,6 +69,20 @@ class Review(BaseModel):
     follow_up_campaign_id: str | None = Field(None, description="the campaign started to follow up")
 
 
+class Suggestion(BaseModel):
+    """What the model suggested for an abstained hypothesis, after code validated it. Never a decision: accept and drop are a
+    person's, and a follow-up runs only if valid and, under approvals, after a person approves it."""
+    action: Literal["follow_up", "accept", "drop"]
+    ok: bool
+    status: str
+    reasons: list[str] = []
+    replicates: int | None = Field(None, description="the replicate count the lab will run, when the lab honors a request")
+    replicates_requested: int | None = None
+    concentrations: list[str] | None = None
+    why: str = Field("", description="the model's own words: shown, never trusted")
+    ran: bool = Field(False, description="a follow-up hypothesis was created from this suggestion")
+
+
 class HypothesisSummary(BaseModel):
     id: str
     candidate: str | None = None
@@ -82,6 +96,7 @@ class HypothesisSummary(BaseModel):
     gate_label: str | None = None
     selected: bool = False
     review: Review | None = None
+    suggestion: Suggestion | None = None
 
 
 class Pick(BaseModel):
@@ -409,6 +424,7 @@ class Limits(BaseModel):
     max_variants_per_family: int = Field(3, ge=1, le=8)
     breadth: int = Field(3, ge=1, le=12, description="hypotheses taken to the lab per round")
     max_depth: int = Field(2, ge=1, le=3, description="how many levels an objective may be split into sub-problems")
+    max_model_calls: int = Field(200, ge=5, le=2000, description="model calls: proposals, re-plans, the critic and the reviewer. A research tree shares it across its sub-problems")
     max_subproblems: int = Field(8, ge=2, le=16, description="sub-problems in one research tree, all levels together")
 
 
@@ -525,6 +541,7 @@ class InboxItem(BaseModel):
     decision: str | None = None
     follow_up_campaign_id: str | None = None
     plan: Plan | None = None
+    suggestion: Suggestion | None = None
 
 
 class DecisionIn(BaseModel):
@@ -627,6 +644,7 @@ class CampaignCreate(BaseModel):
     autonomy: Literal["observe", "gate", "act"] = "gate"
     k: int | None = Field(None, ge=1, le=12, description="per round; defaults to, and is capped by, the program's limit")
     rounds: int | None = Field(None, ge=1, le=8, description="defaults to 2, and is capped by the program's limit")
+    followups: bool = Field(False, description="after each round the model suggests what to do with each abstained hypothesis. A follow-up it suggests runs only if valid, under 'act' or after approval under 'gate'. Accept and drop stay a person's decision. Needs a model")
     replan: bool = Field(False, description="after each round the model proposes the next hypotheses from the results; they require approval")
 
 

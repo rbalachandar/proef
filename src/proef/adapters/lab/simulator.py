@@ -100,6 +100,7 @@ class SimulatorLab:
         self.seed = seed
         self.method_bias = {s: dict(b) for s, b in (method_bias or {}).items()}
         self.replicates = replicates
+        self.supports_replicates = True     # a protocol may ask for its own replicate count (constraints['replicates'])
         self.interference_rate = interference_rate
         self._runs: dict[str, ProtocolSubmission] = {}
         self._capabilities = instruments or {
@@ -107,6 +108,13 @@ class SimulatorLab:
             "throughput": {"plates_per_day": 20},
             "bsl_max": 2,
         }
+
+    def replicates_for(self, protocol: ProtocolSubmission) -> int:
+        """The replicate count this run uses: the protocol's own request when it has one (bounded), else the lab's."""
+        want = (getattr(protocol, "constraints", None) or {}).get("replicates")
+        if isinstance(want, int) and not isinstance(want, bool) and 1 <= want <= 12:
+            return want
+        return self.replicates
 
     def list_capabilities(self) -> dict[str, Any]:
         return dict(self._capabilities)
@@ -172,6 +180,7 @@ class SimulatorLab:
         gate = getattr(self, "_property_gate", None)
         property_mode = bool(gate and gate["metric"] not in
                              ("ic50_um", "value"))
+        reps = self.replicates_for(protocol)
         measurements: list[Measurement] = []
         controls_passed = True
 
@@ -181,7 +190,7 @@ class SimulatorLab:
             conc = parse_concentration_um(sample.concentration)
             ic50 = self.apparent_ic50_um(run_id, sample.sample_id)
             draws = []
-            for rep in range(1, self.replicates + 1):
+            for rep in range(1, reps + 1):
                 rng = random.Random(self._compound_key(run_id + f"r{rep}", sample.sample_id + str(conc)))
                 if property_mode and not is_control:
                     # property readout: dose-independent true value per
@@ -212,7 +221,7 @@ class SimulatorLab:
                     value=round(value, 3),
                     unit=unit,
                     uncertainty=round(noise, 3),
-                    replicate=self.replicates,
+                    replicate=reps,
                     derived_metrics=derived,
                     flags=flags,
                 )

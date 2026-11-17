@@ -30,6 +30,7 @@ def reproduce(branch: str, db_path: str = "proef.db",
     removed_ids: set[str] = set()
     plan_declined = False
     replanned = False
+    followed_up = False
     first_score: dict[str, float] = {}          # hypothesis id -> the score it was first selected on
     for r in recs:
         d = r.decision or {}
@@ -62,6 +63,8 @@ def reproduce(branch: str, db_path: str = "proef.db",
                     # submitted, and its replay must not submit it either
                     **({"metadata": {"lab_check": d["lab_check"]}} if d.get("lab_check") else {}),
                 }
+        elif et == "gate_decision" and d.get("kind") == "followup_proposal" and d.get("executes") and d.get("validation", {}).get("ok"):
+            followed_up = True
         elif et == "hypotheses_filtered" and d.get("kind") not in ("plan_review", "acquisition_selection"):
             for dec in d.get("decisions") or []:
                 if dec.get("score") is not None:
@@ -81,6 +84,9 @@ def reproduce(branch: str, db_path: str = "proef.db",
             if cand and d.get("verdict"):
                 recorded[cand] = d          # last one wins (final state)
 
+    if followed_up and any((r.decision or {}).get("followup_of") for r in recs if r.event_type.value == "hypothesis_proposed"):
+        return {"status": "not-reproducible",
+                "reason": "the model suggested follow-ups after a round and they were run; that step needs the model and is not replayed"}
     if replanned:
         return {"status": "not-reproducible",
                 "reason": "the model re-planned after a round; that step needs the model and is not replayed"}

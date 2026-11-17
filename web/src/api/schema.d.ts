@@ -1286,6 +1286,12 @@ export interface components {
              */
             candidates: string[];
             /**
+             * Followups
+             * @description after each round the model suggests what to do with each abstained hypothesis. A follow-up it suggests runs only if valid, under 'act' or after approval under 'gate'. Accept and drop stay a person's decision. Needs a model
+             * @default false
+             */
+            followups: boolean;
+            /**
              * K
              * @description per round; defaults to, and is capped by, the program's limit
              */
@@ -1740,6 +1746,7 @@ export interface components {
             state: "confirmed" | "validated" | "abstained" | "refuted" | "refused" | "in_lab" | "selected" | "not_selected" | "proposed";
             /** Statement */
             statement: string;
+            suggestion?: components["schemas"]["Suggestion"] | null;
             verdict?: components["schemas"]["Verdict"] | null;
         };
         /** HypothesisSummary */
@@ -1777,6 +1784,7 @@ export interface components {
             state: "confirmed" | "validated" | "abstained" | "refuted" | "refused" | "in_lab" | "selected" | "not_selected" | "proposed";
             /** Statement */
             statement: string;
+            suggestion?: components["schemas"]["Suggestion"] | null;
             verdict?: components["schemas"]["Verdict"] | null;
         };
         /** InboxItem */
@@ -1813,6 +1821,7 @@ export interface components {
              * @default pending
              */
             status: string;
+            suggestion?: components["schemas"]["Suggestion"] | null;
             /** Title */
             title: string;
             /** Ts */
@@ -1906,6 +1915,12 @@ export interface components {
              * @default 20
              */
             max_lab_runs: number;
+            /**
+             * Max Model Calls
+             * @description model calls: proposals, re-plans, the critic and the reviewer. A research tree shares it across its sub-problems
+             * @default 200
+             */
+            max_model_calls: number;
             /**
              * Max Rounds
              * @description sequential rounds; each round's results feed the next
@@ -2225,7 +2240,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "ok" | "unknown_tool" | "wrong_modality" | "no_input" | "invalid_input" | "error" | "invalid_output";
+            status: "ok" | "unknown_tool" | "untrusted_tool" | "wrong_modality" | "no_input" | "invalid_input" | "error" | "invalid_output";
             /** Tool */
             tool: string;
             /**
@@ -2365,6 +2380,7 @@ export interface components {
              *       "max_families": 3,
              *       "max_hypotheses": 12,
              *       "max_lab_runs": 20,
+             *       "max_model_calls": 200,
              *       "max_rounds": 3,
              *       "max_subproblems": 8,
              *       "max_variants_per_family": 3
@@ -2412,6 +2428,7 @@ export interface components {
              *       "max_families": 3,
              *       "max_hypotheses": 12,
              *       "max_lab_runs": 20,
+             *       "max_model_calls": 200,
              *       "max_rounds": 3,
              *       "max_subproblems": 8,
              *       "max_variants_per_family": 3
@@ -2482,6 +2499,7 @@ export interface components {
              *       "max_families": 3,
              *       "max_hypotheses": 12,
              *       "max_lab_runs": 20,
+             *       "max_model_calls": 200,
              *       "max_rounds": 3,
              *       "max_subproblems": 8,
              *       "max_variants_per_family": 3
@@ -2766,6 +2784,48 @@ export interface components {
             rationale: string;
             /** Unit */
             unit?: string | null;
+        };
+        /**
+         * Suggestion
+         * @description What the model suggested for an abstained hypothesis, after code validated it. Never a decision: accept and drop are a
+         *     person's, and a follow-up runs only if valid and, under approvals, after a person approves it.
+         */
+        Suggestion: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "follow_up" | "accept" | "drop";
+            /** Concentrations */
+            concentrations?: string[] | null;
+            /** Ok */
+            ok: boolean;
+            /**
+             * Ran
+             * @description a follow-up hypothesis was created from this suggestion
+             * @default false
+             */
+            ran: boolean;
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: string[];
+            /**
+             * Replicates
+             * @description the replicate count the lab will run, when the lab honors a request
+             */
+            replicates?: number | null;
+            /** Replicates Requested */
+            replicates_requested?: number | null;
+            /** Status */
+            status: string;
+            /**
+             * Why
+             * @description the model's own words: shown, never trusted
+             * @default
+             */
+            why: string;
         };
         /**
          * SystemStatus

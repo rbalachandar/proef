@@ -35,6 +35,7 @@ export function LaunchCampaignDialog({ open, onOpenChange, slug, title = 'New ca
   const [autonomy, setAutonomy] = useState<keyof typeof AUTONOMY>('gate')
   const [rounds, setRounds] = useState(2)
   const [replan, setReplan] = useState(true)
+  const [followups, setFollowups] = useState(false)
   const cappedRounds = Math.min(rounds, maxRounds)
   useEffect(() => { if (open) { setHow(start()); setObjective(defaults?.objective ?? ''); setCands((defaults?.candidates ?? []).join('\n')) } }, [open, model?.configured])  // eslint-disable-line
 
@@ -43,7 +44,7 @@ export function LaunchCampaignDialog({ open, onOpenChange, slug, title = 'New ca
   const blocked = (needsList && !list.length) || (how === 'research' && !model?.configured)
   const submit = () => launch.mutate(
     { objective: objective || null, candidates: how === 'research' ? [] : list, mode: how === 'hand' ? 'hand' : 'agent', autonomy,
-      rounds: cappedRounds, replan: how === 'research' && cappedRounds > 1 && replan, ...(how === 'list' ? { k: Math.max(1, Math.min(list.length, 4)) } : {}) },
+      rounds: cappedRounds, replan: how === 'research' && cappedRounds > 1 && replan, followups: how === 'research' && followups, ...(how === 'list' ? { k: Math.max(1, Math.min(list.length, 4)) } : {}) },
     {
       onSuccess: async (c) => {
         await onLaunched?.(c.id)
@@ -88,6 +89,12 @@ export function LaunchCampaignDialog({ open, onOpenChange, slug, title = 'New ca
           <label className="mb-3 flex items-start gap-2 text-xs text-muted">
             <input type="checkbox" className="mt-0.5" checked={replan} onChange={(e) => setReplan(e.target.checked)} />
             <span><b className="text-ink">Re-plan after each round.</b> The model proposes what to try next from the results{autonomy === 'gate' ? ', pending approval' : ''}.</span>
+          </label>
+        )}
+        {how === 'research' && (
+          <label className="mb-3 flex items-start gap-2 text-xs text-muted">
+            <input type="checkbox" className="mt-0.5" checked={followups} onChange={(e) => setFollowups(e.target.checked)} />
+            <span><b className="text-ink">Suggest follow-ups on abstentions.</b> The model proposes what to do with each abstained result. The lab checks every suggestion{autonomy === 'gate' ? ', and a follow-up it suggests waits for approval' : ''}. Accept and drop stay a person’s decision.</span>
           </label>
         )}
         {how === 'research' && autonomy === 'act' && (

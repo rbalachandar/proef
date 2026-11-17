@@ -358,3 +358,16 @@ def test_an_mcp_call_that_raises_still_leaves_a_ledger_record():
         s._call_tool("run_assay", {"assay": "binding"})            # missing `compounds`
     recs = [r for r in s.store.branch_records("mcp-session") if (r.decision or {}).get("kind") == "tool_call"]
     assert [r.decision["tool"] for r in recs] == ["run_assay"] and recs[0].decision["status"] == "error"
+
+
+# ---- autonomy levels apply to the tools a model is offered ----
+
+def test_under_observe_the_lab_tools_are_not_offered_and_cannot_be_called():
+    offered = {t["name"] for t in AgentToolkit.schemas("observe")}
+    assert not offered & AgentToolkit.LAB_TOOLS and "propose_hypothesis" in offered and "predict_admet" in offered
+    assert {"submit_assay", "request_analysis"} <= {t["name"] for t in AgentToolkit.schemas("gate")} == {t["name"] for t in AgentToolkit.schemas("act")}
+    tk = AgentToolkit(None, SqliteProvenanceStore(), system_actor(), branch_id="t", gate=GATE, approved={"A"}, autonomy="observe")
+    ex = tk.executors()
+    assert "submit_assay" not in ex and "request_analysis" not in ex and "propose_hypothesis" in ex
+    with __import__("pytest").raises(KeyError):
+        ex["submit_assay"](compounds=["A"], assay_type="binding")

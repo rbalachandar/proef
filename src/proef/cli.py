@@ -380,6 +380,7 @@ def _campaign_from_doc(cfg_doc: dict) -> "CampaignConfig":
                                          ["0.5uM", "2uM", "10uM", "40uM"])),
         budget=(ResourceBudget(**cfg_doc["budget"]) if cfg_doc.get("budget") else None),
         replan=bool(cfg_doc.get("replan", False)),
+        followups=bool(cfg_doc.get("followups", False)),
         modality=(cfg_doc.get("modality") or None),
         prediction_tools=(list(cfg_doc["prediction_tools"]) if cfg_doc.get("prediction_tools") else None),
         max_families=cfg_doc.get("max_families", 3),

@@ -15,7 +15,7 @@ from proef.api.v1 import schemas as S
 from proef.api.v1.deps import who
 from proef.api.v1.pauses import pauses_for
 from proef.api.launch import spawn_campaign
-from proef.api.v1.campaigns import (_funnel, _load, _reviews, _status,
+from proef.api.v1.campaigns import (_funnel, _load, _reviews, _status, _suggestions,
                                        _summary_of, _ws, testable)
 from proef.views.ids import row_status
 
@@ -58,7 +58,8 @@ def _digest(eid: str):
     """(CampaignDigest, [hypotheses]) for one campaign, no chain verify."""
     ws, row, detail, branch, recs = _load(eid)
     reviews = _reviews(recs)
-    hyps = [_summary_of(c, None, reviews) for c in testable(detail.get("cards"))]
+    suggestions = _suggestions(recs)
+    hyps = [_summary_of(c, None, reviews, suggestions) for c in testable(detail.get("cards"))]
     status = _status(detail.get("status") or row_status(row), recs)
     return S.CampaignDigest(
         id=eid, title=detail.get("objective") or row.get("question") or eid,
@@ -273,18 +274,21 @@ def _hand_run(p: dict, doc: dict, body: S.CampaignCreate, user: str) -> S.Campai
                              program=S.ProgramRef(slug=p["slug"], name=p["name"]))
 
 
-def campaign_doc(p: dict, body: S.CampaignCreate, *, runs: int | None = None, hypotheses: int | None = None) -> dict:
+def campaign_doc(p: dict, body: S.CampaignCreate, *, runs: int | None = None, hypotheses: int | None = None,
+                 model_calls: int | None = None) -> dict:
     """The engine config for one campaign: the program's gate and caps, narrowed by what the request asks for.
-    `runs`/`hypotheses` carry a research tree leaf's own slice of the program's budget."""
+    `runs`/`hypotheses`/`model_calls` carry a research tree leaf's own slice of the program's budget."""
     lim = _limits(p.get("program") or {})
     doc = {**(p.get("program") or {}), "autonomy": body.autonomy,
            # a campaign may ask for less than the program allows, never more
            "k": min(body.k or lim.breadth, lim.breadth),
            "rounds": min(body.rounds or min(2, lim.max_rounds), lim.max_rounds),
            "replan": bool(body.replan and not [c for c in body.candidates if c.strip()]),
+           "followups": bool(body.followups and not [c for c in body.candidates if c.strip()]),
            "max_families": lim.max_families, "max_variants_per_family": lim.max_variants_per_family,
            "budget": {"max_total_runs": min(runs or lim.max_lab_runs, lim.max_lab_runs),
-                      "max_hypotheses_total": min(hypotheses or lim.max_hypotheses, lim.max_hypotheses)},
+                      "max_hypotheses_total": min(hypotheses or lim.max_hypotheses, lim.max_hypotheses),
+                      "max_model_calls": min(model_calls or lim.max_model_calls, lim.max_model_calls)},
            "candidates": ",".join(c.strip() for c in body.candidates if c.strip())}
     if body.objective:
         doc["objective"] = body.objective

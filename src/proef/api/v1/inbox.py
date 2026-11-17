@@ -49,7 +49,7 @@ def _review_items() -> list[S.InboxItem]:
                         hypothesis_id=h.id, candidate=h.head)
             if h.review is None:
                 out.append(S.InboxItem(
-                    **base, title=f"{h.head} abstained", ts=dg.updated_at,
+                    **base, title=f"{h.head} abstained", ts=dg.updated_at, suggestion=h.suggestion,
                     detail=(f"{v.unit_label or 'value'} {v.observed:.3g}{rng}: "
                             "the interval straddles the gate. Follow up, accept "
                             "the abstention, or drop it." if v and v.observed

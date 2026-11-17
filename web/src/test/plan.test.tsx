@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ToastProvider } from '../app/toast'
 import { PlanReview } from '../features/inbox/PlanReview'
 import { ResultsTable } from '../features/campaign/ResultsTable'
+import { SuggestionNote } from '../features/inbox/ReviewControls'
 
 vi.mock('../api/hooks', () => ({ useDecideApproval: () => ({ mutate: vi.fn(), isPending: false, error: null }) }))
 
@@ -86,5 +87,32 @@ describe('results table', () => {
     expect(screen.getByText('atp_site', { selector: 'span' })).toBeInTheDocument()
     expect(screen.getByText('covalent')).toBeInTheDocument()
     expect(screen.queryAllByText('atp_site')).toHaveLength(1)        // gefitinib's row is not labelled: it is not repeated
+  })
+})
+
+describe('model suggestion on an abstained result', () => {
+  const sug = (over: object) => ({ action: 'follow_up', ok: true, status: 'ok', reasons: [], replicates: 6, replicates_requested: 6, concentrations: ['0.5uM', '5uM', '20uM', '80uM'], why: 'bracket the gate', ran: false, ...over }) as never
+
+  it('is labelled as a suggestion, shows the follow-up it proposes, and says when it ran', () => {
+    render(<SuggestionNote s={sug({ ran: true })} />)
+    const note = screen.getByRole('note')
+    expect(note).toHaveTextContent('Model suggestion, not a decision')
+    expect(note).toHaveTextContent('follow up, 6 replicates, doses 0.5 to 80 µM')
+    expect(note).toHaveTextContent('A follow-up run was made from it')
+    expect(note).toHaveTextContent('“bracket the gate”')
+  })
+
+  it('says so when the lab cannot take the replicate request, and when a suggestion failed its checks', () => {
+    const { rerender } = render(<SuggestionNote s={sug({ replicates: null, reasons: ['this lab does not take a replicate request'] })} />)
+    expect(screen.getByRole('note')).toHaveTextContent('6 replicates requested')
+    expect(screen.getByRole('note')).toHaveTextContent('does not take a replicate request')
+    rerender(<SuggestionNote s={sug({ ok: false, status: 'does_not_bracket_gate', reasons: ['the ladder does not bracket the gate'] })} />)
+    expect(screen.getByRole('note')).toHaveTextContent('did not pass the checks: the ladder does not bracket the gate')
+  })
+
+  it('leaves accept and drop as suggestions with no run claim', () => {
+    render(<SuggestionNote s={sug({ action: 'accept', concentrations: null, replicates: null, replicates_requested: null })} />)
+    expect(screen.getByRole('note')).toHaveTextContent('Suggests accept as inconclusive.')
+    expect(screen.getByRole('note')).not.toHaveTextContent('follow-up run was made')
   })
 })

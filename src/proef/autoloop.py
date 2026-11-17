@@ -49,6 +49,7 @@ class ResourceBudget:
     max_total_runs: int = 50             # lab runs (incl. confirmations)
     max_hypotheses_total: int = 30       # across all rounds
     max_confirmations: int = 10
+    max_model_calls: int = 200           # model calls across proposals, re-plans, the critic and the reviewer
     wall_clock_secs: float | None = None
 
     def lab_runs_used(self, store: ProvenanceStore, problem_id: str) -> int:
@@ -71,6 +72,7 @@ class CampaignConfig:
     max_variants_per_family: int = 3
     prediction_tools: list[str] | None = None   # prediction tools the operator enables (priors, never evidence)
     modality: str | None = None            # selects the domain pack (assays, prompt wording); None = small molecule
+    followups: bool = False                # after each round the model suggests what to do with each abstained hypothesis
     replan: bool = False                   # after each round the model proposes the next hypotheses from the results
     critic_model: Any = None               # a second model that critiques the plan before the person reads it (advisory)
     plan_covers_submissions: bool = True   # an approved plan also approves its own lab submissions
@@ -434,10 +436,12 @@ def _design_protocol(h, cfg, problem, adaptive, screen_conc):
                       concentration="10uM") for i in (1, 2)],
         reagents=[ReagentSpec(name="assay-buffer", amount="5 mL",
                               bsl_level=1)],
+        # a follow-up may ask for its own replicate count: a request, honored only by a lab that declares support
+        constraints=({"replicates": int(h.metadata["replicates"])} if (h.metadata or {}).get("replicates") else {}),
     )
     h.design = ExperimentDesign(
         assay_type=str(coerce_assay_type(h.assay_type).value), concentrations=list(_doses(h, cfg)),
-        replicates=3, controls=["negative"],
+        replicates=int((h.metadata or {}).get("replicates") or 3), controls=["negative"],
         protocol_id=protocol.protocol_id)
     return protocol
 
@@ -811,6 +815,8 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
         "rounds": cfg.rounds,
         "model": getattr(cfg.model, "model", None),
     })
+    from proef.model_guard import govern_models
+    cfg = govern_models(cfg, store, actor, gov, say)     # model calls obey halt, pause and the call budget, like lab submissions
     portfolio, score_fn = _propose_and_score(
         cfg, tracker, problem, store, flywheel, say, lab_ctx)
     _crit, _acq_log = _declare_criteria(problem, lab, portfolio, cfg.modality)
@@ -832,6 +838,7 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
 
     # 1. rounds: select -> design+submit -> analyze; each round feeds the next
     synth_cache: dict[str, dict] = {}
+    followed_up: set[str] = set()       # candidates a follow-up has already been made for (one each)
     _install_budget_gate(gateway, cfg, store, actor, say)
 
     # per-experiment outbox: two campaigns on one inbox would collide on
@@ -843,10 +850,10 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
         if adaptive else None
 
     def _export(run_id: str, candidate: str,
-                concs: list[str] | None = None) -> None:
+                concs: list[str] | None = None, replicates: int | None = None) -> None:
         _export_instrument_file(inbox, run_id, candidate,
                                 concs or list(cfg.concentrations), lab=lab,
-                                noise_variant=cfg.noise_variant)
+                                noise_variant=cfg.noise_variant, replicates=replicates)
 
     messages: list[str] = []
     agent = AutoAnalysisAgent(notify=(lambda m: (messages.append(m), say(f"[agent] {m}"))),
@@ -989,9 +996,10 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
                 f"{getattr(lab, 'name', 'instrument')} "
                 f"({len(_doses(h, cfg)) if not adaptive else 1} dose"
                 f"{'s' if (len(_doses(h, cfg)) if not adaptive else 1) > 1 else ''}"
-                f" × 3 replicates)")
+                f" × {int((h.metadata or {}).get('replicates') or getattr(lab, 'replicates', 3) or 3)} replicates)")
             _export(run_id, h.candidate,
-                    [screen_conc] if adaptive else _doses(h, cfg))
+                    [screen_conc] if adaptive else _doses(h, cfg),
+                    replicates=int((h.metadata or {}).get("replicates") or 0) or None)
 
         _collect_round(monitor, agent, selected, adaptive, cfg, terminal)
         verdicts_r = {h.candidate: h.status for h in selected}
@@ -1004,6 +1012,14 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
                         "picked": sorted(verdicts_r),
                         "verdicts": verdicts_r})
         tested.extend(selected)
+        if cfg.followups and cfg.model is not None:
+            new_f = _followups(cfg, tracker, selected, store, actor, say, lab, _crit, round_no,
+                               followed_up, runs_left=_runs_left(cfg, store, problem), last_round=round_no >= max(1, cfg.rounds),
+                               tested=tested)
+            remaining.extend(new_f)
+            _install_score_for_new(new_f, tracker)
+            if new_f and cfg.plan_approver is not None and cfg.plan_covers_submissions and isinstance(gateway, _GatedGateway):
+                gateway.covered |= {h.candidate for h in new_f}
         if cfg.replan and cfg.hypothesis_source == "agent" and round_no < max(1, cfg.rounds):
             new = _replan(cfg, tracker, problem, store, actor, flywheel, tested, round_no, say, lab_ctx)
             remaining.extend(new)
@@ -1024,6 +1040,60 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
                           recommendations=[m for m in messages
                                            if "recommendation" in m],
                           rounds_run=len(history), history=history)
+
+
+def _runs_left(cfg, store, problem) -> int:
+    budget = cfg.budget or ResourceBudget()
+    return max(0, budget.max_total_runs - budget.lab_runs_used(store, problem.problem_id or ""))
+
+
+def _followups(cfg, tracker, round_hyps, store, actor, say, lab, crit, round_no, followed_up, runs_left, last_round, tested):
+    """The model SUGGESTS what to do with each abstained hypothesis; code validates and records every suggestion. Only a
+    validated follow-up can run: under `act` directly, under `gate` after a person approves it in plan review, never under
+    `observe`. Accept and drop are a person's recorded decision and are never executed here. Returns the new hypotheses."""
+    from proef.followup import propose_followups, validate_followup
+    abstained = {h.hypothesis_id: h for h in round_hyps if h.status == "inconclusive"}
+    if not abstained:
+        return []
+    gate_txt = "; ".join(c.description for c in cfg.problem.constraints if c.kind == "hard")
+    try:
+        raw = propose_followups(cfg.model, list(abstained.values()), gate_txt)
+    except Exception as exc:  # noqa: BLE001 - a refused or failed suggestion must not stop the campaign
+        say(f"follow-up suggestions unavailable ({type(exc).__name__}): the abstentions wait for a person")
+        return []
+    ctx = {"abstained": abstained, "gate": crit, "runs_left": runs_left, "followed_up": followed_up, "seen": set(),
+           "supports_replicates": bool(getattr(lab, "supports_replicates", False))}
+    env = Envelope(experiment_branch_id=f"problem/{cfg.problem.problem_id}")
+    proposals = [validate_followup(r, ctx) for r in raw]
+    for p in proposals:
+        store.append(record_for(env, EventType.gate_decision, actor, decision={**p, "kind": "followup_proposal", "proposal_kind": p["kind"], "round": round_no}))
+    ok = [p for p in proposals if p["validation"]["ok"]]
+    say(f"model suggested {len(proposals)} follow-up action(s) on {len(abstained)} abstained hypothes"
+        f"{'is' if len(abstained) == 1 else 'es'}: {len(ok)} valid")
+    runnable = [p for p in ok if p["executes"]]
+    if cfg.autonomy == "observe" or last_round or not runnable:
+        return []        # observe runs nothing, and a last-round follow-up has no round left to run in: suggestions only
+    new = []
+    for p in runnable:
+        h = abstained[p["hypothesis_id"]]
+        pr = p["params"]
+        fu = tracker.propose(
+            statement=f"{h.candidate}: follow-up with {pr.get('replicates_requested')} replicates (after round {round_no})",
+            candidate=h.candidate, assay_type=h.assay_type, predicted=h.predicted, criteria=h.criteria.model_copy(),
+            rationale=p["rationale"], mechanism=h.mechanism, refutation_condition=h.refutation_condition,
+            round_no=round_no + 1, branch_id=h.branch_id, family=h.family or "",
+            followup_of=h.hypothesis_id,
+            **({"replicates": pr["replicates"]} if pr.get("replicates") else {}),
+            **({"protocol": {"concentrations": pr["concentrations"], "why": pr.get("why", "")}} if pr.get("concentrations") else {}),
+            **({"lab_check": h.metadata["lab_check"]} if (h.metadata or {}).get("lab_check") else {}))
+        fu.problem_id, fu.family = h.problem_id, h.family
+        followed_up.add(h.candidate)
+        new.append(fu)
+    if cfg.autonomy == "gate" and cfg.plan_approver is not None:
+        new, declined = _plan_gate(cfg, tracker, new, store, actor, say, label=f"follow-ups after round {round_no}", tested=tested)
+        if declined:
+            return []
+    return new
 
 
 def _install_score_for_new(new, tracker) -> None:
@@ -1159,7 +1229,7 @@ def _policy_select(cfg, remaining, tracker, say):
 
 def _export_instrument_file(inbox: Path, run_id: str, candidate: str,
                             concentrations: tuple[str, ...], lab: Any = None,
-                            noise_variant: int = 0) -> None:
+                            noise_variant: int = 0, replicates: int | None = None) -> None:
     """Stand-in for the instrument finishing: it drops its export in the
     outbox. Uses the lab's per-compound ground truth when available so the
     fitted IC50 reflects simulated pharmacology, not a fixed pattern."""
@@ -1167,7 +1237,7 @@ def _export_instrument_file(inbox: Path, run_id: str, candidate: str,
 
     time.sleep(0.1)
     rng = random.Random(f"{run_id}:{candidate}:v{noise_variant}")
-    n_rep = getattr(lab, "replicates", 3) if lab is not None else 3
+    n_rep = replicates or (getattr(lab, "replicates", 3) if lab is not None else 3)
     lines = ["Well ID,Compound,Conc (uM),RFU", "A1,ctrl,10,100", "A2,ctrl,10,104"]
     # property-gate campaigns: the export reads the lab's property true
     # value (dose-independent, straddles the gate) — NOT the IC50 curve

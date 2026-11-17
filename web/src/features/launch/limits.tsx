@@ -3,7 +3,7 @@ import { Input } from '../../ui/Field'
 
 export type Limits = Schemas['Limits']
 
-export const DEFAULT_LIMITS: Limits = { max_rounds: 3, max_lab_runs: 20, max_hypotheses: 12, max_families: 3, max_variants_per_family: 3, breadth: 3, max_depth: 2, max_subproblems: 8 }
+export const DEFAULT_LIMITS: Limits = { max_rounds: 3, max_lab_runs: 20, max_hypotheses: 12, max_families: 3, max_variants_per_family: 3, breadth: 3, max_depth: 2, max_subproblems: 8, max_model_calls: 200 }
 
 /** What each cap means, in a scientist's words. Hard caps: a campaign may use less, never more. */
 export const LIMIT_FIELDS: { key: keyof Limits; label: string; hint: string; max: number; min?: number }[] = [
@@ -13,6 +13,7 @@ export const LIMIT_FIELDS: { key: keyof Limits; label: string; hint: string; max
   { key: 'max_families', label: 'Families', hint: 'distinct mechanistic bets a model may propose', max: 8 },
   { key: 'max_variants_per_family', label: 'Variants per family', hint: 'analogs of one idea', max: 8 },
   { key: 'breadth', label: 'Per round', hint: 'hypotheses taken to the lab each round', max: 12 },
+  { key: 'max_model_calls', label: 'Model calls', hint: 'proposals, re-plans, the critic and the reviewer', max: 2000, min: 5 },
   { key: 'max_depth', label: 'Split depth', hint: 'how many levels an objective may be split into sub-problems', max: 3 },
   { key: 'max_subproblems', label: 'Sub-problems', hint: 'in one research tree, all levels together', max: 16, min: 2 },
 ]

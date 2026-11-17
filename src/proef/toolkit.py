@@ -136,10 +136,11 @@ class AgentToolkit:
     """
 
     def __init__(self, lab_gateway, store, actor, tpp=None,
-                 branch_id: str = "agentic-toolkit", gate=None, approved=(), modality=None):
+                 branch_id: str = "agentic-toolkit", gate=None, approved=(), modality=None, autonomy: str | None = None):
         """`gate`: the program's pre-registered SuccessCriteria (a person fixed it). `approved`: candidates a person
         approved in a plan. Both default to nothing, so the lab tools fail closed until a person supplies them."""
         self.gate = gate
+        self.autonomy = autonomy      # observe: the lab tools are not offered and not executable
         self.modality = modality      # the program's modality: which assays are dose-response is the pack's data
         self.approved = set(approved)
         self._hyps: dict[str, Any] = {}
@@ -177,7 +178,8 @@ class AgentToolkit:
         return self._retro
 
     def executors(self) -> dict[str, Callable]:
-        return {name: self._recorded(name, fn) for name, fn in self._raw_executors().items()}
+        return {name: self._recorded(name, fn) for name, fn in self._raw_executors().items()
+                if not (self.autonomy == "observe" and name in self.LAB_TOOLS)}
 
     def _recorded(self, name: str, fn: Callable) -> Callable:
         """Every tool call is a ledger record: tool, argument hash, result hash, actor. Refusals are recorded too."""
@@ -218,8 +220,15 @@ class AgentToolkit:
             "rank_variants": self._tool_rank_variants,
         }
 
+    # tools that reach the lab or write a verdict: not offered at all under `observe` ("reads, fits, recommends, submits nothing")
+    LAB_TOOLS = frozenset({"submit_assay", "request_analysis"})
+
     @staticmethod
-    def schemas() -> list[dict]:
+    def schemas(autonomy: str | None = None) -> list[dict]:
+        """The tools a model is offered. Under `observe` the lab tools are not in the list at all, so a model cannot ask for
+        what it was never shown (and `executors` refuses them too, in case it names one anyway)."""
+        if autonomy == "observe":
+            return [t for t in TOOL_SCHEMAS if t["name"] not in AgentToolkit.LAB_TOOLS]
         return TOOL_SCHEMAS
 
     # ---- implementations ------------------------------------------------

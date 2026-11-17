@@ -117,6 +117,7 @@ def start_tree(slug: str, body: S.TreeCreate, request: Request) -> S.TreeView:
     by = who(request)
     tree_id = f"tree-{uuid.uuid4().hex[:8]}"
     share_h = max(1, lim.max_hypotheses // len(leaves))
+    share_m = max(5, lim.max_model_calls // len(leaves))      # model calls are shared across leaves like lab runs
     campaigns: dict[str, str] = {}
     failed: list[str] = []
     for leaf in leaves:
@@ -124,7 +125,7 @@ def start_tree(slug: str, body: S.TreeCreate, request: Request) -> S.TreeView:
             sub_problem=S.SubProblem(objective=leaf.objective, metric=leaf.metric, direction=leaf.direction, gate=leaf.gate,
                                      priority=leaf.priority),
             autonomy=body.autonomy, rounds=body.rounds, replan=False)
-        cid = spawn_campaign(campaign_doc(p, c, runs=alloc.get(leaf.id), hypotheses=share_h), p["name"])
+        cid = spawn_campaign(campaign_doc(p, c, runs=alloc.get(leaf.id), hypotheses=share_h, model_calls=share_m), p["name"])
         (campaigns.__setitem__(leaf.id, cid) if cid else failed.append(leaf.id))
     from proef.adapters.store.sqlite import get_store
     from proef.core.contracts import Actor, ActorKind, Envelope, EventType

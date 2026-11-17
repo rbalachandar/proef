@@ -62,6 +62,8 @@ def build_cfg(doc: dict) -> dict:
             for c in candidates]
     else:
         cfg["hypothesis_source"] = "agent"
+        if doc.get("followups"):
+            cfg["followups"] = True       # the model suggests what to do with abstained hypotheses (validated by code)
         if doc.get("replan"):
             cfg["replan"] = True          # the model proposes follow-up hypotheses after each round (a person approves them)
     return cfg

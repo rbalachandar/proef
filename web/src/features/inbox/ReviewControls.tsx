@@ -14,8 +14,26 @@ const DONE: Record<Decision, string> = { follow_up: 'followed up', accept: 'acce
 /** Record a decision on an abstained candidate. "Follow up" starts the follow-up
  *  campaign FIRST and records the decision (linked to it) only once it started;
  *  accept / drop are recorded at once. Each is sealed in the ledger under YOUR name. */
-export function ReviewControls({ campaignId, hid, candidate, review }: {
-  campaignId: string; hid: string; candidate: string; review?: Schemas['Review'] | null
+const ACTION: Record<Schemas['Suggestion']['action'], string> = { follow_up: 'follow up', accept: 'accept as inconclusive', drop: 'drop' }
+
+/** What the model suggested, after the lab's checks. A suggestion only: a person records every decision. */
+export function SuggestionNote({ s }: { s: Schemas['Suggestion'] }) {
+  const ladder = s.concentrations?.length ? `, doses ${s.concentrations[0].replace('uM', '')} to ${s.concentrations[s.concentrations.length - 1].replace('uM', '')} µM` : ''
+  const reps = s.replicates_requested ? `, ${s.replicates_requested} replicates${s.replicates ? '' : ' requested'}` : ''
+  return (
+    <div role="note" className={`mb-2 border px-3 py-2 text-[13px] ${s.ok ? 'border-line bg-sunken' : 'border-warn/50 bg-warn-soft text-warn'}`}>
+      <b className="font-medium">Model suggestion, not a decision.</b>{' '}
+      {s.ok
+        ? <>Suggests <b className="font-medium">{ACTION[s.action]}</b>{s.action === 'follow_up' ? `${reps}${ladder}` : ''}.{s.ran && ' A follow-up run was made from it.'}</>
+        : <>Suggested {ACTION[s.action]}, but it did not pass the checks: {s.reasons.join(' ') || s.status}.</>}
+      {s.ok && s.reasons.length > 0 && <span className="block text-[11px] text-faint">{s.reasons.join(' ')}</span>}
+      {s.why && <span className="block text-[11px] text-faint">“{s.why}”</span>}
+    </div>
+  )
+}
+
+export function ReviewControls({ campaignId, hid, candidate, review, suggestion }: {
+  campaignId: string; hid: string; candidate: string; review?: Schemas['Review'] | null; suggestion?: Schemas['Suggestion'] | null
 }) {
   const m = useReviewHypothesis(campaignId)
   const toast = useToast()
@@ -48,6 +66,7 @@ export function ReviewControls({ campaignId, hid, candidate, review }: {
 
   return (
     <div>
+      {suggestion && <SuggestionNote s={suggestion} />}
       {showNote && <Input autoFocus value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (recorded with the decision)" aria-label="Decision note" className="mb-2" />}
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" variant="primary" disabled={m.isPending} onClick={() => setFu(true)}>Follow up…</Button>

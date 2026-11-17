@@ -264,8 +264,27 @@ def _reviews(recs) -> dict[str, S.Review]:
     return out
 
 
+def _suggestions(recs) -> dict[str, S.Suggestion]:
+    """The model's latest validated suggestion per hypothesis, and whether a follow-up was made from it."""
+    ran = {(r.decision or {}).get("followup_of") for r in recs
+           if r.event_type.value == "hypothesis_proposed" and (r.decision or {}).get("followup_of")}
+    out: dict[str, S.Suggestion] = {}
+    for r in recs:
+        d = r.decision or {}
+        if d.get("kind") != "followup_proposal" or not d.get("hypothesis_id"):
+            continue
+        v, pr = d.get("validation") or {}, d.get("params") or {}
+        out[str(d["hypothesis_id"])] = S.Suggestion(
+            action=d.get("action") if d.get("action") in ("follow_up", "accept", "drop") else "accept",
+            ok=bool(v.get("ok")), status=str(v.get("status", "")), reasons=list(v.get("reasons") or []),
+            replicates=pr.get("replicates"), replicates_requested=pr.get("replicates_requested"),
+            concentrations=pr.get("concentrations"), why=str(d.get("rationale") or "")[:300],
+            ran=d["hypothesis_id"] in ran)
+    return out
+
+
 def _summary_of(card, gate_label: str | None = None,
-                reviews: dict | None = None) -> S.HypothesisSummary:
+                reviews: dict | None = None, suggestions: dict | None = None) -> S.HypothesisSummary:
     v = card.get("verdict")
     verdict = None
     if v and v.get("status"):
@@ -286,7 +305,8 @@ def _summary_of(card, gate_label: str | None = None,
         gate_label=gate_label or card.get("gate_label"),
         selected=bool(card.get("selected")),
         review=(reviews or {}).get(card["key"])
-        or (reviews or {}).get(str(card.get("candidate"))))
+        or (reviews or {}).get(str(card.get("candidate"))),
+        suggestion=(suggestions or {}).get(card["key"]))
 
 
 def _funnel(hyps: list[S.HypothesisSummary]) -> S.Funnel:
@@ -538,7 +558,7 @@ def get_campaign(eid: str) -> S.CampaignDetail:
     rounds = _why_rounds(recs, detail.get("rounds") or [])
     tested_cands = {c for r in rounds for c in r.candidates}
     reviews = _reviews(recs)
-    hyps = [_summary_of(c, gate.label, reviews) for c in cards]
+    hyps = [_summary_of(c, gate.label, reviews, _suggestions(recs)) for c in cards]
     runs = sum(1 for r in recs if r.event_type.value == "lab_run"
                and (r.decision or {}).get("run_id"))
     progs = _program_index()
@@ -578,7 +598,7 @@ def get_hypothesis(eid: str, hid: str) -> S.HypothesisDetail:
             type="hypothesis-not-found", title="Hypothesis not found",
             detail=hid).model_dump())
     base = _summary_of(card, _gate(recs, detail.get("cards") or [], detail).label,
-                       _reviews(recs))
+                       _reviews(recs), _suggestions(recs))
     cand = card.get("candidate")
     mine = [r for r in recs
             if (r.decision or {}).get("hypothesis_id") == hid

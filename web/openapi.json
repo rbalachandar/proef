@@ -1421,6 +1421,12 @@
       "title": "Candidates",
       "type": "array"
      },
+     "followups": {
+      "default": false,
+      "description": "after each round the model suggests what to do with each abstained hypothesis. A follow-up it suggests runs only if valid, under 'act' or after approval under 'gate'. Accept and drop stay a person's decision. Needs a model",
+      "title": "Followups",
+      "type": "boolean"
+     },
      "k": {
       "anyOf": [
        {
@@ -2614,6 +2620,16 @@
       "title": "Statement",
       "type": "string"
      },
+     "suggestion": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Suggestion"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
      "verdict": {
       "anyOf": [
        {
@@ -2728,6 +2744,16 @@
      "statement": {
       "title": "Statement",
       "type": "string"
+     },
+     "suggestion": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Suggestion"
+       },
+       {
+        "type": "null"
+       }
+      ]
      },
      "verdict": {
       "anyOf": [
@@ -2860,6 +2886,16 @@
       "default": "pending",
       "title": "Status",
       "type": "string"
+     },
+     "suggestion": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/Suggestion"
+       },
+       {
+        "type": "null"
+       }
+      ]
      },
      "title": {
       "title": "Title",
@@ -3046,6 +3082,14 @@
       "maximum": 500.0,
       "minimum": 1.0,
       "title": "Max Lab Runs",
+      "type": "integer"
+     },
+     "max_model_calls": {
+      "default": 200,
+      "description": "model calls: proposals, re-plans, the critic and the reviewer. A research tree shares it across its sub-problems",
+      "maximum": 2000.0,
+      "minimum": 5.0,
+      "title": "Max Model Calls",
       "type": "integer"
      },
      "max_rounds": {
@@ -3666,6 +3710,7 @@
       "enum": [
        "ok",
        "unknown_tool",
+       "untrusted_tool",
        "wrong_modality",
        "no_input",
        "invalid_input",
@@ -3937,6 +3982,7 @@
        "max_families": 3,
        "max_hypotheses": 12,
        "max_lab_runs": 20,
+       "max_model_calls": 200,
        "max_rounds": 3,
        "max_subproblems": 8,
        "max_variants_per_family": 3
@@ -4001,6 +4047,7 @@
        "max_families": 3,
        "max_hypotheses": 12,
        "max_lab_runs": 20,
+       "max_model_calls": 200,
        "max_rounds": 3,
        "max_subproblems": 8,
        "max_variants_per_family": 3
@@ -4199,6 +4246,7 @@
        "max_families": 3,
        "max_hypotheses": 12,
        "max_lab_runs": 20,
+       "max_model_calls": 200,
        "max_rounds": 3,
        "max_subproblems": 8,
        "max_variants_per_family": 3
@@ -4894,6 +4942,92 @@
      "objective"
     ],
     "title": "SubProblem",
+    "type": "object"
+   },
+   "Suggestion": {
+    "description": "What the model suggested for an abstained hypothesis, after code validated it. Never a decision: accept and drop are a\nperson's, and a follow-up runs only if valid and, under approvals, after a person approves it.",
+    "properties": {
+     "action": {
+      "enum": [
+       "follow_up",
+       "accept",
+       "drop"
+      ],
+      "title": "Action",
+      "type": "string"
+     },
+     "concentrations": {
+      "anyOf": [
+       {
+        "items": {
+         "type": "string"
+        },
+        "type": "array"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Concentrations"
+     },
+     "ok": {
+      "title": "Ok",
+      "type": "boolean"
+     },
+     "ran": {
+      "default": false,
+      "description": "a follow-up hypothesis was created from this suggestion",
+      "title": "Ran",
+      "type": "boolean"
+     },
+     "reasons": {
+      "default": [],
+      "items": {
+       "type": "string"
+      },
+      "title": "Reasons",
+      "type": "array"
+     },
+     "replicates": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "the replicate count the lab will run, when the lab honors a request",
+      "title": "Replicates"
+     },
+     "replicates_requested": {
+      "anyOf": [
+       {
+        "type": "integer"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Replicates Requested"
+     },
+     "status": {
+      "title": "Status",
+      "type": "string"
+     },
+     "why": {
+      "default": "",
+      "description": "the model's own words: shown, never trusted",
+      "title": "Why",
+      "type": "string"
+     }
+    },
+    "required": [
+     "action",
+     "ok",
+     "status"
+    ],
+    "title": "Suggestion",
     "type": "object"
    },
    "SystemStatus": {

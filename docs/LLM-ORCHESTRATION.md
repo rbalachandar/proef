@@ -187,12 +187,62 @@ what the campaign's lab cannot serve.
 13. Known and unchanged: the reference tool reports no uncertainty, so it cannot rank, and the registry is process-global.
 
 ### Phase 3: the model drives discretionary decisions inside the current loop
-- [ ] Which abstentions to follow up, what to re-plan, how many replicates to request within bounds. Each is a
-      proposal with a validation result, shown to the person under the same plan-review component.
-- [ ] Autonomy levels apply: `observe` exposes no submit tools, `gate` needs approval per proposal, `act` runs inside
-      the gates.
-- [ ] Budgets cover model calls and tool calls (`ResourceBudget`), and a campaign pause or global halt stops tool calls
-      too, not only lab submissions.
+
+Findings at the start of Phase 3 (checked in the code):
+- A follow-up today is a person's choice on an abstention (`human_review`: follow up, accept, drop) and a rule-based "what
+  next" (`NextStep`). No model proposes one. The model already proposes new hypotheses after a round (re-plan), reviewed by
+  a person.
+- Replicates are a lab property (`replicates=3` in the design and the simulator), not something a protocol can ask for.
+  `ProtocolSubmission.constraints` is a free dict, so a request can ride there without a contract change.
+- Halt and pause are enforced at the lab gateway only. A halted or paused campaign still calls the model (proposals, the
+  critic, the reviewer), and nothing caps model calls. `ResourceBudget` counts lab runs and hypotheses only.
+
+Split:
+
+**3A: governed model calls (first, because 3B and 3C add model calls)**
+- [x] Every model call in a campaign goes through a guard: halt refuses, a campaign or program pause holds until resumed,
+      a `max_model_calls` budget refuses when exhausted. Each call is a ledger record (role, count), each refusal too.
+- [x] A refused critic or reviewer is skipped and recorded, a refused proposal fails the campaign loudly, a refused
+      re-plan continues with the plan it has.
+- [x] The cap is the program's (`max_model_calls`, default 200, shown in the program limits) and a research tree shares it
+      across its sub-problems like lab runs. Carried by `campaign_doc`, `build_cfg` and the CLI.
+
+**3B: model-proposed follow-ups on abstentions (done)**
+- [x] A validated suggestion shape: kind, action, subject, parameters, the model's rationale (shown, never trusted) and
+      `validation {ok, status, reasons}`, the same form as the lab check and the predictions (`followup.py`).
+- [x] After each round the model suggests, per abstained hypothesis, one of a closed set: follow up, accept, drop. Code
+      validates: the action, that the hypothesis is one of the abstained ones listed, replicates between 3 and 12, a ladder
+      of 3 to 8 doses that brackets the hypothesis's own gate (in the assay's metric), a lab run left in the budget (each
+      valid follow-up spends one), one proposal per hypothesis and one follow-up per candidate.
+- [x] Sealed as `followup_proposal` records. The abstention card in the Decisions page and the campaign drawer shows
+      "Model suggestion, not a decision", what it proposes, whether it ran, and why one failed its checks.
+- [x] Off by default (`followups`), opt-in in the launch dialog, carried by `campaign_doc`, `build_cfg` and the CLI.
+
+**3C: executing a validated follow-up (done)**
+- [x] Only a valid follow-up runs. Accept and drop are a person's recorded decision and the engine never writes one (tested:
+      no `human_review` record from a campaign).
+- [x] Under `act` it becomes a hypothesis for the next round with its own designed ladder and replicate request, judged by
+      the program's gate. Under `gate` it goes through plan review labelled "follow-ups after round N", with the
+      already-tested warning, and a decline stops it. Under `observe`, and in the last round, it is a suggestion only.
+- [x] The replicate request travels in `ProtocolSubmission.constraints`. A lab honors it only if it declares support
+      (the simulator does). Otherwise the follow-up runs with the ladder, the validation says so, and the plan shows it.
+- [x] The toolkit's tool list follows the autonomy level: under `observe` the lab tools are not offered and not callable.
+- [x] Replay: a campaign that ran follow-ups reports "not reproducible", the same as a re-plan. Replaying them would need the
+      recorded proposals to rebuild a second hypothesis on the same candidate, which the replay's candidate-keyed rebuild
+      cannot represent yet. Recorded as a known limit.
+
+#### Phase 3 hole review (author's pass, before the independent review)
+1. A model naming a hypothesis that is not abstained, or inventing an id: rejected and recorded.
+2. A ladder that does not bracket the gate, replicates out of bounds or not a whole number: rejected.
+3. Two follow-ups validated against the same last run: the second is `no_budget`.
+4. The proposal record's `kind` was overwritten by the proposal's own kind, so the card and replay could not find it.
+   Found by the first end-to-end test. Fixed (`proposal_kind` carries the other).
+5. Validation checked the program-level metric name, so a dose-response ladder was never checked against the gate in the
+   assay's metric. Found by the same test. It now uses the hypothesis's own criterion.
+6. Model calls for follow-ups pass the 3A guard, so halt, pause and the call budget apply. Tested: a refused call leaves the
+   abstentions to a person and the campaign finishes.
+7. Known and open: replay of follow-ups (above), and follow-ups are suggested for abstained hypotheses only, not for a
+   preliminary claim that needs replicates.
 
 ### Phase 4: tool-calling orchestrator inside a state machine
 - [ ] The engine becomes an explicit state machine (plan, review, gates, run, analyze, verdict, decide). The model

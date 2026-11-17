@@ -58,6 +58,9 @@ def reproduce(branch: str, db_path: str = "proef.db",
                     # replay would choose different batches than the original did
                     **({"family": d["family"]} if d.get("family") else {}),
                     **({"smiles": d["smiles"]} if d.get("smiles") else {}),
+                    # the validator's verdict on the lab pick: a hypothesis the campaign's lab could not serve was never
+                    # submitted, and its replay must not submit it either
+                    **({"metadata": {"lab_check": d["lab_check"]}} if d.get("lab_check") else {}),
                 }
         elif et == "hypotheses_filtered" and d.get("kind") not in ("plan_review", "acquisition_selection"):
             for dec in d.get("decisions") or []:
@@ -153,6 +156,11 @@ def reproduce(branch: str, db_path: str = "proef.db",
         else:
             diffs.append({"candidate": cand, "recorded": old_v,
                           "replayed": new_v})
+    # the other direction: anything the replay judged that the original never did is a difference too. Before this, a
+    # replay that ran extra hypotheses was reported as a match, because only the recorded verdicts were compared.
+    for cand, new_v in sorted(report.verdicts.items()):
+        if cand not in recorded and new_v not in (None, "proposed"):
+            diffs.append({"candidate": cand, "recorded": None, "replayed": new_v})
     n = len(recorded)
     return {
         "status": "match" if not diffs and n else ("differs" if n else

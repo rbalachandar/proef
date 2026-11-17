@@ -101,16 +101,43 @@ Open follow-up: a second reader for the toolkit before Phase 3 gives a model mor
    (candidate, assay), recorded as `shared_measurement`.
 
 ### Phase 2: menu-based choice of instrument and tools
-- [ ] Registry contract for prediction tools (see DOMAIN-TOOLS): endpoint, unit, input, modality, domain, uncertainty,
-      version.
-- [ ] Build the menu from the operator's pool (`labselect.build_pool`) and the registry. One source for the menu and for
-      the validator.
-- [ ] The model picks per hypothesis from the menu, with a reason, or says nothing fits.
-- [ ] Validation in code: in the pool, capabilities cover the assay, biosafety level, in-domain, simulated versus
-      validated flagged. A failed pick is shown with its reason and never silently fixed.
-- [ ] Plan review shows pick, validation result and predictions (labelled as priors). "No instrument in the fence can
-      serve this" is its own state.
-- [ ] The approved picks are sealed. Replay uses them.
+
+Finding at the start of Phase 2: the engine selects ONE lab per campaign, at the start, before any hypothesis exists. A
+per-hypothesis instrument pick therefore cannot route a run to a different instrument. Multi-instrument routing is the
+open S-T5 item and is not part of this phase. Phase 2 validates the pick, states where the run will really go, and blocks
+what the campaign's lab cannot serve.
+
+**2A: instruments (done)**
+- [x] The menu is the operator's pool as data (`labselect.build_menu`, `menu_text`), labelled simulated, real or
+      hardware-validated. One source for the prompt and the validator.
+- [x] The model names an instrument per variant, or leaves it empty. The prompt lists the menu only when there is one, so
+      prompts without a pool are unchanged. A re-plan is shown the same menu.
+- [x] `check_pick` validates on facts and never reads the reasoning: in the pool, declares the assay, BSL, is where the
+      campaign runs. Statuses: ok, unstated, unverified, invented, lacks, other_instrument, cannot_run. A bad pick is
+      reported, never fixed silently.
+- [x] The check rides in the sealed proposal record (`lab_check`) and in the plan, per variant.
+- [x] Plan review shows "Runs on" for each hypothesis, the model's pick when it differs, and "Will not be submitted" for
+      what the campaign's lab cannot serve.
+- [x] The submit loop refuses a `cannot_run` hypothesis and records `lab_cannot_serve`. It never reaches the lab.
+- [x] Replay carries the recorded check, so it does not submit what the original refused to.
+
+**2B: prediction tools (open)**
+- [ ] Registry contract: endpoint, unit, direction, input, modality, applicability domain, uncertainty, version.
+- [ ] One reference tool, validated like the instruments.
+- [ ] Predictions shown in plan review, labelled as priors, and sealed.
+
+#### Phase 2A hole review
+1. A model naming an instrument that is not in the pool is rejected as `invented`, not mapped to a near match.
+2. A model naming a valid but different instrument does not move the run. The plan states `runs_on`, and the pick is flagged.
+3. A hypothesis the campaign's lab cannot serve could reach it. Now blocked at submit, recorded, and shown in the plan.
+4. Replay rebuilds hypotheses from the records, so without the recorded check it would have submitted the hypothesis the
+   original refused. Found by writing the replay test. Carried through.
+5. Pre-existing hole found on the way: `reproduce()` compared only the recorded verdicts, so a replay that ran extra
+   hypotheses reported a match. It now reports any verdict the original never had as a difference.
+6. A soft spot, by design: an instrument that declares no assay list cannot be checked. It is allowed and marked
+   `unverified` in the plan, not blocked, because blocking would stop every undeclared adapter.
+7. The check shape (`ok`, `status`, `reasons`) is the first `Proposal` validation result. Phase 3 follow-up proposals and
+   2B predictions should reuse it, not invent a second one.
 
 ### Phase 3: the model drives discretionary decisions inside the current loop
 - [ ] Which abstentions to follow up, what to re-plan, how many replicates to request within bounds. Each is a

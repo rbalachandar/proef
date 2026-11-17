@@ -66,7 +66,7 @@ Reply ONLY with JSON:
     "variants": [
       {{"statement": "falsifiable variant prediction",
         "candidate": "the {candidate_kind} or sample name only, e.g. {candidate_example}, with no prefix such as 'proposed'",
-        "assay_type": "binding",
+        "assay_type": "binding",{instrument_field}
         "predicted": "human-readable prediction",
         "predicted_value": 20.0,
         "rationale": "why this variant",
@@ -95,6 +95,7 @@ def propose_families_with_agent(
     notify: Callable[[str], None] | None = None,
     findings: str | None = None,
     modality: str | None = None,
+    instruments: dict | None = None,
 ) -> tuple[list[Hypothesis], dict[str, float]]:
     """max_total_hypotheses: hard cap on hypotheses this generation may add.
     existing_keys: (candidate, statement) pairs already tried — duplicates the
@@ -122,7 +123,19 @@ def propose_families_with_agent(
         guidance_block = ""
     from proef.modality import pack_or_default
     pack = pack_or_default(modality)
+    menu = (instruments or {}).get("menu") or []
+    runs_on = (instruments or {}).get("runs_on")
+    if menu:
+        from proef.labselect import menu_text
+        instrument_block = ("\n\nAVAILABLE INSTRUMENTS (the operator's fence: choose only from these; real and simulated "
+                            "are labelled)\n" + menu_text(menu) + "\nFor each variant name the instrument that would run it "
+                            "in \"instrument\", or leave it empty if none fits. The lab checks your pick against what each "
+                            "instrument declares, and a person sees the result.")
+        instrument_field = '\n        "instrument": "name from the list above, or empty",'
+    else:
+        instrument_block, instrument_field = "", ""
     prompt = PROMPT.format(
+        instrument_field=instrument_field,
         role=pack.prompt_role, mechanism_hint=pack.mechanism_hint,
         candidate_kind=pack.candidate_kind, candidate_example=pack.candidate_example,
         objective=problem.objective,
@@ -132,7 +145,7 @@ def propose_families_with_agent(
         candidates=json.dumps(candidates or [], indent=1)[:4000],
         max_families=max_families,
         max_variants_per_family=max_variants_per_family,
-    ) + ("\n\n" + guidance_block if guidance_block else "")
+    ) + instrument_block + ("\n\n" + guidance_block if guidance_block else "")
     if findings:
         prompt += ("\n\nRESULTS SO FAR (re-plan from these: do not repeat a refuted idea, "
                    "build on what held up, and pick candidates not yet tested)\n" + findings)
@@ -224,6 +237,12 @@ def propose_families_with_agent(
                 "variables": v.get("variables", {}),
                 "protocol": sanitize_protocol(v.get("protocol")),
             }
+            if menu:
+                # the model's pick is validated on FACTS (in the pool, declares the assay, is where this runs); its
+                # reasoning is never read. The result rides in the sealed proposal record.
+                from proef.labselect import check_pick
+                _chk = check_pick(v.get("instrument"), _assay, menu, runs_on)
+                spec["metadata"] = {"lab_pick": _chk["pick"], "lab_check": _chk}
             for k in ("mechanism", "refutation_condition", "citation",
                       "predicted_observables"):
                 if fam.get(k) is not None:

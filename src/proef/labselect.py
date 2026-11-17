@@ -130,6 +130,71 @@ def select_lab(pool: list, req: LabRequirement):
                    "eligible": [n for n, _, _ in eligible]}), refusals
 
 
+def build_menu(pool: list) -> list[dict]:
+    """What a model may choose an instrument from: the operator's pool as plain data. One source for the prompt and for
+    `check_pick`, so the menu and the validator cannot drift."""
+    out = []
+    for name, adapter in pool:
+        caps = normalize_caps(adapter)
+        out.append({"name": name, "assay_types": sorted(caps["assay_types"]), "readouts": sorted(caps["readouts"]),
+                    "bsl_max": caps["bsl_max"], "simulated": caps["simulated"],
+                    "hardware_validated": caps["hardware_validated"]})
+    return out
+
+
+def menu_text(menu: list[dict]) -> str:
+    """The menu as the prompt shows it. Real and simulated instruments are labelled, so a model sees the difference."""
+    lines = []
+    for m in menu:
+        kind = "hardware-validated" if m["hardware_validated"] else ("simulated" if m["simulated"] else "real, not validated")
+        bsl = f", BSL up to {m['bsl_max']}" if m.get("bsl_max") is not None else ""
+        lines.append(f"- {m['name']}: assays {', '.join(m['assay_types']) or 'not declared'}{bsl} ({kind})")
+    return "\n".join(lines)
+
+
+def check_pick(pick: str | None, assay_type: str, menu: list[dict], runs_on: str | None, max_bsl: int = 2) -> dict:
+    """Validate a model's instrument pick FACTS-FIRST: is the name in the pool, does the instrument declare the assay, and is
+    it the instrument this campaign actually runs on. The model's reasoning is never read. Never fixes a pick silently: it
+    reports `status`, `ok` and `reasons`, and `runs_on` is where the run will really go.
+
+    status: ok | unstated | unverified | invented | lacks | other_instrument | cannot_run"""
+    by_name = {m["name"]: m for m in menu}
+    pick = (pick or "").strip() or None
+
+    def serves(m: dict) -> bool:
+        declared = m["assay_types"]
+        return (not declared or assay_type in declared) and (m.get("bsl_max") is None or m["bsl_max"] >= max_bsl)
+
+    eligible = [m["name"] for m in menu if serves(m)]
+    out = {"pick": pick, "runs_on": runs_on, "eligible": eligible, "reasons": [], "flags": []}
+    if pick is not None and pick not in by_name:
+        return {**out, "status": "invented", "ok": False,
+                "reasons": [f"'{pick}' is not in the operator's pool ({', '.join(by_name) or 'empty'})"]}
+    if pick is not None and not serves(by_name[pick]):
+        why = []
+        if by_name[pick]["assay_types"] and assay_type not in by_name[pick]["assay_types"]:
+            why.append(f"{pick} declares no '{assay_type}' assay")
+        if by_name[pick].get("bsl_max") is not None and by_name[pick]["bsl_max"] < max_bsl:
+            why.append(f"{pick} BSL ceiling {by_name[pick]['bsl_max']} is below {max_bsl}")
+        return {**out, "status": "lacks", "ok": False, "reasons": why}
+    chosen = by_name.get(runs_on) if runs_on else None
+    if chosen is not None and not serves(chosen):
+        return {**out, "status": "cannot_run", "ok": False,
+                "reasons": [f"this campaign runs on {runs_on}, which declares no '{assay_type}' assay. "
+                            + (f"Instruments that do: {', '.join(eligible)}." if eligible else "No instrument in the pool does.")]}
+    if pick is not None and runs_on and pick != runs_on:
+        return {**out, "status": "other_instrument", "ok": False,
+                "reasons": [f"{pick} could run it, but this campaign runs on {runs_on}"]}
+    flags = []
+    if pick is not None and by_name[pick]["simulated"] and any(
+            by_name[n]["hardware_validated"] for n in eligible):
+        flags.append("simulated_over_validated")
+    if chosen is not None and not chosen["assay_types"]:
+        return {**out, "status": "unverified", "ok": True, "flags": flags,
+                "reasons": [f"{runs_on} declares no assay list, so this could not be checked"]}
+    return {**out, "status": "ok" if pick else "unstated", "ok": True, "flags": flags}
+
+
 CATALOG_PATH = Path(__file__).parent / "instruments.json"
 
 

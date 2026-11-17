@@ -109,6 +109,15 @@ export function PlanReview({ item, compact }: { item: Item; compact?: boolean })
                         {v.predicted && <span className="mt-0.5 block text-[11px] text-faint"><span className="font-medium">Predicts</span> · {v.predicted}</span>}
                         {v.rationale && <span className="block text-[11px] text-faint"><span className="font-medium">Why</span> · {v.rationale}</span>}
                         {v.protocol && <span className="block text-[11px] text-faint"><span className="font-medium">Designed test</span> · {v.protocol}</span>}
+                        {v.lab && (
+                          <span className={cn('block text-[11px]', v.lab.ok ? 'text-faint' : 'text-bad')}>
+                            <span className="font-medium">Runs on</span> · <span className="num">{v.lab.runs_on ?? 'unknown'}</span>
+                            {v.lab.pick && v.lab.pick !== v.lab.runs_on && <> (model chose <span className="num">{v.lab.pick}</span>)</>}
+                            {v.lab.status === 'unverified' && ', instrument declares no assay list'}
+                            {v.lab.flags.includes('simulated_over_validated') && ', simulated chosen over a validated instrument'}
+                            {!v.lab.ok && <> · {v.lab.status === 'cannot_run' ? 'Will not be submitted. ' : ''}{v.lab.reasons.join(' ')}</>}
+                          </span>
+                        )}
                       </span>
                     </label>
                   </li>

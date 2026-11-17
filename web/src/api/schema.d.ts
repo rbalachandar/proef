@@ -2141,6 +2141,45 @@ export interface components {
              */
             variants: components["schemas"]["PlanVariant"][];
         };
+        /**
+         * PlanLab
+         * @description Where a hypothesis would run and whether the model's instrument pick holds up. Checked on facts, not wording.
+         */
+        PlanLab: {
+            /**
+             * Eligible
+             * @description pool instruments that declare this assay
+             * @default []
+             */
+            eligible: string[];
+            /**
+             * Flags
+             * @default []
+             */
+            flags: string[];
+            /** Ok */
+            ok: boolean;
+            /**
+             * Pick
+             * @description the instrument the model named, from the operator's pool
+             */
+            pick?: string | null;
+            /**
+             * Reasons
+             * @default []
+             */
+            reasons: string[];
+            /**
+             * Runs On
+             * @description where the run will really go: the campaign's instrument
+             */
+            runs_on?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "unstated" | "unverified" | "invented" | "lacks" | "other_instrument" | "cannot_run";
+        };
         /** PlanNote */
         PlanNote: {
             /**
@@ -2194,6 +2233,7 @@ export interface components {
             candidate: string;
             /** Hypothesis Id */
             hypothesis_id: string;
+            lab?: components["schemas"]["PlanLab"] | null;
             /**
              * Predicted
              * @default

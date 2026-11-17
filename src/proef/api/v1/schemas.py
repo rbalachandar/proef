@@ -164,6 +164,18 @@ class PlanVariant(BaseModel):
     rationale: str = ""
     assay: str = ""
     protocol: str = Field("", description="the dose ladder the model designed, as one line")
+    lab: PlanLab | None = None
+
+
+class PlanLab(BaseModel):
+    """Where a hypothesis would run and whether the model's instrument pick holds up. Checked on facts, not wording."""
+    pick: str | None = Field(None, description="the instrument the model named, from the operator's pool")
+    runs_on: str | None = Field(None, description="where the run will really go: the campaign's instrument")
+    status: Literal["ok", "unstated", "unverified", "invented", "lacks", "other_instrument", "cannot_run"]
+    ok: bool
+    reasons: list[str] = []
+    flags: list[str] = []
+    eligible: list[str] = Field([], description="pool instruments that declare this assay")
 
 
 class PlanFamily(BaseModel):

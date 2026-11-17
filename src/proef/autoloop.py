@@ -166,13 +166,20 @@ def announced_branches() -> dict:
 
 
 def _select_lab(cfg, lab, store, actor, approver, say):
-    """S-T5: pick the lab from the operator-declared pool (no-op without one)."""
+    """S-T5: pick the lab from the operator-declared pool (no-op without one).
+    Returns (lab, menu, runs_on): the instruments a model may choose from, and the one this campaign runs on."""
     # S-T5: the pool is the operator's fence; this matcher only picks
     # WITHIN it, and the decision — with every refusal reason — is
     # sealed before any lab acts.
+    menu: list[dict] = []
+    runs_on = getattr(lab, "name", None) or "lab"
+    from proef.labselect import build_menu
+    if not cfg.labs:
+        menu = build_menu([(runs_on, lab)]) if lab is not None else []
     if cfg.labs:
         from proef.labselect import LabRequirement, build_pool, select_lab
         pool = build_pool(cfg.labs)
+        menu = build_menu(pool)
         req = LabRequirement.build(cfg.lab_requirement)
         if not req.assay_types and not req.readouts and cfg.hypotheses:
             req = LabRequirement(
@@ -220,10 +227,11 @@ def _select_lab(cfg, lab, store, actor, approver, say):
                     f"lab choice '{sel.name}' declined by the approver — "
                     f"campaign refused (eligible were "
                     f"{sel.rationale['eligible']})")
+        runs_on = sel.name
         say(f"lab: '{sel.name}' selected from a pool of {len(pool)} "
             f"(simulated={sel.rationale['chosen']['simulated']}); "
             f"decision sealed")
-    return lab
+    return lab, menu, runs_on
 
 
 def _build_gateway(cfg, lab, safety, store, actor, approver, say, gov):
@@ -273,7 +281,7 @@ def _unique_branch(cfg, store, say) -> None:
             f"campaign recorded separately as '{cfg.problem.problem_id}'")
 
 
-def _propose_and_score(cfg, tracker, problem, store, flywheel, say):
+def _propose_and_score(cfg, tracker, problem, store, flywheel, say, lab_ctx=None):
     """Hypothesis portfolio + the scoring function ranking it each round."""
     family_scores: dict[str, float] = {}
     if cfg.hypothesis_source == "agent":
@@ -291,7 +299,7 @@ def _propose_and_score(cfg, tracker, problem, store, flywheel, say):
             existing_keys={(h.candidate, h.statement) for h in tracker.hypotheses.values()},
             skill_guidance=cfg.skill_guidance,
             flywheel=flywheel,
-            notify=say)
+            notify=say, instruments=lab_ctx)
         say(f"resource budget: {remaining_runs}/{budget.max_total_runs} lab runs remaining")
         say(f"agent proposed {len(portfolio)} variant hypotheses")
         _base = cfg.score_fn or (
@@ -765,7 +773,8 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
     # records onto problem/<id>, which would otherwise make every campaign
     # with a lab pool look like a re-run of itself and get a '-2' suffix
     _unique_branch(cfg, store, say)
-    lab = _select_lab(cfg, lab, store, actor, approver, say)
+    lab, _menu, _runs_on = _select_lab(cfg, lab, store, actor, approver, say)
+    lab_ctx = {"menu": _menu, "runs_on": _runs_on}
 
     gateway = _build_gateway(cfg, lab, safety, store, actor, approver, say, gov)
 
@@ -790,7 +799,7 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
         "model": getattr(cfg.model, "model", None),
     })
     portfolio, score_fn = _propose_and_score(
-        cfg, tracker, problem, store, flywheel, say)
+        cfg, tracker, problem, store, flywheel, say, lab_ctx)
     _crit, _acq_log = _declare_criteria(problem, lab, portfolio, cfg.modality)
 
     # announce the branch for live streaming: the API watcher maps the
@@ -904,6 +913,17 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
         # sample name and a second plate that nothing reads.
         measured: dict[tuple[str, str], tuple[Any, str]] = {}
         for h in selected:
+            _lc = (h.metadata or {}).get("lab_check") or {}
+            if _lc.get("status") == "cannot_run":
+                # the plan said so before approval. A person can still approve the rest, but this one never reaches a lab
+                # that declares no such assay: refused and recorded, not run on a wrong instrument
+                store.append(record_for(
+                    Envelope(experiment_branch_id=f"problem/{problem.problem_id}"), EventType.gate_decision, actor,
+                    decision={"kind": "lab_cannot_serve", "candidate": h.candidate, "assay_type": h.assay_type,
+                              "runs_on": _lc.get("runs_on"), "eligible": _lc.get("eligible"),
+                              "reasons": _lc.get("reasons")}))
+                say(f"{h.candidate}: not submitted. {', '.join(_lc.get('reasons') or [])}")
+                continue
             key = (h.candidate, h.assay_type or "binding")
             if key in measured:
                 first_protocol, first_run = measured[key]
@@ -950,7 +970,7 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
                         "verdicts": verdicts_r})
         tested.extend(selected)
         if cfg.replan and cfg.hypothesis_source == "agent" and round_no < max(1, cfg.rounds):
-            new = _replan(cfg, tracker, problem, store, actor, flywheel, tested, round_no, say)
+            new = _replan(cfg, tracker, problem, store, actor, flywheel, tested, round_no, say, lab_ctx)
             remaining.extend(new)
             _install_score_for_new(new, tracker)
             if cfg.plan_approver is not None and cfg.plan_covers_submissions and isinstance(gateway, _GatedGateway):
@@ -978,7 +998,7 @@ def _install_score_for_new(new, tracker) -> None:
         scores.setdefault(h.family or "", 0.5)
 
 
-def _replan(cfg, tracker, problem, store, actor, flywheel, tested, round_no, say):
+def _replan(cfg, tracker, problem, store, actor, flywheel, tested, round_no, say, lab_ctx=None):
     """After a round, the model proposes what to try next FROM the results; a person approves it
     (the same plan gate) before anything is added. Returns the approved new hypotheses."""
     from proef.hypothesis_agent import propose_families_with_agent
@@ -999,7 +1019,7 @@ def _replan(cfg, tracker, problem, store, actor, flywheel, tested, round_no, say
             max_total_hypotheses=room,
             existing_keys={(h.candidate, h.statement) for h in tracker.hypotheses.values()},
             skill_guidance=cfg.skill_guidance, flywheel=flywheel, notify=say, findings=findings,
-            modality=cfg.modality)
+            modality=cfg.modality, instruments=lab_ctx)
     except Exception as exc:  # noqa: BLE001 - a failed re-plan must not abort the campaign
         say(f"re-plan failed ({type(exc).__name__}): continuing with the existing plan")
         return []

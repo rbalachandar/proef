@@ -34,6 +34,23 @@ describe('plan review', () => {
     expect(note).not.toHaveTextContent('Same compound')
   })
 
+  it('shows where each hypothesis runs, and says plainly when one will not be submitted', () => {
+    const lab = (over: object) => ({ pick: null, runs_on: 'plate-reader', status: 'ok', ok: true, reasons: [], flags: [], eligible: ['plate-reader'], ...over })
+    const p = {
+      n_hypotheses: 3, warnings: [],
+      families: [{ id: 'f', claim: 'c', mechanism: 'm', refuted_if: 'r', variants: [
+        { ...variant('a', 'erlotinib'), lab: lab({}) },
+        { ...variant('b', 'gefitinib'), lab: lab({ pick: 'virtual-lab', status: 'other_instrument', ok: false, reasons: ['virtual-lab could run it, but this campaign runs on plate-reader'] }) },
+        { ...variant('c', 'afatinib'), lab: lab({ status: 'cannot_run', ok: false, reasons: ['this campaign runs on plate-reader, which declares no cytotoxicity assay.'] }) },
+      ] }],
+    } as never
+    wrap(<PlanReview item={{ id: 'x', title: 't', ts: 1, plan: p }} />)
+    expect(screen.getAllByText('Runs on')).toHaveLength(3)
+    expect(screen.getByText(/model chose/)).toBeInTheDocument()
+    expect(screen.getByText(/Will not be submitted/)).toBeInTheDocument()
+    expect(screen.getByText(/declares no cytotoxicity assay/)).toBeInTheDocument()
+  })
+
   it('shows no warning when every compound appears once', () => {
     wrap(<PlanReview item={{ id: 'x', title: 't', ts: 1, plan: plan([]) }} />)
     expect(screen.queryByRole('note')).toBeNull()

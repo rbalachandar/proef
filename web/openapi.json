@@ -3510,6 +3510,83 @@
     "title": "PlanFamily",
     "type": "object"
    },
+   "PlanLab": {
+    "description": "Where a hypothesis would run and whether the model's instrument pick holds up. Checked on facts, not wording.",
+    "properties": {
+     "eligible": {
+      "default": [],
+      "description": "pool instruments that declare this assay",
+      "items": {
+       "type": "string"
+      },
+      "title": "Eligible",
+      "type": "array"
+     },
+     "flags": {
+      "default": [],
+      "items": {
+       "type": "string"
+      },
+      "title": "Flags",
+      "type": "array"
+     },
+     "ok": {
+      "title": "Ok",
+      "type": "boolean"
+     },
+     "pick": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "the instrument the model named, from the operator's pool",
+      "title": "Pick"
+     },
+     "reasons": {
+      "default": [],
+      "items": {
+       "type": "string"
+      },
+      "title": "Reasons",
+      "type": "array"
+     },
+     "runs_on": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "where the run will really go: the campaign's instrument",
+      "title": "Runs On"
+     },
+     "status": {
+      "enum": [
+       "ok",
+       "unstated",
+       "unverified",
+       "invented",
+       "lacks",
+       "other_instrument",
+       "cannot_run"
+      ],
+      "title": "Status",
+      "type": "string"
+     }
+    },
+    "required": [
+     "status",
+     "ok"
+    ],
+    "title": "PlanLab",
+    "type": "object"
+   },
    "PlanNote": {
     "properties": {
      "severity": {
@@ -3608,6 +3685,16 @@
      "hypothesis_id": {
       "title": "Hypothesis Id",
       "type": "string"
+     },
+     "lab": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/PlanLab"
+       },
+       {
+        "type": "null"
+       }
+      ]
      },
      "predicted": {
       "default": "",

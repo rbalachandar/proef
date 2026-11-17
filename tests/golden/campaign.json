@@ -225,6 +225,7 @@
       "replicates": 1
      },
      "family": "",
+     "lab_check": null,
      "mechanism": "",
      "predicted": "2.0 uM",
      "predicted_by": null,
@@ -260,6 +261,7 @@
       "replicates": 1
      },
      "family": "",
+     "lab_check": null,
      "mechanism": "",
      "predicted": "5.0 uM",
      "predicted_by": null,
@@ -295,6 +297,7 @@
       "replicates": 1
      },
      "family": "",
+     "lab_check": null,
      "mechanism": "",
      "predicted": "8.0 uM",
      "predicted_by": null,
@@ -330,6 +333,7 @@
       "replicates": 1
      },
      "family": "",
+     "lab_check": null,
      "mechanism": "",
      "predicted": "11.0 uM",
      "predicted_by": null,
@@ -365,6 +369,7 @@
       "replicates": 1
      },
      "family": "",
+     "lab_check": null,
      "mechanism": "",
      "predicted": "90.0 uM",
      "predicted_by": null,
@@ -1671,6 +1676,7 @@
       "replicates": 1
      },
      "family": "",
+     "lab_check": null,
      "mechanism": "",
      "predicted": "2.0 uM",
      "predicted_by": null,
@@ -1706,6 +1712,7 @@
       "replicates": 1
      },
      "family": "",
+     "lab_check": null,
      "mechanism": "",
      "predicted": "5.0 uM",
      "predicted_by": null,
@@ -1741,6 +1748,7 @@
       "replicates": 1
      },
      "family": "",
+     "lab_check": null,
      "mechanism": "",
      "predicted": "8.0 uM",
      "predicted_by": null,
@@ -1776,6 +1784,7 @@
       "replicates": 1
      },
      "family": "",
+     "lab_check": null,
      "mechanism": "",
      "predicted": "11.0 uM",
      "predicted_by": null,
@@ -1811,6 +1820,7 @@
       "replicates": 1
      },
      "family": "",
+     "lab_check": null,
      "mechanism": "",
      "predicted": "90.0 uM",
      "predicted_by": null,

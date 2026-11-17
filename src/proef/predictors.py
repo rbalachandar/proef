@@ -127,17 +127,23 @@ class PredictorRegistry:
             if err:
                 out.append({**base, "status": "error", "reason": err})
                 continue
-            got = raw.get("values") if isinstance(raw, dict) and isinstance(raw.get("values"), dict) else {}
+            raw = raw if isinstance(raw, dict) else {}
+            got = raw.get("values") if isinstance(raw.get("values"), dict) else {}
             # iterate the DECLARED endpoints, never the tool's own dict, so a flood of keys costs nothing
             values = {e: got[e] for e in spec.endpoints if e in got and (_finite(got[e]) or isinstance(got[e], bool))}
             if not values:
                 out.append({**base, "status": "invalid_output", "reason": "no declared endpoint came back with a finite value"})
                 continue
+            # the tool's own extras are validated, not copied: a string where a bool belongs would break plan review, and an
+            # unbounded interval would be written into the sealed record
+            in_domain = raw.get("in_domain") if isinstance(raw.get("in_domain"), bool) else None
+            iv = raw.get("interval") if spec.uncertainty != "none" else None
+            interval = (tuple(float(x) for x in iv) if isinstance(iv, (list, tuple)) and len(iv) == 2
+                        and all(_finite(x) for x in iv) else None)
             out.append({**base, "status": "ok", "values": values,
                         "units": {e: spec.endpoints[e] for e in values},
-                        "in_domain": raw.get("in_domain"), "uncertainty": spec.uncertainty,
-                        "interval": raw.get("interval") if spec.uncertainty != "none" else None,
-                        "calibrated": spec.uncertainty != "none"})
+                        "in_domain": in_domain, "uncertainty": spec.uncertainty,
+                        "interval": interval, "calibrated": spec.uncertainty != "none" and interval is not None})
         return out
 
 

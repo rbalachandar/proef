@@ -258,7 +258,7 @@ def propose_families_with_agent(
                 # the model's pick is validated on FACTS (in the pool, declares the assay, is where this runs); its
                 # reasoning is never read. The result rides in the sealed proposal record.
                 from proef.labselect import check_pick
-                _chk = check_pick(v.get("instrument"), _assay, menu, runs_on)
+                _chk = check_pick(v.get("instrument"), _assay, menu, runs_on, int((instruments or {}).get("max_bsl", 2)))
                 spec["metadata"] = {**spec.get("metadata", {}), "lab_pick": _chk["pick"], "lab_check": _chk}
             for k in ("mechanism", "refutation_condition", "citation",
                       "predicted_observables"):

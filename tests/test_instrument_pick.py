@@ -58,7 +58,7 @@ def test_a_valid_instrument_that_is_not_where_the_campaign_runs_is_flagged():
 def test_the_campaign_lab_that_cannot_serve_the_assay_is_cannot_run_and_lists_who_can():
     c = check_pick(None, "cytotoxicity", MENU, "plate-reader")
     assert (c["status"], c["ok"]) == ("cannot_run", False)
-    assert "virtual-lab" in c["reasons"][0]
+    assert any("virtual-lab" in r for r in c["reasons"])
 
 
 def test_a_simulated_pick_over_a_validated_one_is_flagged():
@@ -227,3 +227,47 @@ def test_a_malformed_pick_never_crashes_and_is_bounded():
         assert c["status"] in ("ok", "unstated", "invented"), (weird, c["status"])
         assert c["pick"] is None or len(c["pick"]) <= 80
     assert check_pick(["plate-reader"], "binding", MENU, "plate-reader")["status"] == "invented"
+
+
+# ---- found by the independent review ----
+
+def test_a_catch_all_assay_is_never_blocked_by_a_capability_list():
+    """`custom` is what an unknown assay name falls back to, and the simulator runs it. Blocking it stopped every
+    property or materials campaign with agent-proposed hypotheses."""
+    menu = build_menu([("simulator", SimulatorLab(seed=1))])
+    for assay in ("custom", "plate_reader"):
+        c = check_pick(None, assay, menu, "simulator")
+        assert (c["status"], c["ok"]) == ("unstated", True), (assay, c)
+    assert check_pick(None, "cytotoxicity", build_menu([("s", SimulatorLab(seed=1, instruments={"assays": ["binding"]}))]), "s")["status"] == "cannot_run"
+
+
+def test_the_bsl_ceiling_is_the_campaigns_and_the_reason_names_the_cause():
+    menu = [{"name": "bsl1-rig", "assay_types": ["binding"], "readouts": [], "bsl_max": 1, "simulated": False, "hardware_validated": True}]
+    assert check_pick(None, "binding", menu, "bsl1-rig", max_bsl=1)["ok"] is True, "the operator set max_bsl 1: this instrument is fine"
+    c = check_pick(None, "binding", menu, "bsl1-rig", max_bsl=2)
+    assert c["status"] == "cannot_run" and "BSL ceiling" in c["reasons"][0] and "declares no" not in c["reasons"][0]
+
+
+def test_a_materials_campaign_with_agent_hypotheses_is_not_blocked_by_the_lab_check(tmp_path):
+    """The review's scenario: modality material, assay `custom`, no pool. Before the fix every hypothesis was skipped."""
+    problem = ProblemStatement(objective="o", constraints=[Constraint(name="conductivity", description="conductivity >= 1.0 mS/cm", kind="hard", limit=1.0, unit="mS/cm")])
+    store = SqliteProvenanceStore(str(tmp_path / "prov.db"))
+    model = Cap([_v("LLZO", "custom")])
+    cfg = CampaignConfig(problem=problem, hypothesis_source="agent", model=model, modality="material", autonomy="act", k=2, rounds=1,
+                         seed=1, inbox=str(tmp_path / "inbox"), poll_secs=0.05, flywheel=Flywheel(":memory:"))
+    report = run_campaign(cfg, SimulatorLab(seed=3), store, approver=lambda t: True, notify=lambda m: None)
+    recs = store.branch_records(f"problem/{report.problem_id}")
+    assert not [r for r in recs if (r.decision or {}).get("kind") == "lab_cannot_serve"]
+    assert any(r.event_type == EventType.lab_run for r in recs), "it ran"
+
+
+def test_a_lab_whose_capabilities_are_not_ready_does_not_stop_a_campaign_that_never_needed_the_menu(tmp_path):
+    class NotReady(SimulatorLab):
+        def list_capabilities(self):
+            raise RuntimeError("device not ready")
+    store = SqliteProvenanceStore(str(tmp_path / "prov.db"))
+    cfg = CampaignConfig(problem=PROBLEM(), hypotheses=[{"statement": "A binds", "candidate": "A", "assay_type": "binding",
+                         "predicted": "p", "predicted_value": 20.0}], autonomy="act", k=1, rounds=1, seed=1,
+                         inbox=str(tmp_path / "inbox"), poll_secs=0.05, flywheel=Flywheel(":memory:"))
+    report = run_campaign(cfg, NotReady(seed=3), store, approver=lambda t: True, notify=lambda m: None)
+    assert "A" in report.verdicts

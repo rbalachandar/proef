@@ -75,3 +75,24 @@ def test_the_run_budget_is_not_spent_on_the_duplicate(tmp_path):
     names = {(r.decision or {}).get("title", "") for r in recs if r.event_type == EventType.lab_run}
     assert used == len([r for r in recs if r.event_type == EventType.lab_run])
     assert len(names) == len([r for r in recs if r.event_type == EventType.lab_run]), "no repeated run title"
+
+
+def test_a_variant_that_tunes_the_test_differently_is_not_judged_from_the_first_ones_run(tmp_path):
+    """Found by the independent review: sharing dropped the later variant's own designed ladder and judged it from a run made
+    under different conditions. Now it waits, recorded, and is never judged from the wrong run."""
+    import tests.test_shared_measurement as me
+    plan = json.loads(json.dumps(me.PLAN))
+    a, b = plan["families"][0]["variants"][0], plan["families"][1]["variants"][0]       # H1 under two families
+    a["protocol"] = {"concentrations_uM": [0.5, 2, 10, 40], "why": "a"}
+    b["protocol"] = {"concentrations_uM": [0.1, 1, 5, 20, 80], "why": "b"}
+    saved = me.PLAN
+    me.PLAN = plan
+    try:
+        report, store, recs, msgs = me._run(tmp_path)
+    finally:
+        me.PLAN = saved
+    declined = [r for r in recs if (r.decision or {}).get("kind") == "shared_measurement_declined"]
+    assert len(declined) == 1 and declined[0].decision["candidate"] == "H1"
+    assert not [r for r in recs if (r.decision or {}).get("kind") == "shared_measurement"], "not shared: the conditions differ"
+    assert sum((r.decision or {}).get("title") == "test-H1" for r in recs if r.event_type == EventType.lab_run) == 1
+    assert any("waits for its own run" in m for m in msgs)

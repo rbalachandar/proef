@@ -69,8 +69,30 @@ Found by reading the toolkit as an adversary, then by writing each attack as a t
 8. Found by the full suite after the guards went in: two older tests (golden campaign, MCP halt) depended on the
    old behaviour. The golden diff was only the new `criteria_source` key.
 
-Open follow-up: a genuinely independent reader (a fresh session or `/code-review`) over Phases 0 to 2 before Phase 3 gives a
-model more tools. The author's own re-read found items 11 and 12 above, which is the reason to want a second one.
+#### Independent review of Phases 0 to 2 (done, `/code-review high`, before Phase 3)
+A reviewer with no stake in the code found nine problems, two of them regressions this work introduced. All are fixed, each
+with a test (mutation-checked unless noted):
+1. The lab check returned `cannot_run` for `custom` and `plate_reader`, which no capability list can declare. Every
+   materials or property campaign with agent hypotheses would have run nothing. Generic assays are no longer checked
+   against a capability list. Found by the reviewer, not by the author's own re-read.
+2. The check hard-coded a biosafety ceiling of 2 and ignored the campaign's `max_bsl`, and blamed the assay for what was a
+   BSL problem. It now uses the campaign's ceiling and names the real cause.
+3. `request_analysis` judged raw wells: no interval (a point estimate was classified as certain), no check that the run was
+   complete, and a model could re-judge a hypothesis by resubmitting it. Now: a Hill fit or replicate readings with an
+   interval, abstention when none can be made, completed runs only, one verdict per hypothesis.
+4. Shared measurement judged a variant from another variant's run, dropping its own designed test. A variant whose designed
+   test differs now waits for its own run (`shared_measurement_declined`).
+5. A rebuild from the ledger (`resume`) restored the placeholder criterion, so a plate submitted later abstained. The gate
+   assigned to each hypothesis is now a record (`criteria_assigned`) and `resume` applies it.
+6. The instrument menu was built for every campaign, so a lab whose capabilities were not ready stopped runs that never
+   used it. Built only for the agent path, and a failure there is reported, not fatal.
+7. A malformed `PROEF_MCP_GATE` crashed the MCP server. Now treated as unset.
+8. An MCP call that raised left no ledger record, unlike the toolkit. Now recorded.
+9. `in_domain` and `interval` from a tool were copied unvalidated: a string could break plan review for the whole plan.
+   Now validated, and a tool returning the wrong type is a status.
+
+Lesson for later phases: the author's own re-read found two holes in this code and the independent one found nine, including
+the most serious. Keep an independent review at the end of every phase from here on.
 
 ### Phase 1: domain packs as data
 - [x] The dose-response assay list has ONE definition (`modality.DOSE_RESPONSE`). The hypothesis agent, the plan, the

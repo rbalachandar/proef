@@ -265,3 +265,21 @@ def test_selection_is_identical_whatever_the_predictions_say():
     a, b = make(great), make(awful)
     pick = lambda hs: [h.candidate for h in tr.select_portfolio(problem, hs, lambda h: 0.5, k=2)]
     assert pick(a) == pick(b)
+
+
+# ---- found by the independent review ----
+
+def test_a_tools_extras_are_validated_not_copied():
+    """in_domain 'yes' would have broken plan review for the whole plan, and an unbounded interval would be sealed."""
+    r = _reg(_spec("a", uncertainty="interval", fn=lambda s: {"values": {"x": 1.0}, "in_domain": "yes", "interval": [0.5, 1, 2, 3]}),
+             _spec("b", uncertainty="interval", fn=lambda s: {"values": {"x": 1.0}, "in_domain": False, "interval": [0.5, math.inf]}),
+             _spec("c", fn=lambda s: ["not", "a", "dict"]),
+             _spec("d", uncertainty="interval", fn=lambda s: {"values": {"x": 1.0}, "in_domain": True, "interval": [0.5, 2.0]}))
+    a, b, c, d = r.run(["a", "b", "c", "d"], {"smiles": "CCO"}, ["a", "b", "c", "d"], "small molecule")
+    assert (a["in_domain"], a["interval"], a["calibrated"]) == (None, None, False)
+    assert (b["in_domain"], b["interval"]) == (False, None)
+    assert c["status"] == "invalid_output", "a tool that returns the wrong type is a status, not a crash"
+    assert (d["in_domain"], d["interval"], d["calibrated"]) == (True, (0.5, 2.0), True)
+    from proef.api.v1.schemas import PlanPrediction
+    for x in (a, b, d):
+        PlanPrediction(**{k: v for k, v in x.items() if k != "interval"})      # plan review's schema accepts every result

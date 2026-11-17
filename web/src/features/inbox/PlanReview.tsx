@@ -50,7 +50,7 @@ export function PlanReview({ item, compact }: { item: Item; compact?: boolean })
               {dup.map((w, i) => (
                 <span key={w.candidate}>{i > 0 && ', '}<span className="num">{w.candidate}</span> ({w.families.join(', ')})</span>
               ))}
-              . One measurement judges all of them, so removing one changes the claim, not the lab cost.
+              . One measurement judges them when their designed tests match. A variant with a different designed test waits for its own run.
             </div>
           )}
           {!!again.length && (

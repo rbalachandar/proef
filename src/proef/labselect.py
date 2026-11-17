@@ -152,6 +152,21 @@ def menu_text(menu: list[dict]) -> str:
     return "\n".join(lines)
 
 
+# Assay names that are catch-alls or instrument kinds, not capabilities an adapter can meaningfully declare: "custom" is what
+# an unknown assay name falls back to (coerce_assay_type), and "plate_reader" names an instrument. A capability list cannot
+# refuse them, so they are never checked against one (checking them blocked every property/materials campaign).
+GENERIC_ASSAYS = frozenset({"custom", "plate_reader"})
+
+
+def _why_not(m: dict, assay_type: str, max_bsl: int) -> list[str]:
+    why = []
+    if assay_type not in GENERIC_ASSAYS and m["assay_types"] and assay_type not in m["assay_types"]:
+        why.append(f"{m['name']} declares no '{assay_type}' assay")
+    if m.get("bsl_max") is not None and m["bsl_max"] < max_bsl:
+        why.append(f"{m['name']} BSL ceiling {m['bsl_max']} is below the campaign's {max_bsl}")
+    return why
+
+
 def check_pick(pick: str | None, assay_type: str, menu: list[dict], runs_on: str | None, max_bsl: int = 2) -> dict:
     """Validate a model's instrument pick FACTS-FIRST: is the name in the pool, does the instrument declare the assay, and is
     it the instrument this campaign actually runs on. The model's reasoning is never read. Never fixes a pick silently: it
@@ -168,8 +183,7 @@ def check_pick(pick: str | None, assay_type: str, menu: list[dict], runs_on: str
         pick = str(pick)[:80]      # a list or dict is not a name: it will be reported as not in the pool
 
     def serves(m: dict) -> bool:
-        declared = m["assay_types"]
-        return (not declared or assay_type in declared) and (m.get("bsl_max") is None or m["bsl_max"] >= max_bsl)
+        return not _why_not(m, assay_type, max_bsl)
 
     eligible = [m["name"] for m in menu if serves(m)]
     out = {"pick": pick, "runs_on": runs_on, "eligible": eligible, "reasons": [], "flags": []}
@@ -177,17 +191,12 @@ def check_pick(pick: str | None, assay_type: str, menu: list[dict], runs_on: str
         return {**out, "status": "invented", "ok": False,
                 "reasons": [f"'{pick}' is not in the operator's pool ({', '.join(by_name) or 'empty'})"]}
     if pick is not None and not serves(by_name[pick]):
-        why = []
-        if by_name[pick]["assay_types"] and assay_type not in by_name[pick]["assay_types"]:
-            why.append(f"{pick} declares no '{assay_type}' assay")
-        if by_name[pick].get("bsl_max") is not None and by_name[pick]["bsl_max"] < max_bsl:
-            why.append(f"{pick} BSL ceiling {by_name[pick]['bsl_max']} is below {max_bsl}")
-        return {**out, "status": "lacks", "ok": False, "reasons": why}
+        return {**out, "status": "lacks", "ok": False, "reasons": _why_not(by_name[pick], assay_type, max_bsl)}
     chosen = by_name.get(runs_on) if runs_on else None
     if chosen is not None and not serves(chosen):
         return {**out, "status": "cannot_run", "ok": False,
-                "reasons": [f"this campaign runs on {runs_on}, which declares no '{assay_type}' assay. "
-                            + (f"Instruments that do: {', '.join(eligible)}." if eligible else "No instrument in the pool does.")]}
+                "reasons": _why_not(chosen, assay_type, max_bsl)
+                + [f"Instruments that can: {', '.join(eligible)}." if eligible else "No instrument in the pool can."]}
     if pick is not None and runs_on and pick != runs_on:
         return {**out, "status": "other_instrument", "ok": False,
                 "reasons": [f"{pick} could run it, but this campaign runs on {runs_on}"]}

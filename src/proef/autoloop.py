@@ -175,12 +175,23 @@ def _select_lab(cfg, lab, store, actor, approver, say):
     menu: list[dict] = []
     runs_on = getattr(lab, "name", None) or "lab"
     from proef.labselect import build_menu
+
+    def _menu_of(pool_) -> list[dict]:
+        # only the agent path reads the menu, and a lab whose capabilities are not ready must not stop a campaign that
+        # never needed them
+        if cfg.hypothesis_source != "agent":
+            return []
+        try:
+            return build_menu(pool_)
+        except Exception as exc:  # noqa: BLE001
+            say(f"instrument menu unavailable ({type(exc).__name__}): picks will not be checked")
+            return []
     if not cfg.labs:
-        menu = build_menu([(runs_on, lab)]) if lab is not None else []
+        menu = _menu_of([(runs_on, lab)]) if lab is not None else []
     if cfg.labs:
         from proef.labselect import LabRequirement, build_pool, select_lab
         pool = build_pool(cfg.labs)
-        menu = build_menu(pool)
+        menu = _menu_of(pool)
         req = LabRequirement.build(cfg.lab_requirement)
         if not req.assay_types and not req.readouts and cfg.hypotheses:
             req = LabRequirement(
@@ -775,7 +786,8 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
     # with a lab pool look like a re-run of itself and get a '-2' suffix
     _unique_branch(cfg, store, say)
     lab, _menu, _runs_on = _select_lab(cfg, lab, store, actor, approver, say)
-    lab_ctx = {"menu": _menu, "runs_on": _runs_on}
+    lab_ctx = {"menu": _menu, "runs_on": _runs_on,
+               "max_bsl": int((cfg.lab_requirement or {}).get("max_bsl", 2))}   # the campaign's own ceiling, as select_lab uses
 
     gateway = _build_gateway(cfg, lab, safety, store, actor, approver, say, gov)
 
@@ -885,6 +897,14 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
             say(f"round {round_no}: nothing selected — stopping")
             break
         _assign_criteria(selected, _crit, cfg.modality)
+        if _crit is not None:
+            # the gate that replaced each proposal's criterion is itself a record, so a rebuild from the ledger (a plate
+            # submitted later) judges against the gate and not the placeholder the proposal was recorded with
+            for h in selected:
+                store.append(record_for(
+                    Envelope(experiment_branch_id=f"problem/{problem.problem_id}"), EventType.gate_decision, actor,
+                    decision={"kind": "criteria_assigned", "hypothesis_id": h.hypothesis_id, "candidate": h.candidate,
+                              "criteria": h.criteria.model_dump(), "source": "gate"}))
         say(f"round {round_no}: testing "
             f"{[h.candidate for h in selected]} "
             f"({len(remaining)} candidates remain)")
@@ -912,7 +932,7 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
         # design + submit this round. ONE measurement per (candidate, assay): the same compound proposed under two
         # families is measured once and every hypothesis on it is judged from that plate, not run twice with the same
         # sample name and a second plate that nothing reads.
-        measured: dict[tuple[str, str], tuple[Any, str]] = {}
+        measured: dict[tuple[str, str], tuple[Any, str, str]] = {}
         for h in selected:
             _lc = (h.metadata or {}).get("lab_check") or {}
             if _lc.get("status") == "cannot_run":
@@ -926,8 +946,22 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
                 say(f"{h.candidate}: not submitted. {', '.join(_lc.get('reasons') or [])}")
                 continue
             key = (h.candidate, h.assay_type or "binding")
+            # what the hypothesis asks to be measured: its designed dose ladder and its tuned variables
+            sig = json.dumps({"protocol": (h.metadata or {}).get("protocol"), "variables": (h.metadata or {}).get("variables")},
+                             sort_keys=True, default=str)
+            if key in measured and measured[key][2] != sig:
+                # a variant that tunes the test differently is NOT answered by the first one's run, so it is not judged from
+                # it. It stays proposed (recorded), and a later round can test it under its own conditions.
+                store.append(record_for(
+                    Envelope(experiment_branch_id=f"problem/{problem.problem_id}"), EventType.gate_decision, actor,
+                    decision={"kind": "shared_measurement_declined", "candidate": h.candidate, "hypothesis_id": h.hypothesis_id,
+                              "run_id": measured[key][1],
+                              "reason": "its designed test differs from the run already made for this compound, so that run "
+                                        "cannot answer it"}))
+                say(f"{h.candidate}: a different designed test from the one already run, so it waits for its own run")
+                continue
             if key in measured:
-                first_protocol, first_run = measured[key]
+                first_protocol, first_run, _sig = measured[key]
                 tracker.attach_test(h, first_protocol, first_run)
                 h.design.run_id = first_run
                 store.append(record_for(
@@ -950,7 +984,7 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
                 continue
             tracker.attach_test(h, protocol, run_id)
             h.design.run_id = run_id
-            measured[key] = (protocol, run_id)
+            measured[key] = (protocol, run_id, sig)
             say(f"started lab run {run_id} for {h.candidate} on "
                 f"{getattr(lab, 'name', 'instrument')} "
                 f"({len(_doses(h, cfg)) if not adaptive else 1} dose"

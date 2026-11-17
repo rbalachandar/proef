@@ -139,7 +139,11 @@ class McpSession:
     # ------------------------------------------------------------ tools
 
     def _call_tool(self, name: str, args: dict[str, Any]) -> dict[str, Any]:
-        out = self._dispatch(name, args)
+        try:
+            out = self._dispatch(name, args)
+        except Exception as exc:  # noqa: BLE001 - a failed or probing call leaves a record, as it does in the toolkit
+            self._log_call(name, args, json.dumps({"status": "error", "error": f"{type(exc).__name__}: {str(exc)[:120]}"}))
+            raise
         self._log_call(name, args, out["content"][0]["text"])
         return out
 
@@ -245,8 +249,11 @@ def _gate_from_env() -> Any:
     if not m:
         return None
     from proef.core.hypothesis import SuccessCriteria
-    return SuccessCriteria(metric=m.group(1), direction="min" if m.group(2) in ("<=", "<") else "max",
-                           threshold=float(m.group(3)))
+    try:
+        threshold = float(m.group(3))
+    except ValueError:        # "1e", "1.2.3": matches the pattern, is not a number. Unset, which refuses hypotheses clearly
+        return None
+    return SuccessCriteria(metric=m.group(1), direction="min" if m.group(2) in ("<=", "<") else "max", threshold=threshold)
 
 
 def _error(rid: Any, code: int, message: str) -> dict[str, Any]:

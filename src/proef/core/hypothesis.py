@@ -234,6 +234,10 @@ class HypothesisTracker:
                     family=d.get("family") or None,
                     metadata={"criteria_source": d.get("criteria_source", "explicit")})
                 t.hypotheses[hid] = h
+            elif ev == "gate_decision" and d.get("kind") == "criteria_assigned" and d.get("hypothesis_id") in t.hypotheses:
+                h = t.hypotheses[d["hypothesis_id"]]          # recency wins: the gate replaces what the proposal carried
+                h.criteria = SuccessCriteria(**d["criteria"])
+                h.metadata = {**(h.metadata or {}), "criteria_source": d.get("source", "gate")}
             elif ev in verdict_events and hid in t.hypotheses:
                 h = t.hypotheses[hid]
                 h.status = d.get("verdict") or h.status

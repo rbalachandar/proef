@@ -328,22 +328,68 @@ class AgentToolkit:
         return {"run_id": run_id, "status": result.status.value,
                 "z_prime": result.qc.z_prime, "measurements": measurements}
 
+    _TERMINAL = ("validated", "invalidated", "inconclusive", "confirmed", "refuted")
+
     def _tool_analysis(self, candidate: str, run_id: str) -> dict:
-        """The engine judges. The model names a candidate and a run and reads the outcome. It cannot write one."""
+        """The engine judges. The model names a candidate and a run and reads the outcome. It cannot write one, judge a
+        hypothesis twice, judge a run that is not finished, or get a verdict from a point estimate."""
         from proef.hypothesis_agent import clean_candidate
         name = clean_candidate(candidate)
         h = self._hyps.get(name)
         if h is None or h.criteria is None:
             return self._refuse("request_analysis", "no hypothesis with a registered gate for this candidate")
+        if h.status in self._TERMINAL:
+            # a model could otherwise resubmit an approved candidate and re-judge it until a favourable run appears
+            return self._refuse("request_analysis", f"this hypothesis already has a verdict ({h.status}); it is judged once")
         protocol = self._runs.get(run_id)
         if protocol is None or name not in {sp.sample_id for sp in protocol.samples}:
             return self._refuse("request_analysis", "that run is not this candidate's own")
         result = self.gateway.results(Envelope(experiment_branch_id=self.branch), run_id)
+        if getattr(result.status, "value", result.status) != "completed":
+            return self._refuse("request_analysis", f"the run is not complete ({getattr(result.status, 'value', result.status)})")
+        result, source = self._with_interval(h, name, result)
         self._tracker.attach_test(h, protocol, run_id)
         self._tracker.verdict(h, result)
         return {"status": "judged", "candidate": name, "verdict": h.status, "observed": h.observed_value,
-                "ci": list(h.observed_ci) if h.observed_ci else None, "recorded_by": "engine",
+                "ci": list(h.observed_ci) if h.observed_ci else None, "interval_source": source, "recorded_by": "engine",
                 "gate": {"metric": h.criteria.metric, "threshold": h.criteria.threshold}}
+
+    def _with_interval(self, h, name: str, result):
+        """The verdict rule abstains when the 95% interval straddles the gate, and with no interval a point value would be
+        judged as if it were certain. So the raw wells are turned into a value WITH an interval here (a Hill fit with a
+        bootstrap interval for dose-response, replicate readings for a property), and a run that cannot give one is
+        judged with no usable evidence, which abstains."""
+        from proef.adapters.lab.simulator import parse_concentration_um
+        from proef.fitting import fit_ic50_ci, replicate_ci
+        rows = [m for m in result.measurements if m.sample_id == name and "control" not in [f.value for f in m.flags]]
+        others = [m for m in result.measurements if m.sample_id != name]
+
+        def conc(m):
+            c = m.derived_metrics.get("conc_um")
+            return float(c) if isinstance(c, (int, float)) else parse_concentration_um((m.well or "").split("-")[-1])
+
+        def keep(new_rows, source):
+            return result.model_copy(update={"measurements": others + new_rows}), source
+
+        if h.criteria.metric == "ic50_um":
+            # a four-parameter Hill curve is underdetermined below four distinct doses: no fit, so no interval, so no call
+            fit = fit_ic50_ci([(conc(m), m.value) for m in rows]) if len({conc(m) for m in rows}) >= 4 else None
+            if not fit:
+                return keep([], "none")
+            first = rows[0]
+            dm = {k: v for k, v in first.derived_metrics.items() if k != "ic50_um"}
+            dm.update({"ic50_um": fit["ic50"], "ic50_ci_low": fit["ci_low"], "ic50_ci_high": fit["ci_high"]})
+            return keep([first.model_copy(update={"derived_metrics": dm})], "hill fit with bootstrap interval")
+        top = max((conc(m) for m in rows), default=None)
+        vals = [m.value for m in rows if conc(m) == top]
+        ci = replicate_ci(vals)
+        if not ci:
+            return keep([], "none")       # fewer than 3 readings at the top dose: no measurable spread, so no call
+        mean = sum(vals) / len(vals)
+        first = next(m for m in rows if conc(m) == top)
+        dm = {**first.derived_metrics, h.criteria.metric: round(mean, 4),
+              f"{h.criteria.metric}_ci_low": ci[0], f"{h.criteria.metric}_ci_high": ci[1]}
+        return keep([first.model_copy(update={"value": round(mean, 4), "derived_metrics": dm})], "replicate readings")
 
     def _tool_tpp(self, phase: str = "hit") -> dict:
         if not self.tpp:

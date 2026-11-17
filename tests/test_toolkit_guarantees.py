@@ -267,3 +267,94 @@ def test_the_toolkit_and_mcp_judge_a_materials_hypothesis_by_the_programs_metric
         s, call = _mcp(gate)
         s.modality = modality
         assert call("propose_hypothesis", {"statement": "s", "candidate": "LLZO", "assay_type": "binding", "predicted": "p"})["gate"]["metric"] == expect
+
+
+# ---- found by the independent review: request_analysis ----
+
+def _judged(approved, concentrations=None):
+    tk, ex, store = _tk(approved=approved)
+    ex["propose_hypothesis"](statement="s", candidate="A", assay_type="binding", predicted="p")
+    kw = {"concentrations": concentrations} if concentrations else {}
+    run = ex["submit_assay"](compounds=["A"], assay_type="binding", **kw)["run_id"]
+    return tk, ex, store, run
+
+
+def test_a_dose_response_verdict_carries_an_interval_not_a_point_estimate():
+    tk, ex, store, run = _judged({"A"}, ["0.5uM", "2uM", "10uM", "40uM", "100uM"])
+    out = ex["request_analysis"](candidate="A", run_id=run)
+    assert out["status"] == "judged" and out["interval_source"] == "hill fit with bootstrap interval"
+    assert out["ci"] and len(out["ci"]) == 2, "the rule saw an interval, so it could abstain"
+
+
+def test_a_run_that_cannot_give_an_interval_abstains_instead_of_judging_a_point_value():
+    """Two doses cannot be fitted. Before: the simulator's apparent IC50 on the well was classified as if certain."""
+    from proef.core.contracts import Envelope
+    tk, ex, store, run = _judged({"A"})
+    full = tk.gateway.results(Envelope(experiment_branch_id="t"), run)
+    two_doses = full.model_copy(update={"measurements": [m for m in full.measurements
+                                                         if m.derived_metrics.get("conc_um") in (0.5, 2.0) or "control" in [f.value for f in m.flags]]})
+    tk.gateway.results = lambda env, rid: two_doses
+    out = ex["request_analysis"](candidate="A", run_id=run)
+    assert (out["verdict"], out["interval_source"]) == ("inconclusive", "none")
+
+
+def test_a_hypothesis_is_judged_once_and_cannot_be_re_judged_by_resubmitting():
+    tk, ex, store, run = _judged({"A"}, ["0.5uM", "2uM", "10uM", "40uM", "100uM"])
+    assert ex["request_analysis"](candidate="A", run_id=run)["status"] == "judged"
+    run2 = ex["submit_assay"](compounds=["A"], assay_type="binding")["run_id"]
+    again = ex["request_analysis"](candidate="A", run_id=run2)
+    assert again["status"] == "refused" and "judged once" in again["reason"]
+    verdicts = [r for r in store.branch_records("t") if r.event_type in (
+        EventType.hypothesis_validated, EventType.hypothesis_invalidated, EventType.hypothesis_inconclusive)]
+    assert len(verdicts) == 1
+
+
+def test_a_run_that_is_not_complete_is_not_judged():
+    from proef.core.contracts import RunStatus
+    tk, ex, store, run = _judged({"A"})
+    real = tk.gateway.results
+    tk.gateway.results = lambda env, rid: real(env, rid).model_copy(update={"status": RunStatus.partial})
+    out = ex["request_analysis"](candidate="A", run_id=run)
+    assert out["status"] == "refused" and "not complete" in out["reason"]
+    assert not [r for r in store.branch_records("t") if r.event_type in (
+        EventType.hypothesis_validated, EventType.hypothesis_invalidated, EventType.hypothesis_inconclusive)]
+
+
+# ---- found by the independent review: a rebuild from the ledger must see the gate ----
+
+def test_a_rebuild_from_the_ledger_judges_against_the_gate_not_the_placeholder(tmp_path):
+    """A proposal with no criteria and no prediction is recorded as a placeholder. The program's gate replaces it in memory.
+    A plate submitted later rebuilds the tracker from the ledger, and used to get the placeholder back and abstain."""
+    from proef.adapters.lab.simulator import SimulatorLab as Lab
+    from proef.autoloop import CampaignConfig, run_campaign
+    from proef.core.hypothesis import Constraint, ProblemStatement
+    from proef.flywheel import Flywheel
+    store = SqliteProvenanceStore(str(tmp_path / "prov.db"))
+    problem = ProblemStatement(objective="o", constraints=[Constraint(name="potency", description="IC50 <= 20 uM", kind="hard", limit=20.0, unit="uM")])
+    cfg = CampaignConfig(problem=problem, hypotheses=[{"statement": "A binds", "candidate": "A", "assay_type": "binding", "predicted": "p"}],
+                         autonomy="act", k=1, rounds=1, seed=1, inbox=str(tmp_path / "inbox"), poll_secs=0.05, flywheel=Flywheel(":memory:"))
+    report = run_campaign(cfg, Lab(seed=3), store, approver=lambda t: True, notify=lambda m: None)
+    branch = f"problem/{report.problem_id}"
+    proposal = next(r for r in store.branch_records(branch) if r.event_type == EventType.hypothesis_proposed and r.decision.get("criteria"))
+    assert proposal.decision["criteria_source"] == "placeholder", "the scenario: the proposal itself carried no gate"
+    from proef.core.hypothesis import HypothesisTracker
+    t = HypothesisTracker.resume(store, system_actor(), branch)
+    h = next(iter(t.hypotheses.values()))
+    assert (h.criteria.threshold, h.metadata["criteria_source"]) == (20.0, "gate")
+
+
+def test_a_malformed_mcp_gate_is_treated_as_unset_not_a_crash(monkeypatch):
+    for bad in ("ic50_um<=1e", "ic50_um<=1.2.3", "ic50_um==5", "<=3", "nonsense"):
+        monkeypatch.setenv("PROEF_MCP_GATE", bad)
+        assert _mcp()[0].gate is None, bad
+    monkeypatch.setenv("PROEF_MCP_GATE", "ic50_um<=1e2")
+    assert _mcp()[0].gate.threshold == 100.0
+
+
+def test_an_mcp_call_that_raises_still_leaves_a_ledger_record():
+    import pytest
+    s, call = _mcp(GATE, approved={"A"})
+    with pytest.raises(Exception):
+        s._call_tool("run_assay", {"assay": "binding"})            # missing `compounds`
+    recs = [r for r in s.store.branch_records("mcp-session") if (r.decision or {}).get("kind") == "tool_call"]
+    assert [r.decision["tool"] for r in recs] == ["run_assay"] and recs[0].decision["status"] == "error"

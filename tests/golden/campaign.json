@@ -419,6 +419,54 @@
     }
    ],
    [
+    "gate_decision",
+    {
+     "candidate": "AD1",
+     "criteria": {
+      "direction": "min",
+      "inconclusive_if_qc_failed": true,
+      "metric": "ic50_um",
+      "min_replicates": 1,
+      "proxy_of": null,
+      "threshold": 20.0
+     },
+     "kind": "criteria_assigned",
+     "source": "gate"
+    }
+   ],
+   [
+    "gate_decision",
+    {
+     "candidate": "H1",
+     "criteria": {
+      "direction": "min",
+      "inconclusive_if_qc_failed": true,
+      "metric": "ic50_um",
+      "min_replicates": 1,
+      "proxy_of": null,
+      "threshold": 20.0
+     },
+     "kind": "criteria_assigned",
+     "source": "gate"
+    }
+   ],
+   [
+    "gate_decision",
+    {
+     "candidate": "H2",
+     "criteria": {
+      "direction": "min",
+      "inconclusive_if_qc_failed": true,
+      "metric": "ic50_um",
+      "min_replicates": 1,
+      "proxy_of": null,
+      "threshold": 20.0
+     },
+     "kind": "criteria_assigned",
+     "source": "gate"
+    }
+   ],
+   [
     "stage_transition",
     {
      "candidates": [
@@ -820,6 +868,38 @@
       }
      ],
      "k": 3
+    }
+   ],
+   [
+    "gate_decision",
+    {
+     "candidate": "H3",
+     "criteria": {
+      "direction": "min",
+      "inconclusive_if_qc_failed": true,
+      "metric": "ic50_um",
+      "min_replicates": 1,
+      "proxy_of": null,
+      "threshold": 20.0
+     },
+     "kind": "criteria_assigned",
+     "source": "gate"
+    }
+   ],
+   [
+    "gate_decision",
+    {
+     "candidate": "M1",
+     "criteria": {
+      "direction": "min",
+      "inconclusive_if_qc_failed": true,
+      "metric": "ic50_um",
+      "min_replicates": 1,
+      "proxy_of": null,
+      "threshold": 20.0
+     },
+     "kind": "criteria_assigned",
+     "source": "gate"
     }
    ],
    [
@@ -1839,6 +1919,54 @@
      "refutation_condition": "",
      "smiles": "",
      "statement": "M1 binds"
+    }
+   ],
+   [
+    "gate_decision",
+    {
+     "candidate": "H1",
+     "criteria": {
+      "direction": "min",
+      "inconclusive_if_qc_failed": true,
+      "metric": "ic50_um",
+      "min_replicates": 1,
+      "proxy_of": null,
+      "threshold": 20.0
+     },
+     "kind": "criteria_assigned",
+     "source": "gate"
+    }
+   ],
+   [
+    "gate_decision",
+    {
+     "candidate": "H2",
+     "criteria": {
+      "direction": "min",
+      "inconclusive_if_qc_failed": true,
+      "metric": "ic50_um",
+      "min_replicates": 1,
+      "proxy_of": null,
+      "threshold": 20.0
+     },
+     "kind": "criteria_assigned",
+     "source": "gate"
+    }
+   ],
+   [
+    "gate_decision",
+    {
+     "candidate": "H3",
+     "criteria": {
+      "direction": "min",
+      "inconclusive_if_qc_failed": true,
+      "metric": "ic50_um",
+      "min_replicates": 1,
+      "proxy_of": null,
+      "threshold": 20.0
+     },
+     "kind": "criteria_assigned",
+     "source": "gate"
     }
    ],
    [

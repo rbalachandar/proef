@@ -69,7 +69,8 @@ Found by reading the toolkit as an adversary, then by writing each attack as a t
 8. Found by the full suite after the guards went in: two older tests (golden campaign, MCP halt) depended on the
    old behaviour. The golden diff was only the new `criteria_source` key.
 
-Open follow-up: a second reader for the toolkit before Phase 3 gives a model more tools.
+Open follow-up: a genuinely independent reader (a fresh session or `/code-review`) over Phases 0 to 2 before Phase 3 gives a
+model more tools. The author's own re-read found items 11 and 12 above, which is the reason to want a second one.
 
 ### Phase 1: domain packs as data
 - [x] The dose-response assay list has ONE definition (`modality.DOSE_RESPONSE`). The hypothesis agent, the plan, the
@@ -121,23 +122,47 @@ what the campaign's lab cannot serve.
 - [x] The submit loop refuses a `cannot_run` hypothesis and records `lab_cannot_serve`. It never reaches the lab.
 - [x] Replay carries the recorded check, so it does not submit what the original refused to.
 
-**2B: prediction tools (open)**
-- [ ] Registry contract: endpoint, unit, direction, input, modality, applicability domain, uncertainty, version.
-- [ ] One reference tool, validated like the instruments.
-- [ ] Predictions shown in plan review, labelled as priors, and sealed.
+**2B: prediction tools (done)**
+- [x] Registry contract (`src/proef/predictors.py`): endpoints with units, input kind, modalities, uncertainty, version.
+      Tools are registered, not built in. The operator enables the ones a campaign may use (`prediction_tools`), the same
+      kind of fence as the instrument pool.
+- [x] The model proposes tools per variant (and the candidate's SMILES). Code validates on facts (registered and enabled,
+      applies to the modality, input present and valid) and RUNS them. Failures are statuses, never fatal.
+- [x] Results keep only declared endpoints with declared units and finite values. Each says `kind: prediction`,
+      `evidence: false`, carries the tool version and the input it used, and is marked uncalibrated when the tool reports
+      no uncertainty.
+- [x] Sealed in the proposal record (`predictions`) and shown in plan review as a prior, with the structure so a person
+      can check it is the compound named.
+- [x] Reference tool: `admet-physchem` (molecular weight, logP, TPSA, Lipinski). It is not a potency model and says nothing
+      about the gate.
+- [x] `prediction_tools` is carried by `build_cfg` and the CLI (the `replan` and `modality` lesson).
 
-#### Phase 2A hole review
-1. A model naming an instrument that is not in the pool is rejected as `invented`, not mapped to a near match.
-2. A model naming a valid but different instrument does not move the run. The plan states `runs_on`, and the pick is flagged.
-3. A hypothesis the campaign's lab cannot serve could reach it. Now blocked at submit, recorded, and shown in the plan.
-4. Replay rebuilds hypotheses from the records, so without the recorded check it would have submitted the hypothesis the
-   original refused. Found by writing the replay test. Carried through.
-5. Pre-existing hole found on the way: `reproduce()` compared only the recorded verdicts, so a replay that ran extra
-   hypotheses reported a match. It now reports any verdict the original never had as a difference.
-6. A soft spot, by design: an instrument that declares no assay list cannot be checked. It is allowed and marked
-   `unverified` in the plan, not blocked, because blocking would stop every undeclared adapter.
-7. The check shape (`ok`, `status`, `reasons`) is the first `Proposal` validation result. Phase 3 follow-up proposals and
-   2B predictions should reuse it, not invent a second one.
+#### Phase 2B hole review
+1. A prediction must never become a criterion or a verdict. Tested: a tool reporting a value far below the gate leaves the
+   criterion at the program's gate and the status `proposed`.
+2. The model's SMILES is its claim about the candidate. It is kept with the prediction and shown to the person, and it is
+   NOT written onto the hypothesis, where structure-keyed logic (series, applicability domain) would trust it.
+3. A tool the operator did not enable cannot run even if registered, and a materials program is not offered a
+   small-molecule tool.
+4. Free text in the SMILES field (prompt-injection style) is rejected by the input check and truncated in the record.
+5. Provenance gap found while reviewing: the first version did not record the input, so a prediction could not be audited.
+   Now recorded.
+6. Replay uses the recorded predictions and needs no tool. Tested by making any tool call raise during a replay.
+7. Third-party tools run in-process with this process's access. Fixed to fail closed: a tool must be marked `trusted` to run,
+   only the reference tool is, and any other is refused (`untrusted_tool`) unless the operator sets
+   `PROEF_ALLOW_UNSANDBOXED_TOOLS=1`. Real isolation still needs the sandbox lanes (S-T3 1d/1e).
+8. A hanging tool could freeze plan review. Each call now has a time limit and is abandoned on timeout (status `error`).
+9. A flood of output keys, a long model-supplied tool list, or a long tool name cost nothing and are bounded (declared
+   endpoints only, at most 8 tools per variant, names at most 80 characters).
+10. Predictions must never rank anything. A test now fails if any module outside the allowed few reads `predictions`, and
+    another shows selection is identical whatever the predictions say. Using them for acquisition needs an
+    applicability-domain and calibration review first.
+11. Found re-reading Phases 0 to 2 together: the toolkit and MCP built a hypothesis's criterion without the modality, so a
+    materials program with a model naming a chemistry assay would have got an IC50 criterion. Both now take the modality
+    (`PROEF_MCP_MODALITY` for MCP).
+12. Found in the same read: a model returning a list or dict where an instrument name belongs would have crashed the
+    campaign, and a long string was stored unbounded in the sealed record. Coerced and capped at 80 characters.
+13. Known and unchanged: the reference tool reports no uncertainty, so it cannot rank, and the registry is process-global.
 
 ### Phase 3: the model drives discretionary decisions inside the current loop
 - [ ] Which abstentions to follow up, what to re-plan, how many replicates to request within bounds. Each is a

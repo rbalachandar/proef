@@ -1,6 +1,7 @@
 # Domain tools: priors from specialist models
 
-Status: design note, nothing built yet. Roadmap item S-T7.
+Status: the registry, validation and plan-review display are built (S-T8 Phase 2). Not built: model-proposed *endpoints* beyond
+the enabled list, acquisition using predictions, and sandboxed third-party tools. Roadmap item S-T7.
 
 ## Problem
 

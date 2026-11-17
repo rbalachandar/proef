@@ -159,7 +159,13 @@ def check_pick(pick: str | None, assay_type: str, menu: list[dict], runs_on: str
 
     status: ok | unstated | unverified | invented | lacks | other_instrument | cannot_run"""
     by_name = {m["name"]: m for m in menu}
-    pick = (pick or "").strip() or None
+    # the model's string is bounded and coerced: a list, a dict or a flood of text must not crash a campaign or bloat the record
+    if isinstance(pick, str):
+        pick = pick[:80].strip() or None
+    elif not pick:
+        pick = None
+    else:
+        pick = str(pick)[:80]      # a list or dict is not a name: it will be reported as not in the pool
 
     def serves(m: dict) -> bool:
         declared = m["assay_types"]

@@ -136,10 +136,11 @@ class AgentToolkit:
     """
 
     def __init__(self, lab_gateway, store, actor, tpp=None,
-                 branch_id: str = "agentic-toolkit", gate=None, approved=()):
+                 branch_id: str = "agentic-toolkit", gate=None, approved=(), modality=None):
         """`gate`: the program's pre-registered SuccessCriteria (a person fixed it). `approved`: candidates a person
         approved in a plan. Both default to nothing, so the lab tools fail closed until a person supplies them."""
         self.gate = gate
+        self.modality = modality      # the program's modality: which assays are dose-response is the pack's data
         self.approved = set(approved)
         self._hyps: dict[str, Any] = {}
         self._tracker = None
@@ -266,7 +267,7 @@ class AgentToolkit:
             self._tracker = HypothesisTracker(self.store, self.actor)
         name = clean_candidate(candidate)
         h = self._tracker.propose(statement=statement, candidate=name, assay_type=assay_type, predicted=predicted,
-                                  criteria=criteria_for_assay(assay_type, self.gate), branch_id=self.branch)
+                                  criteria=criteria_for_assay(assay_type, self.gate, self.modality), branch_id=self.branch)
         self._hyps[name] = h
         return {"hypothesis_id": h.hypothesis_id, "status": "recorded", "candidate": name,
                 "gate": {"metric": h.criteria.metric, "threshold": h.criteria.threshold}}

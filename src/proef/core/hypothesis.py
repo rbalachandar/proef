@@ -507,6 +507,7 @@ class HypothesisTracker:
                                                  "criteria": h.criteria.model_dump(),
                                                  "criteria_source": criteria_source,
                                                  "lab_check": (h.metadata or {}).get("lab_check"),
+                                                 "predictions": (h.metadata or {}).get("predictions"),
                                                  "design": h.design.model_dump(),
                                                  "rationale": rationale,
                                                  "mechanism": mechanism,

@@ -381,6 +381,7 @@ def _campaign_from_doc(cfg_doc: dict) -> "CampaignConfig":
         budget=(ResourceBudget(**cfg_doc["budget"]) if cfg_doc.get("budget") else None),
         replan=bool(cfg_doc.get("replan", False)),
         modality=(cfg_doc.get("modality") or None),
+        prediction_tools=(list(cfg_doc["prediction_tools"]) if cfg_doc.get("prediction_tools") else None),
         max_families=cfg_doc.get("max_families", 3),
         max_variants_per_family=cfg_doc.get("max_variants_per_family", 3),
         dose_design=cfg_doc.get("dose_design", "fixed"),

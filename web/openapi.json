@@ -3614,6 +3614,125 @@
     "title": "PlanNote",
     "type": "object"
    },
+   "PlanPrediction": {
+    "description": "A prior from a registered prediction tool. Never evidence: only the measurement judges the hypothesis.",
+    "properties": {
+     "calibrated": {
+      "default": false,
+      "title": "Calibrated",
+      "type": "boolean"
+     },
+     "evidence": {
+      "const": false,
+      "default": false,
+      "title": "Evidence",
+      "type": "boolean"
+     },
+     "in_domain": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "In Domain"
+     },
+     "input": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "the structure or sequence the model gave for the candidate, so it can be checked",
+      "title": "Input"
+     },
+     "reason": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Reason"
+     },
+     "status": {
+      "enum": [
+       "ok",
+       "unknown_tool",
+       "wrong_modality",
+       "no_input",
+       "invalid_input",
+       "error",
+       "invalid_output"
+      ],
+      "title": "Status",
+      "type": "string"
+     },
+     "tool": {
+      "title": "Tool",
+      "type": "string"
+     },
+     "uncertainty": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "interval, ensemble or none: a tool with none is uncalibrated",
+      "title": "Uncertainty"
+     },
+     "units": {
+      "additionalProperties": {
+       "type": "string"
+      },
+      "default": {},
+      "title": "Units",
+      "type": "object"
+     },
+     "values": {
+      "additionalProperties": {
+       "anyOf": [
+        {
+         "type": "number"
+        },
+        {
+         "type": "boolean"
+        }
+       ]
+      },
+      "default": {},
+      "title": "Values",
+      "type": "object"
+     },
+     "version": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Version"
+     }
+    },
+    "required": [
+     "tool",
+     "status"
+    ],
+    "title": "PlanPrediction",
+    "type": "object"
+   },
    "PlanReview": {
     "description": "The person's decision on the model's research plan, as sealed in the ledger.",
     "properties": {
@@ -3700,6 +3819,14 @@
       "default": "",
       "title": "Predicted",
       "type": "string"
+     },
+     "predictions": {
+      "default": [],
+      "items": {
+       "$ref": "#/components/schemas/PlanPrediction"
+      },
+      "title": "Predictions",
+      "type": "array"
      },
      "protocol": {
       "default": "",

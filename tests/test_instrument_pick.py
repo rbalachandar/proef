@@ -218,3 +218,12 @@ def test_a_replay_that_judges_something_the_original_never_did_is_not_a_match(tm
     monkeypatch.setattr(al, "run_campaign", run_with_an_extra)
     res = reproduce(f"problem/{report.problem_id}", db_path=str(tmp_path / "prov.db"))
     assert res["status"] == "differs" and {"candidate": "EXTRA", "recorded": None, "replayed": "validated"} in res["diffs"]
+
+
+def test_a_malformed_pick_never_crashes_and_is_bounded():
+    """A model may return a list, a dict, a number or a wall of text where a name belongs."""
+    for weird in (["plate-reader"], {"name": "plate-reader"}, 7, "x" * 5000, "  ", True):
+        c = check_pick(weird, "binding", MENU, "plate-reader")
+        assert c["status"] in ("ok", "unstated", "invented"), (weird, c["status"])
+        assert c["pick"] is None or len(c["pick"]) <= 80
+    assert check_pick(["plate-reader"], "binding", MENU, "plate-reader")["status"] == "invented"

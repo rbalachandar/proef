@@ -2197,6 +2197,60 @@ export interface components {
             text: string;
         };
         /**
+         * PlanPrediction
+         * @description A prior from a registered prediction tool. Never evidence: only the measurement judges the hypothesis.
+         */
+        PlanPrediction: {
+            /**
+             * Calibrated
+             * @default false
+             */
+            calibrated: boolean;
+            /**
+             * Evidence
+             * @default false
+             * @constant
+             */
+            evidence: false;
+            /** In Domain */
+            in_domain?: boolean | null;
+            /**
+             * Input
+             * @description the structure or sequence the model gave for the candidate, so it can be checked
+             */
+            input?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "ok" | "unknown_tool" | "wrong_modality" | "no_input" | "invalid_input" | "error" | "invalid_output";
+            /** Tool */
+            tool: string;
+            /**
+             * Uncertainty
+             * @description interval, ensemble or none: a tool with none is uncalibrated
+             */
+            uncertainty?: string | null;
+            /**
+             * Units
+             * @default {}
+             */
+            units: {
+                [key: string]: string;
+            };
+            /**
+             * Values
+             * @default {}
+             */
+            values: {
+                [key: string]: number | boolean;
+            };
+            /** Version */
+            version?: string | null;
+        };
+        /**
          * PlanReview
          * @description The person's decision on the model's research plan, as sealed in the ledger.
          */
@@ -2239,6 +2293,11 @@ export interface components {
              * @default
              */
             predicted: string;
+            /**
+             * Predictions
+             * @default []
+             */
+            predictions: components["schemas"]["PlanPrediction"][];
             /**
              * Protocol
              * @description the dose ladder the model designed, as one line

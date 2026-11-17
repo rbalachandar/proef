@@ -51,6 +51,23 @@ describe('plan review', () => {
     expect(screen.getByText(/declares no cytotoxicity assay/)).toBeInTheDocument()
   })
 
+  it('labels a prediction as a prior, shows the structure it used, and says why one did not run', () => {
+    const p = {
+      n_hypotheses: 2, warnings: [],
+      families: [{ id: 'f', claim: 'c', mechanism: 'm', refuted_if: 'r', variants: [
+        { ...variant('a', 'aspirin'), predictions: [{ tool: 'admet-physchem', version: '1', status: 'ok', input: 'CC(=O)Oc1ccccc1C(=O)O', values: { mw_da: 180.16, lipinski_pass: true }, units: { mw_da: 'Da' }, uncertainty: 'none', in_domain: true, calibrated: false, evidence: false }] },
+        { ...variant('b', 'mystery'), predictions: [{ tool: 'admet-physchem', version: '1', status: 'invalid_input', reason: 'RDKit cannot parse this SMILES', values: {}, units: {}, calibrated: false, evidence: false }] },
+      ] }],
+    } as never
+    wrap(<PlanReview item={{ id: 'x', title: 't', ts: 1, plan: p }} />)
+    expect(screen.getByText('Prediction, a prior and not evidence')).toBeInTheDocument()
+    expect(screen.getByText('CC(=O)Oc1ccccc1C(=O)O')).toBeInTheDocument()
+    expect(screen.getByText(/mw_da 180.16 Da, lipinski_pass yes/)).toBeInTheDocument()
+    expect(screen.getByText(/no uncertainty reported/)).toBeInTheDocument()
+    expect(screen.getByText('Prediction not run')).toBeInTheDocument()
+    expect(screen.getByText(/RDKit cannot parse this SMILES/)).toBeInTheDocument()
+  })
+
   it('shows no warning when every compound appears once', () => {
     wrap(<PlanReview item={{ id: 'x', title: 't', ts: 1, plan: plan([]) }} />)
     expect(screen.queryByRole('note')).toBeNull()

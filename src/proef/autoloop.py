@@ -69,6 +69,7 @@ class CampaignConfig:
                                               # the hypothesis prompt (P: skills)
     max_families: int = 3
     max_variants_per_family: int = 3
+    prediction_tools: list[str] | None = None   # prediction tools the operator enables (priors, never evidence)
     modality: str | None = None            # selects the domain pack (assays, prompt wording); None = small molecule
     replan: bool = False                   # after each round the model proposes the next hypotheses from the results
     critic_model: Any = None               # a second model that critiques the plan before the person reads it (advisory)
@@ -299,7 +300,7 @@ def _propose_and_score(cfg, tracker, problem, store, flywheel, say, lab_ctx=None
             existing_keys={(h.candidate, h.statement) for h in tracker.hypotheses.values()},
             skill_guidance=cfg.skill_guidance,
             flywheel=flywheel,
-            notify=say, instruments=lab_ctx)
+            notify=say, instruments=lab_ctx, predictors=cfg.prediction_tools)
         say(f"resource budget: {remaining_runs}/{budget.max_total_runs} lab runs remaining")
         say(f"agent proposed {len(portfolio)} variant hypotheses")
         _base = cfg.score_fn or (
@@ -1019,7 +1020,7 @@ def _replan(cfg, tracker, problem, store, actor, flywheel, tested, round_no, say
             max_total_hypotheses=room,
             existing_keys={(h.candidate, h.statement) for h in tracker.hypotheses.values()},
             skill_guidance=cfg.skill_guidance, flywheel=flywheel, notify=say, findings=findings,
-            modality=cfg.modality, instruments=lab_ctx)
+            modality=cfg.modality, instruments=lab_ctx, predictors=cfg.prediction_tools)
     except Exception as exc:  # noqa: BLE001 - a failed re-plan must not abort the campaign
         say(f"re-plan failed ({type(exc).__name__}): continuing with the existing plan")
         return []

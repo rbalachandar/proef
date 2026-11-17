@@ -59,7 +59,8 @@ def build_plan(portfolio, family_info: dict | None, family_scores: dict | None, 
             "hypothesis_id": h.hypothesis_id, "candidate": h.candidate, "statement": h.statement,
             "predicted": h.predicted, "rationale": h.rationale, "assay": h.assay_type,
             "protocol": describe((h.metadata or {}).get("protocol")),
-            "lab": (h.metadata or {}).get("lab_check")})
+            "lab": (h.metadata or {}).get("lab_check"),
+            "predictions": (h.metadata or {}).get("predictions") or []})
     return {"families": list(fams.values()), "n_hypotheses": len(portfolio), "warnings": duplicate_compounds(portfolio) + already_tested(portfolio, tested)}
 
 

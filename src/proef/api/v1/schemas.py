@@ -165,6 +165,7 @@ class PlanVariant(BaseModel):
     assay: str = ""
     protocol: str = Field("", description="the dose ladder the model designed, as one line")
     lab: PlanLab | None = None
+    predictions: list[PlanPrediction] = []
 
 
 class PlanLab(BaseModel):
@@ -176,6 +177,21 @@ class PlanLab(BaseModel):
     reasons: list[str] = []
     flags: list[str] = []
     eligible: list[str] = Field([], description="pool instruments that declare this assay")
+
+
+class PlanPrediction(BaseModel):
+    """A prior from a registered prediction tool. Never evidence: only the measurement judges the hypothesis."""
+    tool: str
+    version: str | None = None
+    status: Literal["ok", "unknown_tool", "untrusted_tool", "wrong_modality", "no_input", "invalid_input", "error", "invalid_output"]
+    reason: str | None = None
+    input: str | None = Field(None, description="the structure or sequence the model gave for the candidate, so it can be checked")
+    values: dict[str, float | bool] = {}
+    units: dict[str, str] = {}
+    in_domain: bool | None = None
+    uncertainty: str | None = Field(None, description="interval, ensemble or none: a tool with none is uncalibrated")
+    calibrated: bool = False
+    evidence: Literal[False] = False
 
 
 class PlanFamily(BaseModel):

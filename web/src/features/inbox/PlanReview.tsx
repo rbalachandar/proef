@@ -109,6 +109,15 @@ export function PlanReview({ item, compact }: { item: Item; compact?: boolean })
                         {v.predicted && <span className="mt-0.5 block text-[11px] text-faint"><span className="font-medium">Predicts</span> · {v.predicted}</span>}
                         {v.rationale && <span className="block text-[11px] text-faint"><span className="font-medium">Why</span> · {v.rationale}</span>}
                         {v.protocol && <span className="block text-[11px] text-faint"><span className="font-medium">Designed test</span> · {v.protocol}</span>}
+                        {(v.predictions ?? []).map((p) => (
+                          <span key={p.tool} className={cn('block text-[11px]', p.status === 'ok' ? 'text-faint' : 'text-warn')}>
+                            <span className="font-medium">{p.status === 'ok' ? 'Prediction, a prior and not evidence' : 'Prediction not run'}</span> · <span className="num">{p.tool}{p.version ? ` v${p.version}` : ''}</span>{p.input && <> for <span className="num" title="the structure the model gave for this candidate: check it is the compound named">{p.input}</span></>}
+                            {p.status === 'ok'
+                              ? <>: {Object.entries(p.values).map(([k, x]) => `${k} ${typeof x === 'boolean' ? (x ? 'yes' : 'no') : Number(x.toFixed?.(2) ?? x)}${p.units[k] ? ' ' + p.units[k] : ''}`).join(', ')}
+                                  {p.uncertainty === 'none' ? ', no uncertainty reported' : ''}{p.in_domain === false ? ', outside its domain' : ''}</>
+                              : <>: {p.reason}</>}
+                          </span>
+                        ))}
                         {v.lab && (
                           <span className={cn('block text-[11px]', v.lab.ok ? 'text-faint' : 'text-bad')}>
                             <span className="font-medium">Runs on</span> · <span className="num">{v.lab.runs_on ?? 'unknown'}</span>

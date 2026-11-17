@@ -66,7 +66,7 @@ Reply ONLY with JSON:
     "variants": [
       {{"statement": "falsifiable variant prediction",
         "candidate": "the {candidate_kind} or sample name only, e.g. {candidate_example}, with no prefix such as 'proposed'",
-        "assay_type": "binding",{instrument_field}
+        "assay_type": "binding",{instrument_field}{tools_field}
         "predicted": "human-readable prediction",
         "predicted_value": 20.0,
         "rationale": "why this variant",
@@ -96,6 +96,7 @@ def propose_families_with_agent(
     findings: str | None = None,
     modality: str | None = None,
     instruments: dict | None = None,
+    predictors: list[str] | None = None,
 ) -> tuple[list[Hypothesis], dict[str, float]]:
     """max_total_hypotheses: hard cap on hypotheses this generation may add.
     existing_keys: (candidate, statement) pairs already tried — duplicates the
@@ -134,8 +135,18 @@ def propose_families_with_agent(
         instrument_field = '\n        "instrument": "name from the list above, or empty",'
     else:
         instrument_block, instrument_field = "", ""
+    # prediction tools: the operator enables them, the model proposes which fit, code validates and runs them
+    from proef.predictors import DEFAULT as _REG
+    tool_menu = _REG.menu(predictors, modality)
+    if tool_menu:
+        tools_block = ("\n\nPREDICTION TOOLS (priors the lab computes; never evidence: the measured result judges)\n"
+                       + _REG.menu_text(tool_menu) + "\nFor each variant you may list the tools that fit in \"tools\" and give "
+                       "the candidate's \"smiles\" when it is a small molecule. Leave both empty if unsure: never guess a SMILES.")
+        tools_field = '\n        "tools": ["name from the list above"], "smiles": "SMILES or empty",'
+    else:
+        tools_block, tools_field = "", ""
     prompt = PROMPT.format(
-        instrument_field=instrument_field,
+        instrument_field=instrument_field, tools_field=tools_field,
         role=pack.prompt_role, mechanism_hint=pack.mechanism_hint,
         candidate_kind=pack.candidate_kind, candidate_example=pack.candidate_example,
         objective=problem.objective,
@@ -145,7 +156,7 @@ def propose_families_with_agent(
         candidates=json.dumps(candidates or [], indent=1)[:4000],
         max_families=max_families,
         max_variants_per_family=max_variants_per_family,
-    ) + instrument_block + ("\n\n" + guidance_block if guidance_block else "")
+    ) + instrument_block + tools_block + ("\n\n" + guidance_block if guidance_block else "")
     if findings:
         prompt += ("\n\nRESULTS SO FAR (re-plan from these: do not repeat a refuted idea, "
                    "build on what held up, and pick candidates not yet tested)\n" + findings)
@@ -237,12 +248,18 @@ def propose_families_with_agent(
                 "variables": v.get("variables", {}),
                 "protocol": sanitize_protocol(v.get("protocol")),
             }
+            if tool_menu and (v.get("tools") or v.get("smiles")):
+                # the SMILES stays local to the prediction: it is the model's claim, so it is not written onto the
+                # hypothesis, where structure-keyed logic (series, applicability domain) would trust it
+                _preds = _REG.run(v.get("tools") if isinstance(v.get("tools"), list) else [], {"smiles": str(v.get("smiles") or "")},
+                                  predictors, modality)
+                spec["metadata"] = {**spec.get("metadata", {}), "predictions": _preds}
             if menu:
                 # the model's pick is validated on FACTS (in the pool, declares the assay, is where this runs); its
                 # reasoning is never read. The result rides in the sealed proposal record.
                 from proef.labselect import check_pick
                 _chk = check_pick(v.get("instrument"), _assay, menu, runs_on)
-                spec["metadata"] = {"lab_pick": _chk["pick"], "lab_check": _chk}
+                spec["metadata"] = {**spec.get("metadata", {}), "lab_pick": _chk["pick"], "lab_check": _chk}
             for k in ("mechanism", "refutation_condition", "citation",
                       "predicted_observables"):
                 if fam.get(k) is not None:

@@ -767,7 +767,7 @@ protocols (Make on rig X, Test on reader Y — a plan, not a choice).
 - **Plan:** [`docs/LLM-ORCHESTRATION.md`](LLM-ORCHESTRATION.md) (phases 0 to 5, cross-phase checklist). Builds on S-T7.
 - [x] Phase 0 (done): toolkit holes closed (`record_verdict` removed, gate on `propose_hypothesis`, approval + governance on `submit_assay`), every call on the ledger, 16 adversarial tests. Tracker placeholder criterion, `tool_call` in diary/feed and MCP approval also done (see the plan's hole review)
 - [x] Phase 1 (done): domain packs as data. One dose-response definition, prompt wording and default assay in the pack, unknown modalities refused, 12 tests
-- [~] Phase 2: 2A instruments done (menu, validated pick, "Runs on" in plan review, cannot-run blocked, replay carries the check, `reproduce` now flags extra verdicts). 2B prediction tools open
+- [x] Phase 2 (done): 2A instruments done (menu, validated pick, "Runs on" in plan review, cannot-run blocked, replay carries the check, `reproduce` now flags extra verdicts). 2B prediction tools done: registry contract, operator-enabled, validated and run by code, sealed, shown as priors
 - [ ] Phase 3: model-driven discretionary decisions inside the current loop
 - [ ] Phase 4: tool-calling orchestrator inside a state machine, replayable
 - [ ] Phase 5: evals and a real-data study before any default changes

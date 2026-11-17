@@ -253,3 +253,17 @@ def test_mcp_approval_can_come_from_the_environment_and_ladders_are_bounded(monk
     out = call("run_assay", {"compounds": ["A"], "assay": "binding", "concentrations": ["99999uM", "5uM"]})
     pts = {p[0] for p in out["results"]["A"]["points"]}
     assert 99999 not in pts
+
+
+# ---- the modality reaches every way a hypothesis can be created ----
+
+def test_the_toolkit_and_mcp_judge_a_materials_hypothesis_by_the_programs_metric_not_an_ic50():
+    """A model that names a chemistry assay for a materials program must not turn the gate into an IC50."""
+    gate = SuccessCriteria(metric="conductivity", direction="max", threshold=1.0)
+    for modality, expect in (("material", "conductivity"), (None, "ic50_um")):
+        tk = AgentToolkit(None, SqliteProvenanceStore(), system_actor(), branch_id="t", gate=gate, modality=modality)
+        out = tk.executors()["propose_hypothesis"](statement="s", candidate="LLZO", assay_type="binding", predicted="p")
+        assert out["gate"]["metric"] == expect, (modality, out)
+        s, call = _mcp(gate)
+        s.modality = modality
+        assert call("propose_hypothesis", {"statement": "s", "candidate": "LLZO", "assay_type": "binding", "predicted": "p"})["gate"]["metric"] == expect

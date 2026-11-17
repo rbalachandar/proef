@@ -80,7 +80,7 @@ def _fit_ic50(points):
 class McpSession:
     """Request/response handler, separated from the stdio loop for testability."""
 
-    def __init__(self, gate: Any = None, approved: Any = None) -> None:
+    def __init__(self, gate: Any = None, approved: Any = None, modality: str | None = None) -> None:
         """`gate`: the program's pre-registered SuccessCriteria, or PROEF_MCP_GATE like "ic50_um<=20". With none, a
         client cannot register a hypothesis: a verdict would have no pre-registered rule to be judged by.
         `approved`: candidates a person approved, or PROEF_MCP_APPROVED="A,B". A client cannot run an assay on any
@@ -95,6 +95,8 @@ class McpSession:
 
         self.gate = gate if gate is not None else _gate_from_env()
         self.approved = set(approved) if approved is not None else _approved_from_env()
+        import os
+        self.modality = modality or os.environ.get("PROEF_MCP_MODALITY") or None
         self.branch = "mcp-session"
         self.store = SqliteProvenanceStore()
         self.actor = system_actor("mcp")
@@ -221,7 +223,7 @@ class McpSession:
         h = self.tracker.propose(
             statement=args["statement"], candidate=args["candidate"],
             assay_type=args["assay_type"], predicted=args["predicted"],
-            criteria=criteria_for_assay(str(args["assay_type"]), self.gate), branch_id=self.branch,
+            criteria=criteria_for_assay(str(args["assay_type"]), self.gate, self.modality), branch_id=self.branch,
         )
         return json.dumps({"hypothesis_id": h.hypothesis_id, "status": h.status,
                            "gate": {"metric": h.criteria.metric, "threshold": h.criteria.threshold}})

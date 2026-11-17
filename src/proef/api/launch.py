@@ -45,6 +45,8 @@ def build_cfg(doc: dict) -> dict:
             cfg[key] = int(doc[key])
     if doc.get("budget"):
         cfg["budget"] = dict(doc["budget"])
+    if doc.get("prediction_tools"):
+        cfg["prediction_tools"] = [str(t) for t in doc["prediction_tools"]]   # the operator's fence for prediction tools
     if doc.get("modality"):
         cfg["modality"] = str(doc["modality"])   # selects the domain pack: assays, prompt wording
     candidates = [c.strip() for c in (doc.get("candidates") or "").split(",")

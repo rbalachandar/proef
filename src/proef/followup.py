@@ -65,8 +65,8 @@ def _verdict(ok: bool, status: str, *reasons: str) -> dict:
 
 def validate_followup(raw: dict, ctx: dict) -> dict:
     """Validate ONE raw proposal on facts. `ctx`: abstained {hypothesis_id: hypothesis}, gate (SuccessCriteria or None),
-    runs_left, followed_up (candidates already followed up), seen (hypothesis ids already proposed for),
-    supports_replicates (does this lab honor a replicate request)."""
+    runs_left, hyp_room (hypotheses the campaign may still add, or None), followed_up (candidates already followed up),
+    seen (hypothesis ids already proposed for), supports_replicates (does this lab honor a replicate request)."""
     hid = str(raw.get("hypothesis_id") or "")[:80]
     action = str(raw.get("action") or "")[:20]
     h = ctx["abstained"].get(hid)
@@ -84,12 +84,18 @@ def validate_followup(raw: dict, ctx: dict) -> dict:
         return {**out, "validation": _verdict(True, "ok", "a suggestion: a person records this decision")}
     if h.candidate in ctx["followed_up"]:
         return {**out, "validation": _verdict(False, "already_followed_up", "one follow-up per candidate")}
-    reps = raw.get("replicates", DEFAULT_REPLICATES)
-    if isinstance(reps, bool) or not isinstance(reps, int) or not MIN_REPLICATES <= reps <= MAX_REPLICATES:
+    applied = bool(ctx.get("supports_replicates"))
+    reps = raw.get("replicates")
+    if isinstance(reps, float) and reps.is_integer():
+        reps = int(reps)                          # 6.0 is six
+    if reps is None:
+        reps = DEFAULT_REPLICATES
+    valid_reps = isinstance(reps, int) and not isinstance(reps, bool) and MIN_REPLICATES <= reps <= MAX_REPLICATES
+    if applied and not valid_reps:
         return {**out, "validation": _verdict(False, "replicates_out_of_bounds",
                                               f"replicates must be a whole number from {MIN_REPLICATES} to {MAX_REPLICATES}")}
-    # the hypothesis's own criterion is the truth: it is the program's gate in the ASSAY's metric (ic50_um for a dose-response
-    # assay, whatever the constraint is named), which is what the ladder has to bracket
+    if not valid_reps:
+        reps = None            # this lab ignores a replicate request, so a bad value is advisory and must not sink the follow-up
     gate = getattr(h, "criteria", None) or ctx.get("gate")
     ladder = None
     if gate is not None and gate.metric == "ic50_um":
@@ -103,8 +109,16 @@ def validate_followup(raw: dict, ctx: dict) -> dict:
                                                   f"does not bracket the gate at {gate.threshold:g} uM")}
     if ctx["runs_left"] < 1:
         return {**out, "validation": _verdict(False, "no_budget", "no lab runs remain in the budget")}
+    if not applied and ladder is None:
+        # nothing about the test would change: the lab ignores a replicate request and no ladder applies. That is the same
+        # run again, paid for twice
+        return {**out, "validation": _verdict(False, "no_change", "this lab ignores replicate requests and the gate's metric takes "
+                                              "no dose ladder, so the follow-up would repeat the same test")}
+    if ctx.get("hyp_room") is not None and ctx["hyp_room"] < 1:
+        return {**out, "validation": _verdict(False, "no_hypothesis_budget", "the campaign is at its hypothesis limit")}
     ctx["runs_left"] -= 1          # each valid follow-up spends a run, so a second one cannot claim the same last run
-    applied = bool(ctx.get("supports_replicates"))
+    if ctx.get("hyp_room") is not None:
+        ctx["hyp_room"] -= 1
     reasons = [] if applied else ["this lab does not take a replicate request: the ladder is followed up, replicates stay as the lab runs them"]
     return {**out, "executes": True,
             "params": {"replicates": reps if applied else None, "replicates_requested": reps, "replicates_applied": applied,

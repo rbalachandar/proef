@@ -1340,7 +1340,7 @@ def test_agent_toolkit_submit_and_results(tmp_path):
     from proef.governance import execution_governance
     gateway = LabGateway(SimulatorLab(seed=1), SafetyEngine(), store, system_actor(),
                          governance=execution_governance(), approver=lambda t: True)
-    tk = AgentToolkit(gateway, store, system_actor(), branch_id="tk-lab", approved={"CCO"})
+    tk = AgentToolkit(gateway, store, system_actor(), branch_id="tk-lab", approved={"CCO"}, autonomy="act")
     r = tk._tool_submit(compounds=["CCO"], assay_type="binding",
                         concentrations=["10uM"])
     assert r["status"] == "submitted" and "run_id" in r

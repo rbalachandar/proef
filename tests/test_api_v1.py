@@ -623,3 +623,18 @@ def test_a_driver_check_reports_honestly_and_never_validates_hardware(client):
     after = {i["id"]: i for i in client.get("/api/v1/lab/instruments").json()}
     assert all(after[k]["hardware_validated"] == ins[k]["hardware_validated"] for k in ins), "a check never validates hardware"
     assert client.post("/api/v1/lab/instruments/nope/check").status_code == 404
+
+
+def test_a_tree_whose_leaves_would_exceed_the_model_call_cap_is_refused(client, monkeypatch):
+    """A floor per leaf let the leaves together exceed the program's cap. Now the tree is refused, and nothing is launched."""
+    launched = []
+    monkeypatch.setattr("proef.api.v1.trees.spawn_campaign", lambda doc, name: launched.append(doc) or f"cmp-{len(launched)}")
+    _model(monkeypatch, [SPLIT])
+    slug = _program(client, max_subproblems=6, max_model_calls=5)
+    nodes = [{"id": "a", "objective": "Potent against the target", "metric": "ic50_um", "gate": 2},
+             {"id": "b", "objective": "Soluble enough to dose", "metric": "solubility_uM", "direction": "max", "gate": 50}]
+    r = client.post(f"/api/v1/programs/{slug}/trees", json={"objective": "x inhibitor", "nodes": nodes})
+    assert r.status_code == 422 and r.json()["detail"]["type"] == "model-call-cap-too-small" and launched == []
+    slug = _program(client, max_subproblems=6, max_model_calls=40)
+    ok = client.post(f"/api/v1/programs/{slug}/trees", json={"objective": "x inhibitor", "nodes": nodes})
+    assert ok.status_code == 201 and sum(d["budget"]["max_model_calls"] for d in launched) <= 40, "the leaves share, never exceed, the cap"

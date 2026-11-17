@@ -244,6 +244,30 @@ Split:
 7. Known and open: replay of follow-ups (above), and follow-ups are suggested for abstained hypotheses only, not for a
    preliminary claim that needs replicates.
 
+#### Independent review of Phase 3 (done, `/code-review high`)
+Ten findings, all fixed and tested:
+1. A later duplicate suggestion replaced a valid one on the card, and an unknown action was shown as an accept. The first real
+   proposal now wins and an unknown action is not shown. Also computed once per request, not once per card.
+2. A follow-up dropped the parent's structure, prediction and posterior. It now inherits the parent's metadata and prior.
+3. Follow-ups ignored the hypothesis limit and the runs already queued. Both now bind, and two cannot share the last slot.
+4. The follow-up statement claimed replicates the lab would ignore, and a follow-up that changed nothing still spent a run.
+   The statement says only what will change, and one that would repeat the same test is refused (`no_change`).
+5. The toolkit's `observe` restriction was opt-in and failed open. The default autonomy is now `observe`, the toolkit's own
+   autonomy decides what it offers, and a lab tool named anyway is refused and recorded.
+6. A declined or removed follow-up still used up the candidate's one follow-up. Spent only by one that survived review.
+7. A tree's per-leaf model-call floor could exceed the program's cap. The tree is now refused instead (422).
+8. The guard's pause hold was never closed in the ledger and the ledger was rescanned on every call. It records
+   `pause_released` and scans once.
+9. A strict replicate value sank an otherwise good follow-up for a lab that ignores the request. Advisory in that case, and
+   `6.0` counts as 6.
+
+Lesson, again: an independent review found ten problems in code the author had just reviewed, and several were in what the
+author had added to fix the previous round. Keep it at the end of every phase.
+
+A process lesson from this round: a pytest run killed by its own timeout prints nothing, and silence was read as a pass. Test
+runs now write to a file with an explicit finish marker, and a clean run means the marker AND the 100% line, not an empty
+output.
+
 ### Phase 4: tool-calling orchestrator inside a state machine
 - [ ] The engine becomes an explicit state machine (plan, review, gates, run, analyze, verdict, decide). The model
       chooses among the actions the current state allows. Preconditions are enforced in code, not in the prompt.

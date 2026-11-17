@@ -216,11 +216,12 @@ def test_observe_records_suggestions_and_runs_nothing(tmp_path):
     h.branch_id, h.problem_id, h.family = "problem/p", "p", "f"
     cfg = NS(model=Model(lambda ids: [{"hypothesis_id": "h1", "action": "follow_up", "replicates": 6, "concentrations_uM": GOOD}]),
              problem=NS(problem_id="p", constraints=[Constraint(name="potency", description="IC50 <= 20 uM", kind="hard", limit=20.0, unit="uM")]),
-             autonomy="observe", plan_approver=None)
+             autonomy="observe", plan_approver=None, budget=None)
     cfg.model.generate = lambda inv, prompt, **kw: ToolResult(
         envelope=inv.envelope.model_copy(), invocation_id=inv.invocation_id, status="succeeded",
         output={"text": json.dumps({"proposals": [{"hypothesis_id": "h1", "action": "follow_up", "replicates": 6, "concentrations_uM": GOOD}]})})
-    new = _followups(cfg, None, [h], store, system_actor(), lambda m: None, SimulatorLab(seed=1), GATE, 1, set(), 5, False, [h])
+    from proef.core.hypothesis import HypothesisTracker
+    new = _followups(cfg, HypothesisTracker(store, system_actor()), [h], store, system_actor(), lambda m: None, SimulatorLab(seed=1), GATE, 1, set(), 5, False, [h])
     assert new == [] and [r for r in store.branch_records("problem/p") if r.decision.get("kind") == "followup_proposal"]
 
 
@@ -238,3 +239,116 @@ def test_the_flag_reaches_the_engine_from_the_workbench_and_the_cli():
     assert _campaign_from_doc(build_cfg(doc)).followups is True
     assert _campaign_from_doc(build_cfg({k: v for k, v in doc.items() if k != "followups"})).followups is False
     assert "followups" not in build_cfg({**doc, "candidates": "A,B"}), "a candidate list has no model to ask"
+
+
+# ---- found by the independent review of Phase 3 ----
+
+def test_a_later_duplicate_cannot_replace_a_valid_suggestion_and_an_unknown_action_is_not_shown_as_accept(tmp_path):
+    from proef.api.v1.campaigns import _suggestions
+
+    def answer(ids):
+        return [{"hypothesis_id": ids["C1"], "action": "follow_up", "replicates": 6, "concentrations_uM": GOOD},
+                {"hypothesis_id": ids["C1"], "action": "accept"},                      # a duplicate, recorded after the valid one
+                {"hypothesis_id": ids["C2"], "action": "explode"}]                     # not one of the three actions
+    _, _, recs, _, _ = _run(tmp_path, answer=answer)
+    sug = _suggestions(recs)
+    c1 = next(r.decision["hypothesis_id"] for r in recs if (r.decision or {}).get("kind") == "followup_proposal" and r.decision["candidate"] == "C1")
+    assert sug[c1].action == "follow_up" and sug[c1].ok and sug[c1].ran, "the valid suggestion stands"
+    assert all(s.action != "accept" or s.status == "ok" for s in sug.values())
+    assert len(sug) == 1, "the duplicate and the unknown action are not shown"
+
+
+def test_a_follow_up_that_would_repeat_the_same_test_is_refused():
+    prop = SuccessCriteria(metric="conductivity", direction="max", threshold=1.0)
+    base = {"hypothesis_id": "h1", "action": "follow_up", "replicates": 6}
+    p = validate_followup(base, _ctx(_h(), gate=prop, supports=False))["validation"]
+    assert (p["ok"], p["status"]) == (False, "no_change") and "same test" in p["reasons"][0]
+    assert _v({**base, "concentrations_uM": GOOD}, _ctx(_h(), supports=False))["ok"], "a ladder is a real change"
+    assert _v(base, _ctx(_h(), gate=prop, supports=True))["ok"], "replicates are a real change when the lab honors them"
+
+
+def test_a_replicate_value_the_lab_ignores_does_not_sink_the_follow_up():
+    base = {"hypothesis_id": "h1", "action": "follow_up", "concentrations_uM": GOOD}
+    for bad in (None, 6.0, 20, "six", True):
+        assert _v({**base, "replicates": bad}, _ctx(_h(), supports=False))["ok"], bad
+    assert _v({**base, "replicates": 6.0}, _ctx(_h(), supports=True))["ok"], "6.0 is six"
+    assert _v({**base}, _ctx(_h(), supports=True))["ok"], "no value means the default"
+    assert _v({**base, "replicates": 20}, _ctx(_h(), supports=True))["status"] == "replicates_out_of_bounds", "still strict when it will be used"
+
+
+def test_the_hypothesis_limit_binds_follow_ups_and_two_cannot_share_the_last_slot():
+    ctx = _ctx(_h("h1", "C1"), _h("h2", "C2"))
+    ctx["hyp_room"] = 1
+    base = {"action": "follow_up", "replicates": 6, "concentrations_uM": GOOD}
+    assert validate_followup({**base, "hypothesis_id": "h1"}, ctx)["validation"]["ok"]
+    assert validate_followup({**base, "hypothesis_id": "h2"}, ctx)["validation"]["status"] == "no_hypothesis_budget"
+
+
+def test_a_campaign_at_its_hypothesis_limit_adds_no_follow_up(tmp_path):
+    _, _, recs, _, lab = _run(tmp_path, budget=ResourceBudget(max_total_runs=50, max_hypotheses_total=8))
+    by = {r.decision["candidate"]: r.decision["validation"]["status"] for r in _kind(recs, "followup_proposal") if r.decision.get("candidate")}
+    assert by["C1"] == "no_hypothesis_budget"
+    assert not [r for r in recs if (r.decision or {}).get("followup_of")]
+
+
+def test_what_a_follow_up_says_it_changes_is_what_the_lab_will_actually_do(tmp_path):
+    def no_replicates(seed):
+        lab = SimulatorLab(seed=seed)
+        lab.supports_replicates = False      # an instance flag: the constructor sets it, so a class attribute would be overridden
+        return lab
+    stmt = lambda recs: next(r.decision["statement"] for r in recs if r.event_type == EventType.hypothesis_proposed and r.decision.get("followup_of"))  # noqa: E731
+    (tmp_path / "a").mkdir()
+    _, _, honored, _, _ = _run(tmp_path / "a")
+    assert "6 replicates and a designed dose ladder" in stmt(honored)
+    (tmp_path / "b").mkdir()
+    _, _, ignored, _, lab = _run(tmp_path / "b", lab=no_replicates(3))
+    s = stmt(ignored)
+    assert "replicates" not in s and "a designed dose ladder" in s
+    assert all(not p.constraints.get("replicates") for p in lab._runs.values()), "and no replicate request was sent"
+
+
+def test_a_follow_up_keeps_its_parents_prior_and_lab_check(tmp_path):
+    from proef.hypothesis_agent import propose_families_with_agent  # noqa: F401  (the plan below carries a tool request)
+    plan = PLAN([f"C{i}" for i in range(1, 9)])
+    plan["families"][0]["variants"][0].update({"tools": ["admet-physchem"], "smiles": "CC(=O)Oc1ccccc1C(=O)O"})
+
+    class WithTools(Model):
+        def generate(self, inv, prompt, **kw):
+            if "hypothesis lead" in prompt:
+                self.prompts.append(prompt)
+                return ToolResult(envelope=inv.envelope.model_copy(), invocation_id=inv.invocation_id, status="succeeded",
+                                  output={"text": json.dumps(plan)}, model_version="s-1")
+            return super().generate(inv, prompt, **kw)
+    store = SqliteProvenanceStore(str(tmp_path / "prov.db"))
+    cfg = CampaignConfig(problem=ProblemStatement(objective="o", constraints=[Constraint(name="potency", description="IC50 <= 20 uM", kind="hard", limit=20.0, unit="uM")]),
+                         hypothesis_source="agent", model=WithTools(_answer), autonomy="act", k=8, max_families=8, rounds=2, seed=1, followups=True,
+                         prediction_tools=["admet-physchem"], inbox=str(tmp_path / "inbox"), poll_secs=0.05, flywheel=Flywheel(":memory:"))
+    report = run_campaign(cfg, SimulatorLab(seed=3), store, approver=lambda t: True, notify=lambda m: None)
+    recs = store.branch_records(f"problem/{report.problem_id}")
+    fu = next(r for r in recs if r.event_type == EventType.hypothesis_proposed and (r.decision or {}).get("followup_of"))
+    parent = next(r for r in recs if r.event_type == EventType.hypothesis_proposed and r.artifact
+                  and r.artifact.artifact_id == fu.decision["followup_of"])
+    assert fu.decision["predictions"] == parent.decision["predictions"] and fu.decision["predictions"], "the prior travels with the candidate"
+    assert fu.decision["lab_check"] == parent.decision["lab_check"]
+
+
+def test_a_declined_follow_up_does_not_spend_the_candidates_one_follow_up(monkeypatch):
+    import proef.autoloop as al
+    from proef.core.hypothesis import HypothesisTracker
+    store = SqliteProvenanceStore()
+    tracker = HypothesisTracker(store, system_actor())
+    h = tracker.propose("C1 binds", "C1", "binding", "p", criteria=GATE, branch_id="problem/p")
+    h.status, h.observed_value, h.observed_ci, h.qc_passed, h.problem_id = "inconclusive", 21.0, (12.0, 33.0), True, "p"
+    answers = iter([([], True), (None, False)])             # first the person declines, then (a later round) approves
+    monkeypatch.setattr(al, "_plan_gate", lambda cfg, tr, new, *a, **k: (lambda r: (new, False) if r[0] is None else r)(next(answers)))
+    model = Model(lambda ids: [{"hypothesis_id": h.hypothesis_id, "action": "follow_up", "replicates": 6, "concentrations_uM": GOOD}])
+    model.generate = lambda inv, prompt, **kw: ToolResult(
+        envelope=inv.envelope.model_copy(), invocation_id=inv.invocation_id, status="succeeded",
+        output={"text": json.dumps({"proposals": [{"hypothesis_id": h.hypothesis_id, "action": "follow_up", "replicates": 6, "concentrations_uM": GOOD}]})})
+    cfg = NS(model=model, problem=NS(problem_id="p", constraints=[Constraint(name="potency", description="IC50 <= 20 uM", kind="hard", limit=20.0, unit="uM")]),
+             autonomy="gate", plan_approver=lambda *a: None, budget=None)
+    followed = set()
+    first = al._followups(cfg, tracker, [h], store, system_actor(), lambda m: None, SimulatorLab(seed=1), GATE, 1, followed, 5, False, [h])
+    assert first == [] and followed == set(), "declined: the candidate keeps its one follow-up"
+    second = al._followups(cfg, tracker, [h], store, system_actor(), lambda m: None, SimulatorLab(seed=1), GATE, 2, followed, 5, False, [h])
+    assert len(second) == 1 and followed == {"C1"}

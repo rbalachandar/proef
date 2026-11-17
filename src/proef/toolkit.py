@@ -136,11 +136,12 @@ class AgentToolkit:
     """
 
     def __init__(self, lab_gateway, store, actor, tpp=None,
-                 branch_id: str = "agentic-toolkit", gate=None, approved=(), modality=None, autonomy: str | None = None):
+                 branch_id: str = "agentic-toolkit", gate=None, approved=(), modality=None, autonomy: str = "observe"):
         """`gate`: the program's pre-registered SuccessCriteria (a person fixed it). `approved`: candidates a person
-        approved in a plan. Both default to nothing, so the lab tools fail closed until a person supplies them."""
+        approved in a plan. Both default to nothing, so the lab tools fail closed until a person supplies them. `autonomy`
+        defaults to "observe", which offers and runs no lab tool: a caller has to ask for "gate" or "act" on purpose."""
         self.gate = gate
-        self.autonomy = autonomy      # observe: the lab tools are not offered and not executable
+        self.autonomy = autonomy      # observe (the default): the lab tools are not offered and refuse if named anyway
         self.modality = modality      # the program's modality: which assays are dose-response is the pack's data
         self.approved = set(approved)
         self._hyps: dict[str, Any] = {}
@@ -178,8 +179,19 @@ class AgentToolkit:
         return self._retro
 
     def executors(self) -> dict[str, Callable]:
-        return {name: self._recorded(name, fn) for name, fn in self._raw_executors().items()
-                if not (self.autonomy == "observe" and name in self.LAB_TOOLS)}
+        return {name: self._recorded(name, fn) for name, fn in self._raw_executors().items()}
+
+    def tool_schemas(self) -> list[dict]:
+        """The tools to offer THIS toolkit's model: the autonomy level is the toolkit's own, not an argument a caller can forget."""
+        return self.schemas(self.autonomy)
+
+    def _observe_refusal(self, tool: str) -> dict | None:
+        """Under observe a lab tool is refused (and the refusal recorded by the executor wrapper), even if the model names it
+        although it was never offered."""
+        if self.autonomy == "observe" and tool in self.LAB_TOOLS:
+            self._log_refusal(tool, "observe: this autonomy level submits nothing and judges nothing")
+            return self._refuse(tool, "observe: this autonomy level submits nothing and judges nothing")
+        return None
 
     def _recorded(self, name: str, fn: Callable) -> Callable:
         """Every tool call is a ledger record: tool, argument hash, result hash, actor. Refusals are recorded too."""
@@ -286,6 +298,9 @@ class AgentToolkit:
         """Lab submission. Only candidates a person approved in a plan may go, the ladder is bounded, and the safety
         gateway still checks every submission."""
         from proef.hypothesis_agent import clean_candidate
+        refused = self._observe_refusal("submit_assay")
+        if refused:
+            return refused
         if getattr(self.gateway, "governance", None) is None:
             self._log_refusal("submit_assay", "the gateway has no governance (halt, authorization)")
             return self._refuse("submit_assay", "the lab gateway has no governance bundle, so the halt switch and "
@@ -343,6 +358,9 @@ class AgentToolkit:
         """The engine judges. The model names a candidate and a run and reads the outcome. It cannot write one, judge a
         hypothesis twice, judge a run that is not finished, or get a verdict from a point estimate."""
         from proef.hypothesis_agent import clean_candidate
+        refused = self._observe_refusal("request_analysis")
+        if refused:
+            return refused
         name = clean_candidate(candidate)
         h = self._hyps.get(name)
         if h is None or h.criteria is None:

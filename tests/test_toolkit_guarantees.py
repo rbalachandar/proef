@@ -20,7 +20,7 @@ def _tk(gate=GATE, approved=(), halt=None, governed=True):
     gov = {"matrix": AuthorizationMatrix(), "halt": halt or HaltSwitch(path=_NO_HALT)} if governed else None
     gw = LabGateway(SimulatorLab(seed=1), SafetyEngine(), store, system_actor(), governance=gov,
                     approver=(lambda t: True) if gov else None)
-    tk = AgentToolkit(gw, store, system_actor(), branch_id="t", gate=gate, approved=approved)
+    tk = AgentToolkit(gw, store, system_actor(), branch_id="t", gate=gate, approved=approved, autonomy="act")
     return tk, tk.executors(), store
 
 
@@ -362,12 +362,24 @@ def test_an_mcp_call_that_raises_still_leaves_a_ledger_record():
 
 # ---- autonomy levels apply to the tools a model is offered ----
 
-def test_under_observe_the_lab_tools_are_not_offered_and_cannot_be_called():
+def test_under_observe_the_lab_tools_are_not_offered_and_refuse_if_named_anyway():
     offered = {t["name"] for t in AgentToolkit.schemas("observe")}
     assert not offered & AgentToolkit.LAB_TOOLS and "propose_hypothesis" in offered and "predict_admet" in offered
     assert {"submit_assay", "request_analysis"} <= {t["name"] for t in AgentToolkit.schemas("gate")} == {t["name"] for t in AgentToolkit.schemas("act")}
-    tk = AgentToolkit(None, SqliteProvenanceStore(), system_actor(), branch_id="t", gate=GATE, approved={"A"}, autonomy="observe")
-    ex = tk.executors()
-    assert "submit_assay" not in ex and "request_analysis" not in ex and "propose_hypothesis" in ex
-    with __import__("pytest").raises(KeyError):
-        ex["submit_assay"](compounds=["A"], assay_type="binding")
+    tk, ex, store = _tk(approved={"A"})
+    tk.autonomy = "observe"
+    assert not {t["name"] for t in tk.tool_schemas()} & AgentToolkit.LAB_TOOLS, "the toolkit's own autonomy decides what it offers"
+    out = ex["submit_assay"](compounds=["A"], assay_type="binding")
+    assert out["status"] == "refused" and "observe" in out["reason"]
+    assert ex["request_analysis"](candidate="A", run_id="x")["status"] == "refused"
+    assert not [r for r in store.branch_records("t") if r.event_type == EventType.lab_run], "nothing reached the lab"
+    assert [r.decision["tool"] for r in store.branch_records("t") if (r.decision or {}).get("kind") == "tool_refused"] == ["submit_assay", "request_analysis"]
+
+
+def test_a_toolkit_built_without_an_autonomy_cannot_use_the_lab_tools():
+    """The default is observe: a caller has to ask for gate or act on purpose, so forgetting the argument fails closed."""
+    store = SqliteProvenanceStore()
+    gw = LabGateway(SimulatorLab(seed=1), SafetyEngine(), store, system_actor())
+    tk = AgentToolkit(gw, store, system_actor(), branch_id="t", gate=GATE, approved={"A"})
+    assert tk.autonomy == "observe"
+    assert tk.executors()["submit_assay"](compounds=["A"], assay_type="binding")["status"] == "refused"

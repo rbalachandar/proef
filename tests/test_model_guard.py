@@ -179,3 +179,28 @@ def test_the_programs_model_call_cap_reaches_the_engine_and_a_tree_shares_it():
     assert campaign_doc(p, S.CampaignCreate(), model_calls=10)["budget"]["max_model_calls"] == 10, "a leaf's slice"
     assert campaign_doc(p, S.CampaignCreate(), model_calls=999)["budget"]["max_model_calls"] == 40, "never more than the program allows"
     assert S.Limits().max_model_calls == 200, "programs created before the cap existed get the default"
+
+
+# ---- found by the independent review of Phase 3 ----
+
+def test_a_pause_hold_is_closed_in_the_ledger_when_it_is_released(tmp_path):
+    guard, store, pause, _ = _guard(tmp_path)
+    pause.pause("campaign:p1", "check the reagents", by="kim")
+    done = threading.Event()
+    threading.Thread(target=lambda: (guard.check("model", "x"), done.set()), daemon=True).start()
+    time.sleep(0.1)
+    pause.resume("campaign:p1", by="kim")
+    assert done.wait(2.0)
+    released = _kinds(store.branch_records("problem/p1"), "pause_released")
+    assert len(released) == 1 and released[0].decision["held_seconds"] >= 0.0 and len(_kinds(store.branch_records("problem/p1"), "paused_hold")) == 1
+
+
+def test_the_ledger_is_scanned_once_not_on_every_call(tmp_path):
+    guard, store, _, _ = _guard(tmp_path, max_calls=100)
+    scans = []
+    real = store.branch_records
+    store.branch_records = lambda b: (scans.append(b), real(b))[1]
+    for i in range(10):
+        guard.check("model", str(i))
+    assert len(scans) == 1
+    assert len(_kinds(real("problem/p1"), "model_call")) == 10 and guard.used() == 10

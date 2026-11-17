@@ -265,21 +265,24 @@ def _reviews(recs) -> dict[str, S.Review]:
 
 
 def _suggestions(recs) -> dict[str, S.Suggestion]:
-    """The model's latest validated suggestion per hypothesis, and whether a follow-up was made from it."""
+    """The model's suggestion per hypothesis, and whether a follow-up was made from it. The FIRST real proposal wins: a later
+    duplicate (status duplicate_proposal) must not replace a valid suggestion, and a proposal whose action was not one of
+    the three is not shown at all, rather than as an accept."""
     ran = {(r.decision or {}).get("followup_of") for r in recs
            if r.event_type.value == "hypothesis_proposed" and (r.decision or {}).get("followup_of")}
     out: dict[str, S.Suggestion] = {}
     for r in recs:
         d = r.decision or {}
-        if d.get("kind") != "followup_proposal" or not d.get("hypothesis_id"):
+        hid = str(d.get("hypothesis_id") or "")
+        if d.get("kind") != "followup_proposal" or not hid or hid in out:
             continue
         v, pr = d.get("validation") or {}, d.get("params") or {}
-        out[str(d["hypothesis_id"])] = S.Suggestion(
-            action=d.get("action") if d.get("action") in ("follow_up", "accept", "drop") else "accept",
-            ok=bool(v.get("ok")), status=str(v.get("status", "")), reasons=list(v.get("reasons") or []),
+        if d.get("action") not in ("follow_up", "accept", "drop") or v.get("status") in ("duplicate_proposal", "unknown_hypothesis"):
+            continue
+        out[hid] = S.Suggestion(
+            action=d["action"], ok=bool(v.get("ok")), status=str(v.get("status", "")), reasons=list(v.get("reasons") or []),
             replicates=pr.get("replicates"), replicates_requested=pr.get("replicates_requested"),
-            concentrations=pr.get("concentrations"), why=str(d.get("rationale") or "")[:300],
-            ran=d["hypothesis_id"] in ran)
+            concentrations=pr.get("concentrations"), why=str(d.get("rationale") or "")[:300], ran=hid in ran)
     return out
 
 
@@ -558,7 +561,8 @@ def get_campaign(eid: str) -> S.CampaignDetail:
     rounds = _why_rounds(recs, detail.get("rounds") or [])
     tested_cands = {c for r in rounds for c in r.candidates}
     reviews = _reviews(recs)
-    hyps = [_summary_of(c, gate.label, reviews, _suggestions(recs)) for c in cards]
+    suggestions = _suggestions(recs)
+    hyps = [_summary_of(c, gate.label, reviews, suggestions) for c in cards]
     runs = sum(1 for r in recs if r.event_type.value == "lab_run"
                and (r.decision or {}).get("run_id"))
     progs = _program_index()

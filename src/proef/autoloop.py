@@ -1013,9 +1013,11 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
                         "verdicts": verdicts_r})
         tested.extend(selected)
         if cfg.followups and cfg.model is not None:
+            # a follow-up must not crowd out what is already queued: runs the remaining hypotheses are likely to need come first
+            _queued = min(len(remaining), cfg.k * max(0, cfg.rounds - round_no))
             new_f = _followups(cfg, tracker, selected, store, actor, say, lab, _crit, round_no,
-                               followed_up, runs_left=_runs_left(cfg, store, problem), last_round=round_no >= max(1, cfg.rounds),
-                               tested=tested)
+                               followed_up, runs_left=max(0, _runs_left(cfg, store, problem) - _queued),
+                               last_round=round_no >= max(1, cfg.rounds), tested=tested)
             remaining.extend(new_f)
             _install_score_for_new(new_f, tracker)
             if new_f and cfg.plan_approver is not None and cfg.plan_covers_submissions and isinstance(gateway, _GatedGateway):
@@ -1061,7 +1063,9 @@ def _followups(cfg, tracker, round_hyps, store, actor, say, lab, crit, round_no,
     except Exception as exc:  # noqa: BLE001 - a refused or failed suggestion must not stop the campaign
         say(f"follow-up suggestions unavailable ({type(exc).__name__}): the abstentions wait for a person")
         return []
+    _budget = cfg.budget or ResourceBudget()
     ctx = {"abstained": abstained, "gate": crit, "runs_left": runs_left, "followed_up": followed_up, "seen": set(),
+           "hyp_room": max(0, _budget.max_hypotheses_total - len(tracker.hypotheses)),
            "supports_replicates": bool(getattr(lab, "supports_replicates", False))}
     env = Envelope(experiment_branch_id=f"problem/{cfg.problem.problem_id}")
     proposals = [validate_followup(r, ctx) for r in raw]
@@ -1077,22 +1081,28 @@ def _followups(cfg, tracker, round_hyps, store, actor, say, lab, crit, round_no,
     for p in runnable:
         h = abstained[p["hypothesis_id"]]
         pr = p["params"]
+        # what the follow-up CHANGES, in the words a person approves: only what the lab will actually do
+        changes = ([f"{pr['replicates']} replicates"] if pr.get("replicates") else []) + (["a designed dose ladder"] if pr.get("concentrations") else [])
+        # the parent's structure and prior travel with it (smiles, sequence, modality, prediction, posterior): without them the
+        # gateway's structure checks and an acquisition policy see a blank candidate. Only what must change is left out.
+        inherited = {k: v for k, v in (h.metadata or {}).items()
+                     if k not in ("protocol", "replicates", "followup_of", "criteria_source", "variables")}
         fu = tracker.propose(
-            statement=f"{h.candidate}: follow-up with {pr.get('replicates_requested')} replicates (after round {round_no})",
-            candidate=h.candidate, assay_type=h.assay_type, predicted=h.predicted, criteria=h.criteria.model_copy(),
-            rationale=p["rationale"], mechanism=h.mechanism, refutation_condition=h.refutation_condition,
-            round_no=round_no + 1, branch_id=h.branch_id, family=h.family or "",
-            followup_of=h.hypothesis_id,
+            statement=f"{h.candidate}: follow-up with {' and '.join(changes)} (after round {round_no})",
+            candidate=h.candidate, assay_type=h.assay_type, predicted=h.predicted, predicted_value=h.predicted_value,
+            criteria=h.criteria.model_copy(), rationale=p["rationale"], mechanism=h.mechanism,
+            refutation_condition=h.refutation_condition, round_no=round_no + 1, branch_id=h.branch_id,
+            **{**inherited, "family": h.family or "", "followup_of": h.hypothesis_id},
             **({"replicates": pr["replicates"]} if pr.get("replicates") else {}),
-            **({"protocol": {"concentrations": pr["concentrations"], "why": pr.get("why", "")}} if pr.get("concentrations") else {}),
-            **({"lab_check": h.metadata["lab_check"]} if (h.metadata or {}).get("lab_check") else {}))
+            **({"protocol": {"concentrations": pr["concentrations"], "why": pr.get("why", "")}} if pr.get("concentrations") else {}))
         fu.problem_id, fu.family = h.problem_id, h.family
-        followed_up.add(h.candidate)
         new.append(fu)
     if cfg.autonomy == "gate" and cfg.plan_approver is not None:
         new, declined = _plan_gate(cfg, tracker, new, store, actor, say, label=f"follow-ups after round {round_no}", tested=tested)
         if declined:
             return []
+    # the candidate's one follow-up is spent only by a follow-up that survived the person's review
+    followed_up.update(h.candidate for h in new)
     return new
 
 

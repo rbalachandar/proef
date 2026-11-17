@@ -20,6 +20,8 @@ from proef.api.v1.deps import who
 from proef.api.v1.programs import _digest, _gate, _limits, campaign_doc
 from proef.problem_tree import ProblemTree, TreeLimits
 
+MIN_MODEL_CALLS_PER_LEAF = 3        # a proposal, a critic note and a review is the least a leaf campaign uses
+
 router = APIRouter(tags=["programs"])
 
 _RUNNING = ("running", "executing", "awaiting_results")
@@ -114,10 +116,17 @@ def start_tree(slug: str, body: S.TreeCreate, request: Request) -> S.TreeView:
     if not model_status()["configured"]:
         raise HTTPException(409, S.Problem(type="model-not-configured", title="No model is configured",
                                            detail="Each sub-problem is researched by a model.").model_dump())
+    if lim.max_model_calls // len(leaves) < MIN_MODEL_CALLS_PER_LEAF:
+        # a floor here would let the leaves together exceed the program's cap, so the tree is refused instead
+        raise HTTPException(422, S.Problem(
+            type="model-call-cap-too-small", title="Not enough model calls for this many sub-problems",
+            detail=f"This program allows {lim.max_model_calls} model calls: {lim.max_model_calls // len(leaves)} each for "
+                   f"{len(leaves)} sub-problems, and each needs at least {MIN_MODEL_CALLS_PER_LEAF}. Keep fewer sub-problems "
+                   "or raise the program's model-call limit.").model_dump())
     by = who(request)
     tree_id = f"tree-{uuid.uuid4().hex[:8]}"
     share_h = max(1, lim.max_hypotheses // len(leaves))
-    share_m = max(5, lim.max_model_calls // len(leaves))      # model calls are shared across leaves like lab runs
+    share_m = lim.max_model_calls // len(leaves)               # model calls are shared across leaves like lab runs, never rounded up
     campaigns: dict[str, str] = {}
     failed: list[str] = []
     for leaf in leaves:

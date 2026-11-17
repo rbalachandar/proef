@@ -29,6 +29,7 @@ class ModelGuard:
         self.say = say or (lambda m: None)
         self.pause_poll, self.pause_timeout = pause_poll, pause_timeout
         self._exhausted_recorded = False
+        self._n: int | None = None            # calls made so far: scanned from the ledger ONCE, then counted in memory
 
     @property
     def env(self) -> Envelope:
@@ -37,11 +38,14 @@ class ModelGuard:
     def used(self) -> int:
         """Model calls already recorded on this campaign's branch. Fails CLOSED: a store that cannot be read must not report
         zero calls used and let a campaign overspend."""
+        if self._n is not None:
+            return self._n
         try:
-            return sum(1 for r in self.store.branch_records(f"problem/{self.pid}")
-                       if (r.decision or {}).get("kind") == "model_call")
+            self._n = sum(1 for r in self.store.branch_records(f"problem/{self.pid}")
+                          if (r.decision or {}).get("kind") == "model_call")
         except Exception as exc:  # noqa: BLE001
             raise ModelRefused(f"the model-call budget cannot be read ({type(exc).__name__}): refusing") from exc
+        return self._n
 
     def _refuse(self, role: str, why: str, kind: str) -> None:
         self.store.append(record_for(self.env, EventType.gate_decision, self.actor,
@@ -63,6 +67,11 @@ class ModelGuard:
             while True:
                 blocking = pause.blocking(self.pid, prog)
                 if not blocking:
+                    if held_at is not None:
+                        # the hold is closed in the ledger, as the lab gateway closes its own
+                        self.store.append(record_for(self.env, EventType.gate_decision, self.actor, decision={
+                            "kind": "pause_released", "title": f"model call ({role})",
+                            "held_seconds": round(time.monotonic() - held_at, 2)}))
                     break
                 if self.gov.get("halt") and self.gov["halt"].engaged():
                     self._refuse(role, "[halt] engaged while paused", "halt_refusal")
@@ -82,6 +91,7 @@ class ModelGuard:
                 self.store.append(record_for(self.env, EventType.tool_invocation, self.actor, decision={
                     "kind": "budget_exhausted", "resource": "model_calls", "used": n, "cap": self.max_calls}))
             self._refuse(role, f"model-call budget exhausted ({n}/{self.max_calls})", "budget_refusal")
+        self._n = n + 1
         self.store.append(record_for(self.env, EventType.tool_invocation, self.actor, decision={
             "kind": "model_call", "role": role, "n": n + 1, "prompt_hash": hashlib.sha256(prompt.encode()).hexdigest()[:12]}))
 

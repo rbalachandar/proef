@@ -191,6 +191,11 @@ def _select_lab(cfg, lab, store, actor, approver, say):
         except Exception as exc:  # noqa: BLE001
             say(f"instrument menu unavailable ({type(exc).__name__}): picks will not be checked")
             return []
+    def _warn_dropped() -> None:
+        for m in menu:
+            if m.get("dropped_names"):
+                say(f"instrument '{m['name']}' declared {len(m['dropped_names'])} capability name(s) that are not safe to show a model, "
+                    f"so they were left out: {', '.join(m['dropped_names'][:3])}")
     if not cfg.labs:
         menu = _menu_of([(runs_on, lab)]) if lab is not None else []
     if cfg.labs:
@@ -248,6 +253,7 @@ def _select_lab(cfg, lab, store, actor, approver, say):
         say(f"lab: '{sel.name}' selected from a pool of {len(pool)} "
             f"(simulated={sel.rationale['chosen']['simulated']}); "
             f"decision sealed")
+    _warn_dropped()
     return lab, menu, runs_on
 
 

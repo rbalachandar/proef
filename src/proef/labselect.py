@@ -130,13 +130,32 @@ def select_lab(pool: list, req: LabRequirement):
                    "eligible": [n for n, _, _ in eligible]}), refusals
 
 
+SAFE_NAME = __import__("re").compile(r"[A-Za-z0-9_.\-]{1,40}")
+
+
+def safe_names(names, report: list | None = None) -> list[str]:
+    """The capability names an instrument's server supplied, restricted to what is safe to show a model: a short token of letters,
+    digits and `_ . -`. An instrument's server is untrusted input, and a name is the one place it could put an instruction in a prompt.
+    Anything else is DROPPED and, if a list is given, reported there."""
+    keep = []
+    for n in names:
+        n = str(n)
+        if SAFE_NAME.fullmatch(n):
+            keep.append(n)
+        elif report is not None:
+            report.append(n[:60])
+    return sorted(set(keep))
+
+
 def build_menu(pool: list) -> list[dict]:
     """What a model may choose an instrument from: the operator's pool as plain data. One source for the prompt and for
-    `check_pick`, so the menu and the validator cannot drift."""
+    `check_pick`, so the menu and the validator cannot drift. Names the instruments declared are restricted (`safe_names`)."""
     out = []
     for name, adapter in pool:
         caps = normalize_caps(adapter)
-        out.append({"name": name, "assay_types": sorted(caps["assay_types"]), "readouts": sorted(caps["readouts"]),
+        dropped: list[str] = []
+        out.append({"name": name, "assay_types": safe_names(caps["assay_types"], dropped), "readouts": safe_names(caps["readouts"], dropped),
+                    "dropped_names": dropped,
                     "bsl_max": caps["bsl_max"], "simulated": caps["simulated"],
                     "hardware_validated": caps["hardware_validated"]})
     return out

@@ -314,6 +314,10 @@ class LabGateway:
     def results(self, envelope: Any, run_id: str) -> AssayResult:
         result = self.lab.fetch_results(run_id)
         result.envelope = envelope
+        # the result is the run that was ASKED FOR. Several adapters build an AssayResult with a fresh random id, and a verdict's evidence
+        # pointer comes from it, so the verdict would cite a run that never existed. The gateway is the one path to an adapter, so it is
+        # fixed here once for all of them.
+        result.run_id = run_id
         return result
 
     def capabilities(self) -> dict[str, Any]:

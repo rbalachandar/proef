@@ -1002,3 +1002,8 @@ def _t_sandbox_isolation():
          + ", ".join(k for k, v in checks.items() if not v))
         if ok < len(checks) else
         f"{ok}/{len(checks)} isolation properties hold")
+
+
+# orchestration and tool-calling evals (Phase 5): registered by import
+from proef.evals import orchestration as _orchestration  # noqa: E402,F401
+from proef.evals import toolcalls as _toolcalls  # noqa: E402,F401

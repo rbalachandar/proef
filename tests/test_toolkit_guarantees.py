@@ -383,3 +383,30 @@ def test_a_toolkit_built_without_an_autonomy_cannot_use_the_lab_tools():
     tk = AgentToolkit(gw, store, system_actor(), branch_id="t", gate=GATE, approved={"A"})
     assert tk.autonomy == "observe"
     assert tk.executors()["submit_assay"](compounds=["A"], assay_type="binding")["status"] == "refused"
+
+
+# ---- found by the Phase 5 audit running over the tool loop ----
+
+def test_a_verdict_points_at_the_run_that_was_actually_made():
+    """The audit found it: the simulator returned an AssayResult with a random id, so a verdict's `evidence_run_id` named a run that never existed."""
+    from proef.audit import audit_campaign
+    tk, ex, store = _tk(approved={"A"})
+    ex["propose_hypothesis"](statement="s", candidate="A", assay_type="binding", predicted="p")
+    run = ex["submit_assay"](compounds=["A"], assay_type="binding", concentrations=["0.5uM", "2uM", "10uM", "40uM", "100uM"])["run_id"]
+    ex["request_analysis"](candidate="A", run_id=run)
+    verdict = next(r for r in store.branch_records("t") if r.event_type in (
+        EventType.hypothesis_validated, EventType.hypothesis_invalidated, EventType.hypothesis_inconclusive))
+    assert verdict.decision["evidence_run_id"] == run
+    assert audit_campaign(store.branch_records("t")) == []
+
+
+def test_every_adapters_result_carries_the_requested_run_id_through_the_gateway():
+    """An adapter that returns a fresh random id must not leak it: the gateway stamps the id that was asked for."""
+    from proef.core.contracts import Envelope
+    tk, ex, store = _tk(approved={"A"})
+    lab = tk.gateway.lab
+    real = lab.fetch_results
+    lab.fetch_results = lambda rid: real(rid).model_copy(update={"run_id": "some-random-uuid"})
+    ex["propose_hypothesis"](statement="s", candidate="A", assay_type="binding", predicted="p")
+    run = ex["submit_assay"](compounds=["A"], assay_type="binding", concentrations=["0.5uM", "2uM", "10uM", "40uM", "100uM"])["run_id"]
+    assert tk.gateway.results(Envelope(experiment_branch_id="t"), run).run_id == run

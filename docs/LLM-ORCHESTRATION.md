@@ -535,6 +535,35 @@ Kinds, each a scripted scenario run through the loop with the audit and the ledg
 - Tool results reach the model verbatim from the executor, and the loop never lets the model edit one. The narrative is the only place a
   result can be fabricated, which is why the check is on the narrative.
 
+**5H: grounding with knowledge tools, before and after a hypothesis (design; built after the engine calls the loop)**
+Today the hypothesis agent makes one text call with no retrieval. With the knowledge class in the catalog the model can read before it
+proposes and check what it proposed, and a person sees what it found. Two steps in the flow, each a state-scoped loop:
+- **Before (`propose`)**: the model may search PubMed, ChEMBL, Open Targets, the web or a materials or genomic database for context, then
+  propose. What it read is on the ledger as sealed tool results.
+- **After, before plan review (`ground`)**: for each hypothesis the model uses the same tools to look for supporting evidence,
+  contradicting evidence, prior measurements of the same compound and whether the idea is already known. It records a `grounding`
+  entry per hypothesis, and EVERY item in it must point at a sealed tool result from this run (a paper, a database row). Plan review
+  shows it beside the hypothesis ("3 papers, 1 contradicts", "a public IC50 of 4 uM exists", "no evidence found"), the way "already
+  tested" is shown now.
+- **After results (`decide`)**: knowledge tools are available to explain a result and to suggest the next step, with the same
+  traceability. The verdict does not change: it comes from the measurement and the rule.
+What the model may and may not do with what it finds:
+- It may use it as context, as a prior and as a reason in a suggestion. It may not turn it into a verdict, an approval or a criterion.
+  Literature is not evidence for a verdict. Only a measurement is.
+- **A citation must trace to a tool result.** Any paper the model cites that is not in a sealed result of this run is flagged
+  unverified, however real it looks. This is cheap, mechanical and catches the commonest hallucination without a network call.
+- **Public data can leak the answer.** A database may hold the very measurement a blinded study is scoring against (case study 04's
+  held-out drugs are in ChEMBL). For any blinded eval or case study the knowledge tools are either off, or filtered by a cutoff date and
+  an exclusion list, and the run records which. The contamination probes already in the eval suite extend to cover it.
+- Everything in the Phase 5 tool rules applies: results are untrusted data, queries are egress-checked, results are sealed for replay,
+  calls count against the model-call and tool-call budgets, and halt and pause hold them.
+- [ ] A `ground` state and a `grounding` record, with plan review showing it.
+- [ ] The citation-traces-to-a-result check, in `groundedness.py`, and in the hallucination evals.
+- [ ] Knowledge tools in the `propose` and `decide` states of the engine's own flow.
+- [ ] Blinding rules for knowledge tools in eval and case-study arms.
+- [ ] Evals: grounding precision (a supporting item really supports), recall of a planted contradiction, and a leakage test that a blinded
+      run cannot retrieve its held-out truth.
+
 **5D: the real-data case study (opt-in, costs money, asked first)**
 - [ ] Case study 09 reuses case study 04's `ReplayLab` and 36-candidate library with its published truth. Arms: the fixed loop, and
       the model orchestrator, each over several seeds, with a real model. Metrics: true hits found per lab run, abstentions

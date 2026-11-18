@@ -771,6 +771,7 @@ protocols (Make on rig X, Test on reader Y — a plan, not a choice).
 - [x] Phase 3 (done, independently reviewed): governed model calls (halt, pause, call budget), model-suggested follow-ups on abstentions validated by code, valid ones run under act or after approval, accept and drop stay a person's, toolkit tools follow the autonomy level
 - [x] Phase 4 (done, independently reviewed): sealed model answers and agent-campaign replay (re-plans and follow-ups reproduce), an explicit decision state with computed allowed actions, a fixed and an opt-in model orchestrator, a kill switch and an enforced wall clock. MCP-as-orchestrator is an open item
 - [ ] Phase 5: evals and a real-data study before any default changes
+- [ ] Phase 6: a settings page for every configuration (models, tools, instruments, limits, access, MCP), with secrets never shown, fence changes sealed under the person's name, and settings recorded into each campaign. See `docs/LLM-ORCHESTRATION.md`
 
 ## T0 — Uncertainty-aware verdicts (epistemic integrity)
 - [x] Fit IC50 with a confidence interval — Hill grid fit + residual bootstrap

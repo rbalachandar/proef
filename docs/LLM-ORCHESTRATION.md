@@ -268,11 +268,70 @@ A process lesson from this round: a pytest run killed by its own timeout prints 
 runs now write to a file with an explicit finish marker, and a clean run means the marker AND the 100% line, not an empty
 output.
 
-### Phase 4: tool-calling orchestrator inside a state machine
-- [ ] The engine becomes an explicit state machine (plan, review, gates, run, analyze, verdict, decide). The model
-      chooses among the actions the current state allows. Preconditions are enforced in code, not in the prompt.
-- [ ] Replay: the recorded tool-call sequence is replayed, and the model is not asked again.
-- [ ] A kill switch and wall-clock bound the model cannot reach.
+### Phase 4: a tool-calling orchestrator inside a state machine, replayable
+
+Findings at the start of Phase 4 (checked in the code):
+- The ledger keeps a model call's prompt hash and the character count of its response, never the response. A replay cannot
+  re-supply a model's answer, so a campaign with a re-plan or follow-ups reports "not reproducible".
+- `ResourceBudget.wall_clock_secs` exists and nothing reads it. A documented bound that does nothing.
+- The engine is one long `run_campaign` loop. The discretionary part after a round (follow-ups, then re-plan) is two
+  `if cfg.flag` blocks in a fixed order, so there is nowhere for a different policy to choose.
+- The MCP surface approves nothing at the campaign level: `run_assay` has a candidate list, not a state.
+
+Design:
+- A model call's response is sealed in the ledger. A **recorded model** replays those responses in order and checks each
+  prompt hash, so a replay of an agent campaign never asks a model and reports exactly where it diverges. This also closes
+  "not reproducible" for re-plans and follow-ups, and it covers whatever the orchestrator asks.
+- An explicit **state** for the decision point after a round, with the actions each state allows computed from preconditions
+  in code (budget, autonomy, what is permitted, what already happened). An **orchestrator** chooses among the allowed actions.
+  The fixed orchestrator reproduces today's order exactly. The model orchestrator picks, and an invalid choice falls back to
+  the fixed one and is recorded. The operator's `followups` and `replan` flags become what the model MAY choose.
+- A **kill switch and a wall clock** checked at every state transition, neither reachable by a tool.
+
+**4A: replayable model calls (done)**
+- [x] Each response is sealed (`model_response`: the model, the prompt hash, a truncation flag), paired with its `model_call`.
+- [x] `RecordedModel` plays the sealed answers back in order and checks every prompt hash. Replay of an agent campaign
+      reproduces re-plans, follow-ups, the critic and the plan reviews, and reports any deviation, including one a caller
+      swallowed on purpose (the critic, a re-plan).
+- [x] The settings a replay needs are in the recorded environment, and the flywheel's prompt context is sealed with each
+      generation, because a replay has no flywheel. Selection scores come from the recorded ones.
+- [x] Branches recorded before this keep the old replay and its "not reproducible" for re-plans and follow-ups.
+
+**4B: the state machine and the fixed orchestrator (done)**
+- [x] `campaign_fsm.py`: the decision after a round is a state, the allowed actions are computed from preconditions (what the
+      operator permits, abstentions, rounds left, what was already done this round), next round and stop are always allowed.
+- [x] Every decision is an `orchestrator_choice` record with what was allowed and what was chosen. The fixed orchestrator keeps
+      the old order (follow up, re-plan, next round) and never stops early, so behaviour is unchanged.
+
+**4C: the model orchestrator (done)**
+- [x] Opt-in (`orchestrator: "model"`, a launch-dialog checkbox). The model is shown only the allowed actions and is asked again
+      after each action until it chooses next round or stop. `followups` and `replan` become what it MAY choose.
+- [x] An answer outside the list, unparseable, or a refused call falls back to the fixed choice, recorded as `fixed-fallback`.
+      A custom orchestrator cannot return anything outside the list either. The model's questions pass the 3A guard, and a
+      model-orchestrated campaign replays from the sealed answers.
+
+**4D: kill switch and wall clock (done)**
+- [x] The halt switch and `wall_clock_secs` are checked at every transition (each round and each decision) and end the campaign
+      with a `campaign_stopped` record and `report.stopped`. The wall clock was documented and never read before this.
+- [x] A campaign ended that way spends no more model calls, not even the advisory reviewer's.
+- [x] A test fails if any tool a model is given can name or touch the halt or pause state.
+
+**4E: MCP (decided: not in this phase)**
+The MCP server stays a set of tools a person's client calls, with a gate and an approved list. Making an external client the
+orchestrator needs the state and its allowed actions exposed as tools and the approval model that goes with it. That is a
+design of its own, recorded as an open item rather than bolted on.
+
+#### Phase 4 hole review (author's pass, before the independent review)
+1. A model that chooses `stop` ends a campaign early and leaves queued hypotheses untested. It is opt-in, recorded, and the
+   fixed orchestrator never stops. A prompt-injected stop costs a campaign, not safety: follow-ups and re-plans are still
+   validated by code and approvals.
+2. A replay cannot reproduce a human decision that was not an approval. The replay approves every submission, so an original
+   in which a person declined a submission would diverge. Known limit.
+3. A response over 100,000 characters is not sealed in full and the replay reports it instead of guessing.
+4. The wall clock counts time a person spends reviewing a plan. That is the budget's meaning and an operator picks the number.
+5. After a stop the advisory reviewer would still have made a model call. Found while writing the stop test. Fixed.
+6. An f-string message still carried em-dashes because this Python tokenizes f-strings differently from the earlier rewrite.
+   Fixed with a rewrite that handles them.
 
 ### Phase 5: evidence it helps
 - [ ] Eval tasks comparing the model-driven order with the fixed loop (hits per lab run, abstention handling, cost).

@@ -246,7 +246,8 @@ def test_nothing_that_selects_or_scores_reads_predictions():
     review first, so this fails when any new module reads them."""
     from pathlib import Path
     root = Path(__file__).resolve().parents[1] / "src" / "proef"
-    allowed = {"predictors.py", "hypothesis_agent.py", "plan.py", "core/hypothesis.py", "api/v1/schemas.py"}
+    allowed = {"predictors.py", "hypothesis_agent.py", "plan.py", "core/hypothesis.py", "api/v1/schemas.py",
+               "reproduce.py"}      # replay plays recorded predictions back: it reads them to re-supply, never to select or score
     readers = {str(p.relative_to(root)) for p in root.rglob("*.py") if '"predictions"' in p.read_text() or "'predictions'" in p.read_text()}
     assert readers <= allowed, f"new readers of predictions: {readers - allowed}"
 

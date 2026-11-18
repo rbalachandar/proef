@@ -163,7 +163,7 @@ def build_diary_html(records: list[Any], branch: str) -> str:
             counts["gates"] += 1
             approved = d.get("approved", d.get("pass", d.get("match")))
             shared.append(_entry(
-                f"review gate — {d.get('gate', d.get('question', ''))}",
+                f"review gate, {d.get('gate', d.get('question', ''))}",
                 "APPROVED" if approved else "REJECTED",
                 f"by {d.get('approved_by', 'operator')} · "
                 f"{d.get('reason', '')}", cls="gate"))
@@ -214,7 +214,7 @@ def build_diary_html(records: list[Any], branch: str) -> str:
                 f"<p class='sub'>{_html.escape(s['label'])} · grouping: "
                 f"{_html.escape(s['backend'])}</p>"
                 f"<div class='pts'>{rows}</div>"
-                + (f"<p class='sub'>matched pairs — ΔIC50 with CI: "
+                + (f"<p class='sub'>matched pairs, ΔIC50 with CI: "
                    f"{_html.escape(pairs)}</p>" if pairs else "")
                 + "</div>")
     if not body:
@@ -225,7 +225,7 @@ def build_diary_html(records: list[Any], branch: str) -> str:
                     if k != "validated_or_not")
     return f"""<!DOCTYPE html><html><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Campaign diary — {_html.escape(branch)}</title><style>{_CSS}
+<title>Campaign diary, {_html.escape(branch)}</title><style>{_CSS}
 .lane{{border:1px solid #d8d2c2;border-radius:8px;padding:10px 14px;margin:10px 0;background:#faf8f2}}
 .lane-head{{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}}
 .lane-title{{margin:18px 0 6px;font-size:15px}}
@@ -237,7 +237,7 @@ def build_diary_html(records: list[Any], branch: str) -> str:
 <body><div class="wrap">
 <h1>Campaign diary</h1>
 <p class="sub">branch <span class="mono">{_html.escape(branch)}</span> ·
-{len(records)} provenance records · hash-chained — verify with
+{len(records)} provenance records · hash-chained, verify with
 <span class="mono">proef prove</span></p>
 <div class="stats">{stats}</div>
 {body}
@@ -267,7 +267,7 @@ def _run_submission_entry(run_id: str, candidate: str | None,
         bits.append(f"{info['replicates']} replicates")
     bits.append(f"on {inst}")
     when = time.strftime("%H:%M", time.localtime(ts)) if ts else ""
-    head = f"{assay.capitalize()} run — to {purpose}"
+    head = f"{assay.capitalize()} run, to {purpose}"
     body = " · ".join(bits) + (f" · submitted {when}" if when else "")
     return ("lab run submitted", head, body)
 

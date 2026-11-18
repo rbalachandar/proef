@@ -225,11 +225,13 @@ def test_observe_records_suggestions_and_runs_nothing(tmp_path):
     assert new == [] and [r for r in store.branch_records("problem/p") if r.decision.get("kind") == "followup_proposal"]
 
 
-def test_a_replay_of_a_campaign_that_ran_follow_ups_says_it_cannot_reproduce_them(tmp_path):
+def test_a_replay_of_a_campaign_that_ran_follow_ups_reproduces_it_from_the_sealed_answers(tmp_path):
+    """Phase 4A: this used to say "not reproducible", because the model's follow-up answers were not in the ledger."""
     from proef.reproduce import reproduce
-    report, _, _, _, _ = _run(tmp_path)
+    report, _, recs, _, _ = _run(tmp_path)
+    assert [r for r in recs if (r.decision or {}).get("followup_of")]
     res = reproduce(f"problem/{report.problem_id}", db_path=str(tmp_path / "prov.db"))
-    assert res["status"] == "not-reproducible" and "follow-ups" in res["reason"]
+    assert res["status"] == "match" and res["model_pinned"] is True, res
 
 
 def test_the_flag_reaches_the_engine_from_the_workbench_and_the_cli():

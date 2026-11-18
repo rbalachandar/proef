@@ -1,8 +1,8 @@
-"""AgentToolkit — wires Proef capabilities as tools for an LLM tool-calling loop.
+"""AgentToolkit, wires Proef capabilities as tools for an LLM tool-calling loop.
 
 Each tool is a named function with an Anthropic-compatible schema. The toolkit
 connects to the real Proef layer: LabGateway (safety), ADMET panel,
-retrosynthesis, provenance store, and TPP. Agents cannot bypass these — the
+retrosynthesis, provenance store, and TPP. Agents cannot bypass these, the
 gateway is the only path to the lab.
 """
 from __future__ import annotations
@@ -246,7 +246,7 @@ class AgentToolkit:
     # ---- implementations ------------------------------------------------
 
     def _tool_rank_variants(self, variants: list[dict]) -> dict:
-        """variants: [{chromosome, position, ref, alt}, ...] — ranked by
+        """variants: [{chromosome, position, ref, alt}, ...], ranked by
         AlphaGenome Atlas AVI score (real API when configured, else seeded
         simulation flagged as such)."""
         scored = self.variant_scorer.rank(variants)

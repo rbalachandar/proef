@@ -97,6 +97,7 @@ def propose_families_with_agent(
     modality: str | None = None,
     instruments: dict | None = None,
     predictors: list[str] | None = None,
+    registry: Any = None,
 ) -> tuple[list[Hypothesis], dict[str, float]]:
     """max_total_hypotheses: hard cap on hypotheses this generation may add.
     existing_keys: (candidate, statement) pairs already tried — duplicates the
@@ -136,7 +137,8 @@ def propose_families_with_agent(
     else:
         instrument_block, instrument_field = "", ""
     # prediction tools: the operator enables them, the model proposes which fit, code validates and runs them
-    from proef.predictors import DEFAULT as _REG
+    from proef.predictors import DEFAULT as _DEFAULT_REG
+    _REG = registry if registry is not None else _DEFAULT_REG     # a replay passes one that plays back what was recorded
     tool_menu = _REG.menu(predictors, modality)
     if tool_menu:
         tools_block = ("\n\nPREDICTION TOOLS (priors the lab computes; never evidence: the measured result judges)\n"
@@ -175,6 +177,8 @@ def propose_families_with_agent(
     import hashlib as _hl
     store_append(record_for(env, EventType.tool_invocation, actor,
                             decision={"kind": "hypothesis_generation",
+                                      # what the flywheel put in the prompt: a replay has no flywheel, so it replays this
+                                      "flywheel_context": (negs[:4000] if flywheel is not None and negs else ""),
                                       "prompt_chars": len(prompt),
                                       "response_chars": len(raw),
                                       # retrieval trace: what shaped this gen

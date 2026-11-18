@@ -1,4 +1,4 @@
-"""Proef MCP server — expose the framework as tools for any MCP client
+"""Proef MCP server, expose the framework as tools for any MCP client
 (Claude Desktop, Cursor, Claude Code...). Stdio transport, newline-delimited
 JSON-RPC 2.0, implemented on the stdlib only (P1).
 

@@ -36,6 +36,7 @@ export function LaunchCampaignDialog({ open, onOpenChange, slug, title = 'New ca
   const [rounds, setRounds] = useState(2)
   const [replan, setReplan] = useState(true)
   const [followups, setFollowups] = useState(false)
+  const [orchestrate, setOrchestrate] = useState(false)
   const cappedRounds = Math.min(rounds, maxRounds)
   useEffect(() => { if (open) { setHow(start()); setObjective(defaults?.objective ?? ''); setCands((defaults?.candidates ?? []).join('\n')) } }, [open, model?.configured])  // eslint-disable-line
 
@@ -44,7 +45,7 @@ export function LaunchCampaignDialog({ open, onOpenChange, slug, title = 'New ca
   const blocked = (needsList && !list.length) || (how === 'research' && !model?.configured)
   const submit = () => launch.mutate(
     { objective: objective || null, candidates: how === 'research' ? [] : list, mode: how === 'hand' ? 'hand' : 'agent', autonomy,
-      rounds: cappedRounds, replan: how === 'research' && cappedRounds > 1 && replan, followups: how === 'research' && followups, ...(how === 'list' ? { k: Math.max(1, Math.min(list.length, 4)) } : {}) },
+      rounds: cappedRounds, replan: how === 'research' && cappedRounds > 1 && replan, followups: how === 'research' && followups, orchestrator: how === 'research' && cappedRounds > 1 && orchestrate ? 'model' : 'fixed', ...(how === 'list' ? { k: Math.max(1, Math.min(list.length, 4)) } : {}) },
     {
       onSuccess: async (c) => {
         await onLaunched?.(c.id)
@@ -95,6 +96,12 @@ export function LaunchCampaignDialog({ open, onOpenChange, slug, title = 'New ca
           <label className="mb-3 flex items-start gap-2 text-xs text-muted">
             <input type="checkbox" className="mt-0.5" checked={followups} onChange={(e) => setFollowups(e.target.checked)} />
             <span><b className="text-ink">Suggest follow-ups on abstentions.</b> The model proposes what to do with each abstained result. The lab checks every suggestion{autonomy === 'gate' ? ', and a follow-up it suggests waits for approval' : ''}. Accept and drop stay a person’s decision.</span>
+          </label>
+        )}
+        {how === 'research' && cappedRounds > 1 && (
+          <label className="mb-3 flex items-start gap-2 text-xs text-muted">
+            <input type="checkbox" className="mt-0.5" checked={orchestrate} onChange={(e) => setOrchestrate(e.target.checked)} />
+            <span><b className="text-ink">Let the model choose the next step after each round.</b> It picks among the actions the engine allows (follow up, re-plan, next round, stop). The two switches above only say what it may pick. Every choice is recorded, and an invalid one falls back to the usual order.</span>
           </label>
         )}
         {how === 'research' && autonomy === 'act' && (

@@ -95,6 +95,13 @@ def summarize(rec) -> tuple[str, str, str | None]:
             return ("verdict", f"Family “{d['family_id']}”: {word} ({d.get('reason') or 'derived from its variants'})", None)
         return ("verdict", f"{cand or '?'}: {word}"
                 + (f": observed {obs}" if obs is not None else ""), cand)
+    if et == "gate_decision" and d.get("kind") == "orchestrator_choice":
+        who_ = {"model": "the model", "fixed": "the configured order", "fixed-fallback": "the configured order (the model's choice was not usable)"}.get(d.get("source"), "the orchestrator")
+        return ("gate", f"After round {d.get('round')}: {who_} chose {str(d.get('chosen', '?')).replace('_', ' ')}"
+                + (f": {d['why']}" if d.get("why") else ""), None)
+    if et == "gate_decision" and d.get("kind") == "campaign_stopped":
+        why_ = {"halt": "the operator's stop switch", "wall_clock": "the wall-clock budget", "orchestrator": "the orchestrator"}.get(d.get("why"), str(d.get("why")))
+        return ("gate", f"Campaign ended early by {why_}" + (f": {d['detail']}" if d.get("detail") else ""), None)
     if et == "tool_invocation" and d.get("kind") == "tool_call":
         outcome = "refused" if d.get("refused") else (d.get("status") or "done")
         return ("tool", f"{rec.actor.id} called {d.get('tool', '?')}: {outcome}", None)

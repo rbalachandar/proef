@@ -285,6 +285,7 @@ def campaign_doc(p: dict, body: S.CampaignCreate, *, runs: int | None = None, hy
            "rounds": min(body.rounds or min(2, lim.max_rounds), lim.max_rounds),
            "replan": bool(body.replan and not [c for c in body.candidates if c.strip()]),
            "followups": bool(body.followups and not [c for c in body.candidates if c.strip()]),
+           "orchestrator": body.orchestrator if not [c for c in body.candidates if c.strip()] else "fixed",
            "max_families": lim.max_families, "max_variants_per_family": lim.max_variants_per_family,
            "budget": {"max_total_runs": min(runs or lim.max_lab_runs, lim.max_lab_runs),
                       "max_hypotheses_total": min(hypotheses or lim.max_hypotheses, lim.max_hypotheses),

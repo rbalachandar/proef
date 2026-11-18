@@ -223,7 +223,7 @@ def _trust(recs, out, advs, durc, last) -> None:
     abstained = sum(1 for d in last.values()
                     if d.get("verdict") in ("inconclusive", "proposed"))
     if abstained:
-        checks.append(f"{abstained} verdict(s) abstained — CI straddled "
+        checks.append(f"{abstained} verdict(s) abstained, CI straddled "
                       "the gate; abstention is reported, not hidden")
     from proef.adapters.bio.tox_alerts import RULES_VERSION
     checks.append(f"safety rules: {RULES_VERSION}")

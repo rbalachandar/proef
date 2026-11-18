@@ -62,6 +62,8 @@ def build_cfg(doc: dict) -> dict:
             for c in candidates]
     else:
         cfg["hypothesis_source"] = "agent"
+        if doc.get("orchestrator") == "model":
+            cfg["orchestrator"] = "model"      # a model chooses among the actions the engine allows after each round
         if doc.get("followups"):
             cfg["followups"] = True       # the model suggests what to do with abstained hypotheses (validated by code)
         if doc.get("replan"):

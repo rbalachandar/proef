@@ -17,6 +17,9 @@ from proef.core.contracts import Envelope, EventType
 from proef.core.interfaces import record_for
 
 
+MAX_RESPONSE_CHARS = 100_000
+
+
 class ModelRefused(RuntimeError):
     """A model call the campaign is not allowed to make right now (halt, pause timeout, or budget)."""
 
@@ -53,7 +56,8 @@ class ModelGuard:
         self.say(f"model call refused ({role}): {why}")
         raise ModelRefused(why)
 
-    def check(self, role: str, prompt: str = "") -> None:
+    def check(self, role: str, prompt: str = "") -> tuple[int, str]:
+        """Refuse or hold as the halt, pause and budget require, record the call, and return (its number, its prompt hash)."""
         halt = (self.gov.get("halt").engaged() if self.gov.get("halt") else None)
         if halt:
             self._refuse(role, f"[halt] operator stop-condition engaged: {halt.get('reason', '')}", "halt_refusal")
@@ -92,8 +96,24 @@ class ModelGuard:
                     "kind": "budget_exhausted", "resource": "model_calls", "used": n, "cap": self.max_calls}))
             self._refuse(role, f"model-call budget exhausted ({n}/{self.max_calls})", "budget_refusal")
         self._n = n + 1
+        phash = hashlib.sha256(prompt.encode()).hexdigest()[:12]
         self.store.append(record_for(self.env, EventType.tool_invocation, self.actor, decision={
-            "kind": "model_call", "role": role, "n": n + 1, "prompt_hash": hashlib.sha256(prompt.encode()).hexdigest()[:12]}))
+            "kind": "model_call", "role": role, "n": n + 1, "prompt_hash": phash}))
+        return n + 1, phash
+
+    def record_response(self, n: int, role: str, phash: str, result: Any, model: Any) -> None:
+        """Seal what the model answered. Without it a replay cannot re-supply the answer, and a campaign with a re-plan or a
+        follow-up could not be reproduced. A response too large to seal is flagged, so a replay says so instead of guessing."""
+        out = getattr(result, "output", None)
+        text = str(out.get("text", "")) if isinstance(out, dict) else ""
+        self.store.append(record_for(self.env, EventType.tool_invocation, self.actor, decision={
+            "kind": "model_response", "n": n, "role": role, "prompt_hash": phash, "response": text[:MAX_RESPONSE_CHARS],
+            "truncated": len(text) > MAX_RESPONSE_CHARS, "status": getattr(result, "status", "succeeded"),
+            "model": getattr(model, "model", None), "model_version": getattr(result, "model_version", None)}))
+
+    def record_error(self, n: int, role: str, phash: str, exc: Exception) -> None:
+        self.store.append(record_for(self.env, EventType.tool_invocation, self.actor, decision={
+            "kind": "model_error", "n": n, "role": role, "prompt_hash": phash, "error": f"{type(exc).__name__}: {str(exc)[:200]}"}))
 
 
 class GovernedModel:
@@ -106,8 +126,14 @@ class GovernedModel:
         return getattr(self._inner, name)
 
     def generate(self, invocation: Any, prompt: str, *a: Any, **kw: Any) -> Any:
-        self._guard.check(self._role, prompt)
-        return self._inner.generate(invocation, prompt, *a, **kw)
+        n, phash = self._guard.check(self._role, prompt)
+        try:
+            result = self._inner.generate(invocation, prompt, *a, **kw)
+        except Exception as exc:  # noqa: BLE001 - recorded, then the caller decides what a failed call means
+            self._guard.record_error(n, self._role, phash, exc)
+            raise
+        self._guard.record_response(n, self._role, phash, result, self._inner)
+        return result
 
     def predict(self, invocation: Any, kind: Any, payload: Any, *a: Any, **kw: Any) -> Any:
         self._guard.check(self._role, str(kind))
@@ -124,3 +150,46 @@ def govern_models(cfg: Any, store: Any, actor: Any, governance: dict, say=None) 
     return replace(cfg,
                    model=GovernedModel(cfg.model, "model", guard) if cfg.model is not None else None,
                    critic_model=GovernedModel(cfg.critic_model, "critic", guard) if cfg.critic_model is not None else None)
+
+
+# ---- replay: a model that only plays back what was sealed -------------------------------------------------------------
+
+class ReplayDivergence(RuntimeError):
+    """The replay asked something the original did not: a different prompt, or more calls than were recorded."""
+
+
+class RecordedModel:
+    """Plays back the sealed responses of an earlier campaign, in order, and checks every prompt against the recorded hash. It
+    never reaches a real model. A replay that deviates raises, AND remembers the deviation, because some callers (the critic, a
+    re-plan) deliberately swallow a model failure and a swallowed divergence must still show in the replay's result."""
+
+    def __init__(self, responses: list[dict]):
+        self._r = sorted(responses, key=lambda d: d.get("n", 0))
+        self._i = 0
+        self.divergences: list[dict] = []
+        first = self._r[0] if self._r else {}
+        self.name, self.model, self.model_version = "recorded", first.get("model"), first.get("model_version")
+
+    def remaining(self) -> int:
+        return len(self._r) - self._i
+
+    def _diverge(self, why: str) -> None:
+        self.divergences.append({"call": self._i + 1, "why": why})
+        raise ReplayDivergence(f"model call {self._i + 1}: {why}")
+
+    def generate(self, invocation: Any, prompt: str, *a: Any, **kw: Any) -> Any:
+        from proef.core.contracts import ToolResult
+        if self._i >= len(self._r):
+            self._diverge("the replay made a model call the original did not")
+        rec = self._r[self._i]
+        if hashlib.sha256(prompt.encode()).hexdigest()[:12] != rec.get("prompt_hash"):
+            self._diverge(f"the prompt differs from the recorded one (role {rec.get('role')})")
+        if rec.get("truncated"):
+            self._diverge("the recorded response was too large to seal")
+        self._i += 1
+        return ToolResult(envelope=invocation.envelope.model_copy(), invocation_id=invocation.invocation_id,
+                          status=rec.get("status") or "succeeded", output={"text": rec.get("response", "")},
+                          model_version=rec.get("model_version"))
+
+    def predict(self, *a: Any, **kw: Any) -> Any:
+        raise NotImplementedError("a recorded model only replays generate()")

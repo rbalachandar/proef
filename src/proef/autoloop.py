@@ -70,8 +70,10 @@ class CampaignConfig:
                                               # the hypothesis prompt (P: skills)
     max_families: int = 3
     max_variants_per_family: int = 3
+    prediction_registry: Any = None        # a replay's stand-in that plays recorded predictions back instead of running tools
     prediction_tools: list[str] | None = None   # prediction tools the operator enables (priors, never evidence)
     modality: str | None = None            # selects the domain pack (assays, prompt wording); None = small molecule
+    orchestrator: Any = "fixed"           # 'fixed' (the configured order), 'model' (a model chooses among the allowed actions) or an object with choose()
     followups: bool = False                # after each round the model suggests what to do with each abstained hypothesis
     replan: bool = False                   # after each round the model proposes the next hypotheses from the results
     critic_model: Any = None               # a second model that critiques the plan before the person reads it (advisory)
@@ -125,6 +127,7 @@ class CampaignReport:
     recommendations: list[str] = field(default_factory=list)
     rounds_run: int = 1
     history: list[dict] = field(default_factory=list)
+    stopped: str | None = None            # why the campaign ended before its rounds did: halt, wall_clock or orchestrator
 
 
 from proef.core.contracts.models import coerce_assay_type
@@ -238,7 +241,7 @@ def _select_lab(cfg, lab, store, actor, approver, say):
                           "eligible": sel.rationale["eligible"]}))
             if not ok:
                 raise ValueError(
-                    f"lab choice '{sel.name}' declined by the approver — "
+                    f"lab choice '{sel.name}' declined by the approver, "
                     f"campaign refused (eligible were "
                     f"{sel.rationale['eligible']})")
         runs_on = sel.name
@@ -278,7 +281,7 @@ def _durc_gate(cfg, store, actor) -> None:
                       "action": "campaign refused before hypothesis work"}))
         raise ValueError(
             f"DURC: campaign names a select agent / regulated toxin family "
-            f"({', '.join(durc_hits)}) — refused and recorded; requires "
+            f"({', '.join(durc_hits)}), refused and recorded; requires "
             f"institutional review before Proef will run it")
 
 
@@ -291,7 +294,7 @@ def _unique_branch(cfg, store, say) -> None:
         _n += 1
         cfg.problem.problem_id = f"{_base_pid}-{_n}"
     if cfg.problem.problem_id != _base_pid:
-        say(f"branch '{_base_pid}' already holds a previous run — this "
+        say(f"branch '{_base_pid}' already holds a previous run, this "
             f"campaign recorded separately as '{cfg.problem.problem_id}'")
 
 
@@ -313,7 +316,8 @@ def _propose_and_score(cfg, tracker, problem, store, flywheel, say, lab_ctx=None
             existing_keys={(h.candidate, h.statement) for h in tracker.hypotheses.values()},
             skill_guidance=cfg.skill_guidance,
             flywheel=flywheel,
-            notify=say, instruments=lab_ctx, predictors=cfg.prediction_tools)
+            notify=say, instruments=lab_ctx, predictors=cfg.prediction_tools,
+            registry=cfg.prediction_registry)
         say(f"resource budget: {remaining_runs}/{budget.max_total_runs} lab runs remaining")
         say(f"agent proposed {len(portfolio)} variant hypotheses")
         _base = cfg.score_fn or (
@@ -475,7 +479,7 @@ def _make_candidate(h, protocol, cfg, store, say, synth_cache) -> bool:
                        (h.mechanism or "").lower() else "")
             _hits = screen_smiles(smi, _intent)["refuse"]
             if _hits:
-                say(f"{h.candidate}: REFUSED at Make entry — "
+                say(f"{h.candidate}: REFUSED at Make entry, "
                     f"toxicophore pre-screen (never synthesized)")
                 store.append(record_for(
                     protocol.envelope, EventType.gate_decision,
@@ -505,7 +509,7 @@ def _make_candidate(h, protocol, cfg, store, say, synth_cache) -> bool:
                 cfg.synthesis_backend).plan_routes(smi)
             viable = [p for p in plans if p.feasible]
             if not viable:
-                say(f"{h.candidate}: NO VIABLE SYNTHESIS ROUTE — "
+                say(f"{h.candidate}: NO VIABLE SYNTHESIS ROUTE, "
                     f"blocked at Make (never reaches Test)")
                 store.append(record_for(
                     protocol.envelope, EventType.gate_decision,
@@ -599,7 +603,7 @@ def _make_candidate(h, protocol, cfg, store, say, synth_cache) -> bool:
     return True
 
 
-def _review_pass(cfg, store, problem, say) -> None:
+def _review_pass(cfg, store, problem, say, use_model: bool = True) -> None:
     """Independent audit (and the flags-only LLM advisory layer) before
     results are finalized; recorded as provenance."""
     # reviewer pass: independent audit before results are finalized.
@@ -619,7 +623,7 @@ def _review_pass(cfg, store, problem, say) -> None:
                   "findings": review["findings"]}))
     if review["findings"]:
         say(f"reviewer: {review['critical']} critical / "
-            f"{review['warnings']} warning finding(s) — "
+            f"{review['warnings']} warning finding(s), "
             + "; ".join(f["detail"] for f in
                         review["findings"][:3]))
     else:
@@ -627,7 +631,7 @@ def _review_pass(cfg, store, problem, say) -> None:
 
     # LLM advisory layer: only when a model was part of this campaign.
     # Its output is flags-only (schema-enforced) — advisory by construction
-    if cfg.model is not None:
+    if cfg.model is not None and use_model:
         from proef.reviewer import review_llm
         llm_review = review_llm(
             store.branch_records(
@@ -659,7 +663,7 @@ def _resolve_series(store, problem, actor, flywheel, say) -> None:
                  "inconclusive": EventType.hypothesis_inconclusive}
     for c in resolve_series_claims(store.branch_records(branch)):
         if c["status"] == "open":
-            say(f"series claim {c['family_id']}: open — {c['reason']}")
+            say(f"series claim {c['family_id']}: open, {c['reason']}")
             continue
         store.append(record_for(
             Envelope(experiment_branch_id=branch), _claim_ev[c["status"]],
@@ -675,7 +679,7 @@ def _resolve_series(store, problem, actor, flywheel, say) -> None:
                       "derived_from": [list(x) for x in c["derived_from"]]}))
         flywheel.submit(f"series:{c['family_id']}", c["family_id"],
                         "series-claim", c["status"])
-        say(f"series claim {c['family_id']}: {c['status'].upper()} — "
+        say(f"series claim {c['family_id']}: {c['status'].upper()}, "
             f"{c['reason']}")
 
 
@@ -763,6 +767,7 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
                  notify: Callable[[str], None] | None = None,
                  sandbox: Any = None) -> CampaignReport:
     """Start-to-finish: problem -> portfolio -> filter -> test -> verdict -> confirm."""
+    started = time.monotonic()           # the wall clock a budget's wall_clock_secs is measured against
     if cfg.modality:
         from proef.modality import PACKS, get_pack
         if get_pack(cfg.modality) is None:   # never a silent fall-back to small molecule
@@ -802,7 +807,7 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
         sandbox.start(f"problem/{cfg.problem.problem_id}")
         lab = SandboxedLab(sandbox, lab=lab)
         say(f"sandbox: lab ops execute inside the experiment sandbox "
-            f"({lab.name} @ problem/{cfg.problem.problem_id}) — every op "
+            f"({lab.name} @ problem/{cfg.problem.problem_id}), every op "
             f"is a sealed sandbox_exec")
     problem = tracker.define_problem(cfg.problem, environment={
         "lab": getattr(lab, "name", "unknown"),
@@ -814,9 +819,23 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
         "k": cfg.k,
         "rounds": cfg.rounds,
         "model": getattr(cfg.model, "model", None),
+        # what a replay needs to rebuild the same campaign without a model
+        "hypothesis_source": cfg.hypothesis_source, "followups": cfg.followups, "replan": cfg.replan,
+        "max_families": cfg.max_families, "max_variants_per_family": cfg.max_variants_per_family,
+        "modality": cfg.modality, "prediction_tools": list(cfg.prediction_tools or []),
+        "critic": cfg.critic_model is not None, "plan_review": cfg.plan_approver is not None,
+        "orchestrator": cfg.orchestrator if isinstance(cfg.orchestrator, str) else "custom",
+        "lab_capabilities": _json_safe(lambda: lab.list_capabilities()),       # so a replay's lab declares the same assays
+        "labs": _json_safe(lambda: cfg.labs), "lab_requirement": _json_safe(lambda: cfg.lab_requirement),
+        "budget": ({"max_total_runs": cfg.budget.max_total_runs, "max_hypotheses_total": cfg.budget.max_hypotheses_total,
+                    "max_confirmations": cfg.budget.max_confirmations, "max_model_calls": cfg.budget.max_model_calls}
+                   if cfg.budget else None),
     })
     from proef.model_guard import govern_models
     cfg = govern_models(cfg, store, actor, gov, say)     # model calls obey halt, pause and the call budget, like lab submissions
+    from proef.campaign_fsm import FixedOrchestrator, ModelOrchestrator
+    orch = (cfg.orchestrator if hasattr(cfg.orchestrator, "choose") else
+            ModelOrchestrator(cfg.model) if cfg.orchestrator == "model" and cfg.model is not None else FixedOrchestrator())
     portfolio, score_fn = _propose_and_score(
         cfg, tracker, problem, store, flywheel, say, lab_ctx)
     _crit, _acq_log = _declare_criteria(problem, lab, portfolio, cfg.modality)
@@ -873,9 +892,13 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
     remaining = list(portfolio)
     history: list[dict] = []
     tested: list = []
+    stopped: str | None = None
     for round_no in range(1, max(1, cfg.rounds) + 1):
+        stopped = _limit_reason(cfg, gov, started, store, actor, say, round_no)
+        if stopped:
+            break
         if not remaining:
-            say(f"round {round_no}: no untested candidates remain — stopping")
+            say(f"round {round_no}: no untested candidates remain, stopping")
             break
         k_round = (cfg.k_schedule[min(round_no - 1, len(cfg.k_schedule) - 1)]
                    if cfg.k_schedule else cfg.k)
@@ -901,7 +924,7 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
                              f"problem/{problem.problem_id or 'unnamed'}"),
                     EventType.hypotheses_filtered, actor,
                     decision=acq_sel.decision_payload()))
-            say(f"round {round_no}: nothing selected — stopping")
+            say(f"round {round_no}: nothing selected, stopping")
             break
         _assign_criteria(selected, _crit, cfg.modality)
         if _crit is not None:
@@ -1012,36 +1035,103 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
                         "picked": sorted(verdicts_r),
                         "verdicts": verdicts_r})
         tested.extend(selected)
-        if cfg.followups and cfg.model is not None:
-            # a follow-up must not crowd out what is already queued: runs the remaining hypotheses are likely to need come first
-            _queued = min(len(remaining), cfg.k * max(0, cfg.rounds - round_no))
-            new_f = _followups(cfg, tracker, selected, store, actor, say, lab, _crit, round_no,
-                               followed_up, runs_left=max(0, _runs_left(cfg, store, problem) - _queued),
-                               last_round=round_no >= max(1, cfg.rounds), tested=tested)
-            remaining.extend(new_f)
-            _install_score_for_new(new_f, tracker)
-            if new_f and cfg.plan_approver is not None and cfg.plan_covers_submissions and isinstance(gateway, _GatedGateway):
-                gateway.covered |= {h.candidate for h in new_f}
-        if cfg.replan and cfg.hypothesis_source == "agent" and round_no < max(1, cfg.rounds):
-            new = _replan(cfg, tracker, problem, store, actor, flywheel, tested, round_no, say, lab_ctx)
-            remaining.extend(new)
-            _install_score_for_new(new, tracker)
-            if cfg.plan_approver is not None and cfg.plan_covers_submissions and isinstance(gateway, _GatedGateway):
-                gateway.covered |= {h.candidate for h in new}
+        # the decision point: what the campaign does with a round's results. The allowed actions are computed here from what the
+        # operator permits and what remains, an orchestrator (fixed or a model) chooses among them, and every choice is recorded
+        from proef.campaign_fsm import Action, Choice, State, View, allowed_actions
+        done: set[str] = set()
+        while True:
+            stopped = _limit_reason(cfg, gov, started, store, actor, say, round_no)
+            if stopped:
+                break
+            view = View(round_no=round_no, rounds=max(1, cfg.rounds), verdicts={h.candidate: h.status for h in tested},
+                        abstained=[h.candidate for h in selected if h.status == "inconclusive"], queued=len(remaining),
+                        runs_left=_runs_left(cfg, store, problem), done=set(done))
+            allowed = allowed_actions(State.ROUND_JUDGED, view=view, followups_permitted=cfg.followups,
+                                      replan_permitted=cfg.replan, has_model=cfg.model is not None,
+                                      agent_source=cfg.hypothesis_source == "agent")
+            choice = orch.choose(State.ROUND_JUDGED, allowed, view)
+            if choice.action not in allowed:      # whatever an orchestrator returns, it cannot leave the allowed list
+                choice = Choice(Action.NEXT_ROUND.value, "the choice was not an allowed action", "fixed-fallback", False,
+                                [f"'{choice.action}' is not allowed here ({', '.join(allowed)})"])
+            store.append(record_for(
+                Envelope(experiment_branch_id=f"problem/{problem.problem_id}"), EventType.gate_decision, actor,
+                decision={"kind": "orchestrator_choice", "state": State.ROUND_JUDGED.value, "round": round_no, "allowed": allowed,
+                          "chosen": choice.action, "source": choice.source, "valid": choice.valid, "reasons": choice.reasons,
+                          "why": choice.why[:300]}))
+            if choice.action == Action.FOLLOW_UP.value:
+                done.add(choice.action)
+                # a follow-up must not crowd out what is already queued: runs the remaining hypotheses are likely to need come first
+                _queued = min(len(remaining), cfg.k * max(0, cfg.rounds - round_no))
+                new_f = _followups(cfg, tracker, selected, store, actor, say, lab, _crit, round_no,
+                                   followed_up, runs_left=max(0, _runs_left(cfg, store, problem) - _queued),
+                                   last_round=round_no >= max(1, cfg.rounds), tested=tested)
+                remaining.extend(new_f)
+                _install_score_for_new(new_f, tracker)
+                if new_f and cfg.plan_approver is not None and cfg.plan_covers_submissions and isinstance(gateway, _GatedGateway):
+                    gateway.covered |= {h.candidate for h in new_f}
+            elif choice.action == Action.REPLAN.value:
+                done.add(choice.action)
+                new = _replan(cfg, tracker, problem, store, actor, flywheel, tested, round_no, say, lab_ctx)
+                remaining.extend(new)
+                _install_score_for_new(new, tracker)
+                if cfg.plan_approver is not None and cfg.plan_covers_submissions and isinstance(gateway, _GatedGateway):
+                    gateway.covered |= {h.candidate for h in new}
+            elif choice.action == Action.STOP.value:
+                stopped = "orchestrator"
+                store.append(record_for(
+                    Envelope(experiment_branch_id=f"problem/{problem.problem_id}"), EventType.gate_decision, actor,
+                    decision={"kind": "campaign_stopped", "why": "orchestrator", "round": round_no, "detail": choice.why[:300]}))
+                say(f"round {round_no}: the orchestrator ended the campaign ({choice.why[:120] or 'no reason given'})")
+                break
+            else:
+                break
+        if stopped:
+            break
 
     verdicts = {h.candidate: h.status for h in tested}
-    _review_pass(cfg, store, problem, say)
+    # a campaign ended by the stop switch or the wall clock spends no more model calls, not even the advisory reviewer's
+    _review_pass(cfg, store, problem, say, use_model=stopped not in ("halt", "wall_clock"))
 
     _resolve_series(store, problem, actor, flywheel, say)
 
     say(f"CAMPAIGN COMPLETE {problem.problem_id}: "
         + (", ".join(f"{c}={s}" for c, s in verdicts.items()) or "nothing tested"))
-    return CampaignReport(problem_id=problem.problem_id,
+    return CampaignReport(problem_id=problem.problem_id, stopped=stopped,
                           selected=[h.candidate for h in tested],
                           verdicts=verdicts,
                           recommendations=[m for m in messages
                                            if "recommendation" in m],
                           rounds_run=len(history), history=history)
+
+
+def _limit_reason(cfg, gov, started, store, actor, say, round_no) -> str | None:
+    """Checked at every transition. The halt switch and the wall clock end a campaign, and the reason is recorded. Neither is
+    reachable by a tool or a model: the switch is a file only a person or the operator API writes, and the clock is the budget's."""
+    why = None
+    halt = gov["halt"].engaged() if gov.get("halt") else None
+    if halt:
+        why = ("halt", f"operator stop-condition engaged: {halt.get('reason', '')}")
+    else:
+        b = cfg.budget
+        if b is not None and b.wall_clock_secs is not None and time.monotonic() - started >= b.wall_clock_secs:
+            why = ("wall_clock", f"the {b.wall_clock_secs:g}s wall-clock budget is spent")
+    if not why:
+        return None
+    store.append(record_for(
+        Envelope(experiment_branch_id=f"problem/{cfg.problem.problem_id}"), EventType.gate_decision, actor,
+        decision={"kind": "campaign_stopped", "why": why[0], "round": round_no, "detail": why[1]}))
+    say(f"round {round_no}: campaign stopped ({why[1]})")
+    return why[0]
+
+
+def _json_safe(get):
+    """A value for the recorded environment, or None when it is not plain JSON (a live handle must not poison the record)."""
+    try:
+        v = get()
+        json.dumps(v)
+        return v
+    except Exception:  # noqa: BLE001
+        return None
 
 
 def _runs_left(cfg, store, problem) -> int:
@@ -1125,7 +1215,7 @@ def _replan(cfg, tracker, problem, store, actor, flywheel, tested, round_no, say
     findings = "\n".join(
         f"- {h.candidate}: {h.status}"
         + (f", observed {h.observed_value:g}" if h.observed_value is not None else "")
-        + f" — {h.statement}" for h in tested)
+        + f", {h.statement}" for h in tested)
     before = set(tracker.hypotheses)
     try:
         new, _ = propose_families_with_agent(
@@ -1134,7 +1224,8 @@ def _replan(cfg, tracker, problem, store, actor, flywheel, tested, round_no, say
             max_total_hypotheses=room,
             existing_keys={(h.candidate, h.statement) for h in tracker.hypotheses.values()},
             skill_guidance=cfg.skill_guidance, flywheel=flywheel, notify=say, findings=findings,
-            modality=cfg.modality, instruments=lab_ctx, predictors=cfg.prediction_tools)
+            modality=cfg.modality, instruments=lab_ctx, predictors=cfg.prediction_tools,
+            registry=cfg.prediction_registry)
     except Exception as exc:  # noqa: BLE001 - a failed re-plan must not abort the campaign
         say(f"re-plan failed ({type(exc).__name__}): continuing with the existing plan")
         return []
@@ -1301,7 +1392,7 @@ class _GatedGateway:
                 decision={"kind": "covered_by_plan", "title": title, "candidate": self.current,
                           "reason": "within the plan a person approved"}))
         elif not self._approver(title):
-            self._say(f"operator declined: '{title}' — submission cancelled")
+            self._say(f"operator declined: '{title}', submission cancelled")
             self._gw.store.append(record_for(
                 protocol.envelope, EventType.gate_decision, self._gw.actor,
                 decision={"kind": "operator_declined", "title": title,

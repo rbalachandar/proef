@@ -769,7 +769,7 @@ protocols (Make on rig X, Test on reader Y — a plan, not a choice).
 - [x] Phase 1 (done): domain packs as data. One dose-response definition, prompt wording and default assay in the pack, unknown modalities refused, 12 tests
 - [x] Phase 2 (done): 2A instruments done (menu, validated pick, "Runs on" in plan review, cannot-run blocked, replay carries the check, `reproduce` now flags extra verdicts). 2B prediction tools done: registry contract, operator-enabled, validated and run by code, sealed, shown as priors
 - [x] Phase 3 (done, independently reviewed): governed model calls (halt, pause, call budget), model-suggested follow-ups on abstentions validated by code, valid ones run under act or after approval, accept and drop stay a person's, toolkit tools follow the autonomy level
-- [ ] Phase 4: tool-calling orchestrator inside a state machine, replayable
+- [x] Phase 4 (done pending independent review): sealed model answers and agent-campaign replay (re-plans and follow-ups reproduce), an explicit decision state with computed allowed actions, a fixed and an opt-in model orchestrator, a kill switch and an enforced wall clock. MCP-as-orchestrator is an open item
 - [ ] Phase 5: evals and a real-data study before any default changes
 
 ## T0 — Uncertainty-aware verdicts (epistemic integrity)

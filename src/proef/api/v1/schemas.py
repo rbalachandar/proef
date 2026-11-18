@@ -644,6 +644,7 @@ class CampaignCreate(BaseModel):
     autonomy: Literal["observe", "gate", "act"] = "gate"
     k: int | None = Field(None, ge=1, le=12, description="per round; defaults to, and is capped by, the program's limit")
     rounds: int | None = Field(None, ge=1, le=8, description="defaults to 2, and is capped by the program's limit")
+    orchestrator: Literal["fixed", "model"] = Field("fixed", description="'model': after each round a model chooses among the actions the engine allows (follow up, re-plan, next round, stop). The follow-up and re-plan switches become what it MAY choose. Every choice is recorded, an invalid one falls back to the fixed order, and a replay plays the choices back. Needs a model")
     followups: bool = Field(False, description="after each round the model suggests what to do with each abstained hypothesis. A follow-up it suggests runs only if valid, under 'act' or after approval under 'gate'. Accept and drop stay a person's decision. Needs a model")
     replan: bool = Field(False, description="after each round the model proposes the next hypotheses from the results; they require approval")
 

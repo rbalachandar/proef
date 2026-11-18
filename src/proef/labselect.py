@@ -1,12 +1,12 @@
 """Capability-matched lab selection inside the OPERATOR's fence (S-T5).
 
-Division of authority — mirroring the tighten-only safety doctrine:
+Division of authority, mirroring the tighten-only safety doctrine:
 
   * The PROGRAM CREATOR declares the pool of permitted instruments
     (consent for physical action is a human act; nobody downstream may
     add to the fence).
   * The MATCHER selects which pool member can serve the experiment's
-    declared needs, deterministically, and RECORDS the rationale —
+    declared needs, deterministically, and RECORDS the rationale , 
     including every refusal reason of the ones not chosen.
   * AGENTS may recommend, never re-fence.
 
@@ -26,7 +26,7 @@ from typing import Any
 
 @dataclass
 class LabRequirement:
-    """What the experiment needs — from the hypothesis/readout spec."""
+    """What the experiment needs, from the hypothesis/readout spec."""
     assay_types: frozenset = frozenset()
     readouts: frozenset = frozenset()
     max_bsl: int = 2
@@ -83,11 +83,11 @@ class Selection:
 def select_lab(pool: list, req: LabRequirement):
     """pool: [(name, adapter)] -> (Selection | None, refusals). Always
     returns the refusals list (why each DECLINED instrument was declined)
-    — the decision record is as informative when selection succeeds.
+   , the decision record is as informative when selection succeeds.
     Deterministic: eligible = capability-superset AND BSL-compatible;
     ordered hardware-validated first, then pool order (operator intent)."""
     if req.physical and not pool:
-        return None, [{"name": None, "why": ["empty pool — physical "
+        return None, [{"name": None, "why": ["empty pool, physical "
                                              "campaign has no permitted "
                                              "instruments"]}]
     eligible, refusals = [], []
@@ -240,7 +240,7 @@ def available_instruments() -> list[dict]:
     """The picker view: every catalog instrument, whether it is
     installable/reachable HERE, and what it declares. Availability is an
     INSTALL check; capability truth comes from the live handshake at
-    selection time — the list never overstates what an instrument is."""
+    selection time, the list never overstates what an instrument is."""
     import importlib.util
     import shutil
     out = []
@@ -350,7 +350,7 @@ def build_pool(entries: list[dict]) -> list:
             m = e["mcp"]
             if not isinstance(m.get("profile"), dict):
                 raise ValueError(
-                    "inline mcp entries need a full profile dict — named "
+                    "inline mcp entries need a full profile dict, named "
                     "profiles live in instruments.json; add the instrument "
                     "to the catalog (one data edit, then use its id)")
             label = str(m.get("command", ["mcp"])[0]).rsplit("/", 1)[-1]
@@ -365,7 +365,7 @@ def build_pool(entries: list[dict]) -> list:
 def fence_info(labs_entries: list | None) -> list[dict]:
     """Human-facing view of a program's fence: which instruments the
     creator permitted, by name, with honest status. This is DECLARATION
-    data (what the fence allows) — not a live probe of the devices."""
+    data (what the fence allows), not a live probe of the devices."""
     out = []
     for e in labs_entries or []:
         iid = canonical_id(e["instrument"]) if e.get("instrument") else None
@@ -398,7 +398,7 @@ def fence_info(labs_entries: list | None) -> list[dict]:
 def fence_declared_caps(labs_entries: list | None) -> dict[str, set]:
     """Union of the capability vocabulary DECLARED by a program's fence
     instruments (from the catalog). Vocabulary-agnostic: the readiness
-    check treats unmet declared readouts as blockers — failing closed."""
+    check treats unmet declared readouts as blockers, failing closed."""
     ids = [e.get("instrument") for e in labs_entries or []
            if e.get("instrument")]
     readouts, assay_types = set(), set()

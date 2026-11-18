@@ -179,7 +179,7 @@ def _merge_verdict(verd: dict, verd_c: dict) -> dict:
 def _card_state(v, *, hid, cand, sel, refused, run_map, unit_lbl, observed,
                 ci_txt, margin, ad_chip) -> tuple[str, str]:
     """(state, stage text) for one card, the pipeline state machine."""
-    obs_txt = (f" — {unit_lbl} {observed}{ci_txt}"
+    obs_txt = (f", {unit_lbl} {observed}{ci_txt}"
                if observed is not None else "")
     paren = (f" ({unit_lbl} {observed}{ci_txt})"
              if observed is not None else "")
@@ -225,7 +225,7 @@ def _card_statement(hp: dict, head) -> str:
     # strip any leading duplication before cosmetics
     if stmt.startswith(str(head)):
         stmt = stmt[len(str(head)):].strip(" , -·:")
-    return re.sub(rf"^{re.escape(str(head))}\s*(\([^)]*\))?\s*[—-]\s*",
+    return re.sub(rf"^{re.escape(str(head))}\s*(\([^)]*\))?\s*[, -]\s*",
                   "", stmt) or head   # statement was the label itself
 
 

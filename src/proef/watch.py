@@ -164,7 +164,7 @@ class AutoAnalysisAgent:
         phys = _fm([r["value"] for r in result.records])
         if phys["kind"] == "physical":
             self.notify(f"⚠ PHYSICAL failure mode "
-                        f"({event.path.name}): {phys['evidence']} — "
+                        f"({event.path.name}): {phys['evidence']}, "
                         f"{phys['action']}; no verdicts derived")
             self._record_failure_mode(event, phys)
             return None, {"failure_mode": phys, "file": event.path.name}
@@ -177,12 +177,12 @@ class AutoAnalysisAgent:
         verdict = _fm([], error=str(exc))
         if verdict["kind"] == "physical":
             self.notify(f"⚠ PHYSICAL failure mode "
-                        f"({event.path.name}): {verdict['evidence']} — "
+                        f"({event.path.name}): {verdict['evidence']}, "
                         f"{verdict['action']}")
             self._record_failure_mode(event, verdict)
         else:
             self.notify(f"⚠ instrument output unreadable ({event.path.name}): "
-                        f"{str(exc)[:120]} — flagged for review, no verdicts "
+                        f"{str(exc)[:120]}, flagged for review, no verdicts "
                         f"changed")
         return {"error": str(exc)[:200], "file": event.path.name,
                 "failure_mode": verdict}
@@ -284,7 +284,7 @@ class AutoAnalysisAgent:
         unit = next((d.get("unit", "") for d in _as_dicts(result.records)
                      if d.get("sample") == hyp.candidate), "")
         self.notify(f"hypothesis {hyp.hypothesis_id} ({hyp.candidate}): "
-                    f"{hyp.status.upper()} — {crit.metric} {value} {unit} vs "
+                    f"{hyp.status.upper()}, {crit.metric} {value} {unit} vs "
                     f"threshold {crit.threshold}")
         return (hyp.hypothesis_id, hyp.candidate, hyp.status, value)
 
@@ -310,7 +310,7 @@ class AutoAnalysisAgent:
             criteria_direction=crit.direction if crit else None,
             criteria_threshold=crit.threshold if crit else None)
         self.notify(f"hypothesis {hyp.hypothesis_id} ({hyp.candidate}): "
-                    f"INCONCLUSIVE — {why}; no claim either way")
+                    f"INCONCLUSIVE, {why}; no claim either way")
         return (hyp.hypothesis_id, hyp.candidate, hyp.status, None)
 
     def _verdict_fitted(self, event, result, hyp, match):
@@ -337,8 +337,8 @@ class AutoAnalysisAgent:
         ci_txt = (f" (95% CI {match['ic50_ci'][0]}–{match['ic50_ci'][1]})"
                   if match.get("ic50_ci") else "")
         self.notify(f"hypothesis {hyp.hypothesis_id} ({hyp.candidate}): "
-                    f"{hyp.status.upper()} (preliminary — pending orthogonal "
-                    f"confirmation) — IC50 {match['ic50_um']} uM{ci_txt} vs "
+                    f"{hyp.status.upper()} (preliminary, pending orthogonal "
+                    f"confirmation), IC50 {match['ic50_um']} uM{ci_txt} vs "
                     f"threshold {crit.threshold if crit else '?'}")
         return (hyp.hypothesis_id, hyp.candidate, hyp.status, match["ic50_um"])
 
@@ -350,7 +350,7 @@ class AutoAnalysisAgent:
         if best:
             candidate, ic50 = best[0]
             self.notify(f"recommendation: best binder so far is {candidate} "
-                        f"(IC50 {ic50} uM) — next: confirm with orthogonal assay")
+                        f"(IC50 {ic50} uM), next: confirm with orthogonal assay")
             if self.auto_confirm and candidate not in self._confirm_submitted:
                 self._submit_confirmation(candidate, ic50)
 
@@ -397,7 +397,7 @@ class AutoAnalysisAgent:
         phys = _fm(vals) if vals else _fm([], error="no readings")
         if phys["kind"] == "physical":
             self.notify(f"⚠ physical failure mode on adaptive well "
-                        f"{event.path.name}: {phys['evidence']} — "
+                        f"{event.path.name}: {phys['evidence']}, "
                         f"{phys['action']}; well discarded, posterior "
                         f"unchanged")
             self._record_failure_mode(event, phys)
@@ -523,7 +523,7 @@ class AutoAnalysisAgent:
         phys = _fm(vals) if vals else _fm([], error="no readings")
         if phys["kind"] == "physical":
             self.notify(f"\u26a0 physical failure mode on confirmation plate "
-                        f"{event.path.name}: {phys['evidence']} — "
+                        f"{event.path.name}: {phys['evidence']}, "
                         f"{phys['action']}; no confirmation verdict")
             self._record_failure_mode(event, phys)
             return self._finish_confirmation(

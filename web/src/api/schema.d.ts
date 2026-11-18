@@ -1306,6 +1306,13 @@ export interface components {
             /** Objective */
             objective?: string | null;
             /**
+             * Orchestrator
+             * @description 'model': after each round a model chooses among the actions the engine allows (follow up, re-plan, next round, stop). The follow-up and re-plan switches become what it MAY choose. Every choice is recorded, an invalid one falls back to the fixed order, and a replay plays the choices back. Needs a model
+             * @default fixed
+             * @enum {string}
+             */
+            orchestrator: "fixed" | "model";
+            /**
              * Replan
              * @description after each round the model proposes the next hypotheses from the results; they require approval
              * @default false

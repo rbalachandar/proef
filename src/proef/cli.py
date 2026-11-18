@@ -138,7 +138,7 @@ def cmd_prove(args: argparse.Namespace) -> int:
               f"[{'ok' if ok else 'BROKEN'}]")
     for p in problems:
         print(f"TAMPERED {p['record_id']} ({p['event']}): {p['problem']}"
-              + (f" — {p['detail']}" if p.get("detail") else ""))
+              + (f", {p['detail']}" if p.get("detail") else ""))
     print(f"chain intact: {prev_ok and not problems} "
           f"({len(records)} records, hashes recomputed from payload)")
     if not prev_ok or problems:
@@ -303,7 +303,7 @@ def cmd_why(args: argparse.Namespace) -> int:
                 f"in-domain (nn Tanimoto {ad['nn_tanimoto']})"
                 if not ad["extrapolation"] else
                 f"EXTRAPOLATION (nn {ad['nn_tanimoto']} < {ad['ad_floor']}, "
-                f"{ad['ad_basis']} basis) — claim-grade use vetoed"))
+                f"{ad['ad_basis']} basis), claim-grade use vetoed"))
         for key, sign in (("top_positive", "+"), ("top_negative", "−")):
             for g, w in exp.get(key, []):
                 print(f"    {sign} {g}: {w:+.3f}")
@@ -381,6 +381,7 @@ def _campaign_from_doc(cfg_doc: dict) -> "CampaignConfig":
         budget=(ResourceBudget(**cfg_doc["budget"]) if cfg_doc.get("budget") else None),
         replan=bool(cfg_doc.get("replan", False)),
         followups=bool(cfg_doc.get("followups", False)),
+        orchestrator=("model" if cfg_doc.get("orchestrator") == "model" else "fixed"),
         modality=(cfg_doc.get("modality") or None),
         prediction_tools=(list(cfg_doc["prediction_tools"]) if cfg_doc.get("prediction_tools") else None),
         max_families=cfg_doc.get("max_families", 3),
@@ -451,7 +452,7 @@ def cmd_select(args) -> int:
         print(f"  + {p['candidate']:10s} EI={p['acquisition']:<9} {p['reason']}")
     refusals = sel.get("refusals") or []
     if refusals:
-        print(f"\nRefused ({len(refusals)}) — why they did NOT make the plate:")
+        print(f"\nRefused ({len(refusals)}), why they did NOT make the plate:")
         for x in refusals:
             print(f"  - {x['candidate']:10s} {x['reason']}")
     if sel.get("note"):
@@ -524,7 +525,7 @@ def cmd_auto(args: argparse.Namespace) -> int:
             branch_id=branch, store=store, actor=_sa("sandbox-lifecycle"),
             image=sbx_cfg.get("image"))
         _ts_notify(f"sandbox: {sbx_cfg['mode']} ({sbx_cfg.get('type', 'local')}) "
-                   f"branch={branch} — lifecycle provenance-sealed; lab ops "
+                   f"branch={branch}, lifecycle provenance-sealed; lab ops "
                    f"route in-sandbox inside run_campaign; registry()/tool "
                    f"calls route when routed through this session")
     try:
@@ -585,7 +586,7 @@ def cmd_eval(args: argparse.Namespace) -> int:
     scored = [r for r in results if not r.notes.startswith("SKIPPED")]
     overall = sum(r.score for r in scored) / len(scored) if scored else 0.0
     all_pass = all(r.passed for r in scored)
-    print(f"\n{'PASS' if all_pass else 'FAIL'} — {len(results)} tasks, "
+    print(f"\n{'PASS' if all_pass else 'FAIL'}, {len(results)} tasks, "
           f"mean score {overall:.3f} (pass bar {PASS_THRESHOLD})")
 
     if args.task or (getattr(args, "suite", None) and not args.all):
@@ -607,7 +608,7 @@ def cmd_eval(args: argparse.Namespace) -> int:
             f"| {r.task_id} | {r.score:.3f} | "
             f"{'⏭' if r.notes.startswith('SKIPPED') else ('✅' if r.passed else '❌')} | "
             f"{r.metrics.get('duration_s', ', ')}s | {r.notes} |" for r in rs)
-        sections += (f"\n### {suite} — mean "
+        sections += (f"\n### {suite}, mean "
                      f"{sum(x.score for x in rs) / len(rs):.3f}\n\n"
                      f"| task | score | pass | time | notes |\n"
                      f"|---|---|---|---|---|\n{rows}\n")
@@ -697,7 +698,7 @@ def cmd_reproduce(args: argparse.Namespace) -> int:
             "error": "❌"}.get(status, "•")
     print(f"{icon} {status}", end="")
     if status in ("match", "differs"):
-        print(f" — {res['matched']}/{res['recorded_verdicts']} verdicts "
+        print(f", {res['matched']}/{res['recorded_verdicts']} verdicts "
               f"identical on the REPLAYED execution path")
         print(f"   {res.get('note', '')}")
         for d in res["diffs"]:
@@ -707,7 +708,7 @@ def cmd_reproduce(args: argparse.Namespace) -> int:
               f"seed={res['environment'].get('lab_seed')} "
               f"conc={res['environment'].get('concentrations')}")
     else:
-        print(f" — {res.get('reason', '')}")
+        print(f", {res.get('reason', '')}")
     return 0 if status == "match" else 1
 
 
@@ -822,7 +823,7 @@ def cmd_sop(args: argparse.Namespace) -> int:
         return 0
     if args.command == "approve":
         ok = reg.approve(args.sop_id, by=args.by)
-        print(f"approved {args.sop_id} — recurring runs of this procedure "
+        print(f"approved {args.sop_id}, recurring runs of this procedure "
               "are now authorized" if ok else f"unknown SOP {args.sop_id}")
         return 0 if ok else 1
     return 2
@@ -875,7 +876,7 @@ def cmd_connect(args: argparse.Namespace) -> int:
         base = builtin_card(args.device, args.device, {}) if args.builtin else None
         card = load_card(args.device, base=base)
         if not card:
-            print(f"no card for '{args.device}' — run "
+            print(f"no card for '{args.device}', run "
                   f"`proef connect describe {args.device}` first")
             return 1
         print(to_agent_text(card))

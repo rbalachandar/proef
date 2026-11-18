@@ -51,7 +51,7 @@
     "refutation_condition": "",
     "round": 1,
     "selected": true,
-    "stage": "confirmed by orthogonal assay \u2014 IC50 (\u00b5M) 4.403 (95% CI 3.043\u20136.043) \u00b7 borderline: CI spans the gate",
+    "stage": "confirmed by orthogonal assay, IC50 (\u00b5M) 4.403 (95% CI 3.043\u20136.043) \u00b7 borderline: CI spans the gate",
     "state": "confirmed",
     "statement": "binds",
     "threshold": 5.0,
@@ -150,7 +150,7 @@
     "refutation_condition": "",
     "round": 2,
     "selected": true,
-    "stage": "confirmed by orthogonal assay \u2014 IC50 (\u00b5M) 1.574 (95% CI 1.241\u20131.795) \u00b7 clear margin",
+    "stage": "confirmed by orthogonal assay, IC50 (\u00b5M) 1.574 (95% CI 1.241\u20131.795) \u00b7 clear margin",
     "state": "confirmed",
     "statement": "binds",
     "threshold": 90.0,
@@ -182,18 +182,44 @@
      ],
      "environment": {
       "autonomy": "act",
+      "budget": null,
       "concentrations": [
        "0.5uM",
        "2uM",
        "10uM",
        "40uM"
       ],
+      "critic": false,
       "dose_design": "fixed",
+      "followups": false,
+      "hypothesis_source": "config",
       "k": 3,
       "lab": "simulator",
+      "lab_capabilities": {
+       "assays": [
+        "binding",
+        "enzymatic",
+        "cytotoxicity",
+        "counterscreen",
+        "adme"
+       ],
+       "bsl_max": 2,
+       "throughput": {
+        "plates_per_day": 20
+       }
+      },
+      "lab_requirement": null,
       "lab_seed": 3,
       "lab_version": "sim-v1",
+      "labs": null,
+      "max_families": 3,
+      "max_variants_per_family": 3,
+      "modality": null,
       "model": null,
+      "orchestrator": "fixed",
+      "plan_review": false,
+      "prediction_tools": [],
+      "replan": false,
       "rounds": 2
      },
      "objective": "find IC50<=20",
@@ -863,6 +889,23 @@
     }
    ],
    [
+    "gate_decision",
+    {
+     "allowed": [
+      "next_round",
+      "stop"
+     ],
+     "chosen": "next_round",
+     "kind": "orchestrator_choice",
+     "reasons": [],
+     "round": 1,
+     "source": "fixed",
+     "state": "round_judged",
+     "valid": true,
+     "why": "nothing else is allowed or configured"
+    }
+   ],
+   [
     "hypotheses_filtered",
     {
      "decisions": [
@@ -1208,6 +1251,23 @@
     }
    ],
    [
+    "gate_decision",
+    {
+     "allowed": [
+      "next_round",
+      "stop"
+     ],
+     "chosen": "next_round",
+     "kind": "orchestrator_choice",
+     "reasons": [],
+     "round": 2,
+     "source": "fixed",
+     "state": "round_judged",
+     "valid": true,
+     "why": "nothing else is allowed or configured"
+    }
+   ],
+   [
     "stage_transition",
     {
      "critical": 0,
@@ -1486,7 +1546,7 @@
    "title": "The record of this run",
    "trust": {
     "checks": [
-     "1 verdict(s) abstained \u2014 CI straddled the gate; abstention is reported, not hidden",
+     "1 verdict(s) abstained, CI straddled the gate; abstention is reported, not hidden",
      "safety rules: safety-rules-v1"
     ]
    },
@@ -1566,11 +1626,11 @@
   },
   "report": {
    "recommendations": [
-    "recommendation: best binder so far is AD1 (IC50 20.883 uM) \u2014 next: confirm with orthogonal assay",
-    "recommendation: best binder so far is H1 (IC50 4.288 uM) \u2014 next: confirm with orthogonal assay",
-    "recommendation: best binder so far is H2 (IC50 61.6 uM) \u2014 next: confirm with orthogonal assay",
-    "recommendation: best binder so far is H3 (IC50 49.879 uM) \u2014 next: confirm with orthogonal assay",
-    "recommendation: best binder so far is M1 (IC50 1.703 uM) \u2014 next: confirm with orthogonal assay"
+    "recommendation: best binder so far is AD1 (IC50 20.883 uM), next: confirm with orthogonal assay",
+    "recommendation: best binder so far is H1 (IC50 4.288 uM), next: confirm with orthogonal assay",
+    "recommendation: best binder so far is H2 (IC50 61.6 uM), next: confirm with orthogonal assay",
+    "recommendation: best binder so far is H3 (IC50 49.879 uM), next: confirm with orthogonal assay",
+    "recommendation: best binder so far is M1 (IC50 1.703 uM), next: confirm with orthogonal assay"
    ],
    "rounds_run": 2,
    "selected": [
@@ -1728,18 +1788,44 @@
      ],
      "environment": {
       "autonomy": "observe",
+      "budget": null,
       "concentrations": [
        "0.5uM",
        "2uM",
        "10uM",
        "40uM"
       ],
+      "critic": false,
       "dose_design": "fixed",
+      "followups": false,
+      "hypothesis_source": "config",
       "k": 3,
       "lab": "simulator",
+      "lab_capabilities": {
+       "assays": [
+        "binding",
+        "enzymatic",
+        "cytotoxicity",
+        "counterscreen",
+        "adme"
+       ],
+       "bsl_max": 2,
+       "throughput": {
+        "plates_per_day": 20
+       }
+      },
+      "lab_requirement": null,
       "lab_seed": 3,
       "lab_version": "sim-v1",
+      "labs": null,
+      "max_families": 3,
+      "max_variants_per_family": 3,
+      "modality": null,
       "model": null,
+      "orchestrator": "fixed",
+      "plan_review": false,
+      "prediction_tools": [],
+      "replan": false,
       "rounds": 2
      },
      "objective": "find IC50<=20",

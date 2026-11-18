@@ -424,6 +424,7 @@ class Limits(BaseModel):
     max_variants_per_family: int = Field(3, ge=1, le=8)
     breadth: int = Field(3, ge=1, le=12, description="hypotheses taken to the lab per round")
     max_depth: int = Field(2, ge=1, le=3, description="how many levels an objective may be split into sub-problems")
+    max_wall_minutes: int = Field(0, ge=0, le=10080, description="a campaign ends early once it has run this long, not counting time spent waiting for a person or on a pause. 0 means no limit")
     max_model_calls: int = Field(200, ge=5, le=2000, description="model calls: proposals, re-plans, the critic and the reviewer. A research tree shares it across its sub-problems")
     max_subproblems: int = Field(8, ge=2, le=16, description="sub-problems in one research tree, all levels together")
 

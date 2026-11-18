@@ -333,6 +333,33 @@ design of its own, recorded as an open item rather than bolted on.
 6. An f-string message still carried em-dashes because this Python tokenizes f-strings differently from the earlier rewrite.
    Fixed with a rewrite that handles them.
 
+#### Independent review of Phase 4 (done, `/code-review high`)
+Ten findings, all fixed and tested (each guard mutation-checked, see the process note below):
+1. A model call that FAILED in the original was sealed but not replayed, so the replay gave its slot to the next answer and every
+   later call shifted by one. A failed call is now replayed as a failure and the same fallback runs.
+2. A halt or the wall clock tripping after the last round was recorded as the campaign ending early and skipped the advisory
+   review. On the last round nothing is left to end: it is not recorded as a stop. `stop` is not offered on the last round either.
+3. A last-round follow-up cost a model call and could never run. It still records a suggestion for a person, and the prompt now
+   says so.
+4. The replay's prediction stand-in did not apply the real registry's per-variant tool cap, so extra tools looked like divergences.
+5. The replay lab dropped the simulator's other settings (replicates, interference rate, method bias). The lab's settings are in
+   the recorded environment and the replay builds the same lab.
+6. Every model answer, up to 100,000 characters, was in the ledger and served by the provenance API. The advisory reviewer's answer
+   (study data, no effect on any decision) is no longer sealed and a replay answers it with no flags. The workbench serves the
+   size of a sealed answer, not its text. The ledger keeps the rest, which a replay needs.
+7. `predict()` was counted but never sealed. It is refused, since a campaign's model is called with `generate()` only.
+8. The wall clock counted time spent waiting for a person or on a pause, and no program setting reached it. Waits are now left
+   out, and the program has a time limit in minutes (0 is no limit).
+9. The orchestrator's model calls competed with the follow-up, re-plan and review calls for the same budget. It keeps a reserve and
+   falls back to the fixed order when only the reserve is left.
+10. The frozen flywheel handed out prompt contexts one per successful generation, so a failed generation shifted the rest. Each
+    attempt now writes its context before the call.
+
+Process lesson, second time in this phase: a shell script that makes backups with an unquoted variable made none (zsh does not split
+it), and its restore then restored nothing, leaving ten mutations stacked. It was caught by the restore errors, reversed by hand and
+re-run with backups made in Python and a byte-for-byte check afterwards. That re-run also showed one mutation the first pass had
+"caught" by accident was not covered by its test, and the test was rewritten.
+
 ### Phase 5: evidence it helps
 - [ ] Eval tasks comparing the model-driven order with the fixed loop (hits per lab run, abstention handling, cost).
 - [ ] A real-data case study before any default changes. The model-driven mode stays opt-in until it wins.

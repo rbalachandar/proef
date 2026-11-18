@@ -164,6 +164,7 @@ class LabGateway:
         self.approver = approver
         self.pause_poll = 1.0          # seconds between checks while a pause holds a submission
         self.pause_timeout: float | None = None   # None: wait until resumed
+        self.on_wait = None            # told how long a pause held a submission, so a wall-clock budget can leave it out
 
     def _hold_while_paused(self, protocol: ProtocolSubmission) -> str | None:
         """A pause HOLDS the submission and releases it on resume (recorded both ways). The global halt still wins
@@ -199,6 +200,8 @@ class LabGateway:
                 return f"[paused] {blocking.get('scope')}: {blocking.get('reason') or 'no reason given'}"
             time.sleep(self.pause_poll)
         if held_at is not None:
+            if self.on_wait:
+                self.on_wait(time.monotonic() - held_at)
             self.store.append(record_for(
                 protocol.envelope, EventType.gate_decision, self.actor,
                 decision={"kind": "pause_released", "title": protocol.title,

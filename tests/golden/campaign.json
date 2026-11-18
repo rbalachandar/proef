@@ -208,6 +208,24 @@
         "plates_per_day": 20
        }
       },
+      "lab_config": {
+       "instruments": {
+        "assays": [
+         "binding",
+         "enzymatic",
+         "cytotoxicity",
+         "counterscreen",
+         "adme"
+        ],
+        "bsl_max": 2,
+        "throughput": {
+         "plates_per_day": 20
+        }
+       },
+       "interference_rate": 0.25,
+       "method_bias": {},
+       "replicates": 3
+      },
       "lab_requirement": null,
       "lab_seed": 3,
       "lab_version": "sim-v1",
@@ -1254,8 +1272,7 @@
     "gate_decision",
     {
      "allowed": [
-      "next_round",
-      "stop"
+      "next_round"
      ],
      "chosen": "next_round",
      "kind": "orchestrator_choice",
@@ -1813,6 +1830,24 @@
        "throughput": {
         "plates_per_day": 20
        }
+      },
+      "lab_config": {
+       "instruments": {
+        "assays": [
+         "binding",
+         "enzymatic",
+         "cytotoxicity",
+         "counterscreen",
+         "adme"
+        ],
+        "bsl_max": 2,
+        "throughput": {
+         "plates_per_day": 20
+        }
+       },
+       "interference_rate": 0.25,
+       "method_bias": {},
+       "replicates": 3
       },
       "lab_requirement": null,
       "lab_seed": 3,

@@ -18,6 +18,11 @@ from proef.core.interfaces import record_for
 
 
 MAX_RESPONSE_CHARS = 100_000
+# who is asking, told by the call's own branch. The advisory reviewer's answer is flags only and enters no decision, so its text is
+# NOT sealed (it carries study data, and a replay does not need it): only its prompt hash is, and a replay answers with no flags.
+ROLE_BY_BRANCH = {"critic": "critic", "review": "reviewer", "orchestrator": "orchestrator", "followup": "followup"}
+UNSEALED_ROLES = frozenset({"reviewer"})
+REVIEWER_STUB = '{"flags": []}'
 
 
 class ModelRefused(RuntimeError):
@@ -26,11 +31,12 @@ class ModelRefused(RuntimeError):
 
 class ModelGuard:
     def __init__(self, store: Any, actor: Any, problem_id: str, governance: dict | None, max_calls: int,
-                 say=None, pause_poll: float = 1.0, pause_timeout: float | None = None):
+                 say=None, pause_poll: float = 1.0, pause_timeout: float | None = None, on_wait=None):
         self.store, self.actor, self.pid = store, actor, problem_id
         self.gov, self.max_calls = governance or {}, int(max_calls)
         self.say = say or (lambda m: None)
         self.pause_poll, self.pause_timeout = pause_poll, pause_timeout
+        self.on_wait = on_wait                # told how long a pause held a call, so the wall clock can leave it out
         self._exhausted_recorded = False
         self._n: int | None = None            # calls made so far: scanned from the ledger ONCE, then counted in memory
 
@@ -72,6 +78,8 @@ class ModelGuard:
                 blocking = pause.blocking(self.pid, prog)
                 if not blocking:
                     if held_at is not None:
+                        if self.on_wait:
+                            self.on_wait(time.monotonic() - held_at)
                         # the hold is closed in the ledger, as the lab gateway closes its own
                         self.store.append(record_for(self.env, EventType.gate_decision, self.actor, decision={
                             "kind": "pause_released", "title": f"model call ({role})",
@@ -106,9 +114,11 @@ class ModelGuard:
         follow-up could not be reproduced. A response too large to seal is flagged, so a replay says so instead of guessing."""
         out = getattr(result, "output", None)
         text = str(out.get("text", "")) if isinstance(out, dict) else ""
+        sealed = role not in UNSEALED_ROLES
         self.store.append(record_for(self.env, EventType.tool_invocation, self.actor, decision={
-            "kind": "model_response", "n": n, "role": role, "prompt_hash": phash, "response": text[:MAX_RESPONSE_CHARS],
-            "truncated": len(text) > MAX_RESPONSE_CHARS, "status": getattr(result, "status", "succeeded"),
+            "kind": "model_response", "n": n, "role": role, "prompt_hash": phash,
+            "response": text[:MAX_RESPONSE_CHARS] if sealed else "", "response_chars": len(text), "sealed": sealed,
+            "truncated": sealed and len(text) > MAX_RESPONSE_CHARS, "status": getattr(result, "status", "succeeded"),
             "model": getattr(model, "model", None), "model_version": getattr(result, "model_version", None)}))
 
     def record_error(self, n: int, role: str, phash: str, exc: Exception) -> None:
@@ -125,28 +135,34 @@ class GovernedModel:
     def __getattr__(self, name: str) -> Any:      # name, model_version, model...: whatever the provider exposes
         return getattr(self._inner, name)
 
+    def remaining(self) -> int:
+        """Model calls the budget still allows (so a caller can keep a reserve for what matters more)."""
+        return max(0, self._guard.max_calls - self._guard.used())
+
     def generate(self, invocation: Any, prompt: str, *a: Any, **kw: Any) -> Any:
-        n, phash = self._guard.check(self._role, prompt)
+        role = ROLE_BY_BRANCH.get(getattr(getattr(invocation, "envelope", None), "experiment_branch_id", None), self._role)
+        n, phash = self._guard.check(role, prompt)
         try:
             result = self._inner.generate(invocation, prompt, *a, **kw)
         except Exception as exc:  # noqa: BLE001 - recorded, then the caller decides what a failed call means
-            self._guard.record_error(n, self._role, phash, exc)
+            self._guard.record_error(n, role, phash, exc)
             raise
-        self._guard.record_response(n, self._role, phash, result, self._inner)
+        self._guard.record_response(n, role, phash, result, self._inner)
         return result
 
     def predict(self, invocation: Any, kind: Any, payload: Any, *a: Any, **kw: Any) -> Any:
-        self._guard.check(self._role, str(kind))
-        return self._inner.predict(invocation, kind, payload, *a, **kw)
+        # a campaign's model is asked with generate(). predict() would be a call that is counted but never sealed, so a replay
+        # could not reproduce it: refused, rather than a hole
+        raise NotImplementedError("a campaign's model is called with generate() only")
 
 
-def govern_models(cfg: Any, store: Any, actor: Any, governance: dict, say=None) -> Any:
+def govern_models(cfg: Any, store: Any, actor: Any, governance: dict, say=None, on_wait=None) -> Any:
     """A copy of the campaign config whose model and critic go through one guard. The config passed in is not mutated."""
     if cfg.model is None and cfg.critic_model is None:
         return cfg
     from proef.autoloop import ResourceBudget
     budget = cfg.budget or ResourceBudget()
-    guard = ModelGuard(store, actor, cfg.problem.problem_id or "unnamed", governance, budget.max_model_calls, say)
+    guard = ModelGuard(store, actor, cfg.problem.problem_id or "unnamed", governance, budget.max_model_calls, say, on_wait=on_wait)
     return replace(cfg,
                    model=GovernedModel(cfg.model, "model", guard) if cfg.model is not None else None,
                    critic_model=GovernedModel(cfg.critic_model, "critic", guard) if cfg.critic_model is not None else None)
@@ -187,8 +203,14 @@ class RecordedModel:
         if rec.get("truncated"):
             self._diverge("the recorded response was too large to seal")
         self._i += 1
+        if rec.get("error"):
+            # the original call FAILED, and its caller took its fallback. The replay fails the same way, so the same path runs
+            raise RuntimeError(rec["error"])
+        text = rec.get("response", "")
+        if rec.get("sealed") is False:
+            text = REVIEWER_STUB          # advisory text that was never sealed: the replay says no flags, as it may
         return ToolResult(envelope=invocation.envelope.model_copy(), invocation_id=invocation.invocation_id,
-                          status=rec.get("status") or "succeeded", output={"text": rec.get("response", "")},
+                          status=rec.get("status") or "succeeded", output={"text": text},
                           model_version=rec.get("model_version"))
 
     def predict(self, *a: Any, **kw: Any) -> Any:

@@ -59,7 +59,7 @@ class Choice:
 
 def allowed_actions(state: State, *, view: View, followups_permitted: bool, replan_permitted: bool, has_model: bool,
                     agent_source: bool) -> list[str]:
-    """What this state allows, from preconditions. next_round and stop are always allowed: a campaign can always go on or end."""
+    """What this state allows, from preconditions. next_round is always allowed, and so is stop while a round remains."""
     if state is not State.ROUND_JUDGED:
         return []
     out: list[str] = []
@@ -67,8 +67,16 @@ def allowed_actions(state: State, *, view: View, followups_permitted: bool, repl
         out.append(Action.FOLLOW_UP.value)
     if replan_permitted and agent_source and view.round_no < max(1, view.rounds) and Action.REPLAN.value not in view.done:
         out.append(Action.REPLAN.value)
-    out += [Action.NEXT_ROUND.value, Action.STOP.value]
+    out.append(Action.NEXT_ROUND.value)
+    if view.round_no < max(1, view.rounds):
+        out.append(Action.STOP.value)         # on the last round there is nothing left to end
     return out
+
+
+def _help(action: str, view: View) -> str:
+    if action == Action.FOLLOW_UP.value and view.round_no >= max(1, view.rounds):
+        return "record a suggestion for a person about the abstained results (this is the last round, so nothing can run)"
+    return ACTION_HELP[Action(action)]
 
 
 class Orchestrator(Protocol):
@@ -105,8 +113,11 @@ class ModelOrchestrator:
     """Asks a model which allowed action to take. The model decides nothing outside the list, and a failure is not an error: the
     fixed orchestrator answers instead and the choice says so."""
 
-    def __init__(self, model: Any, fallback: Orchestrator | None = None):
+    RESERVE = 4        # model calls kept for the follow-up, re-plan and review work that steering must not starve
+
+    def __init__(self, model: Any, fallback: Orchestrator | None = None, reserve: int | None = None):
         self.model, self.fallback = model, fallback or FixedOrchestrator()
+        self.reserve = self.RESERVE if reserve is None else reserve
 
     def choose(self, state: State, allowed: list[str], view: View) -> Choice:
         from proef.core.contracts import Envelope, ToolInvocation
@@ -115,8 +126,13 @@ class ModelOrchestrator:
             verdicts="\n".join(f"- {c}: {v}" for c, v in sorted(view.verdicts.items()))[:3000] or "- nothing judged yet",
             abstained=", ".join(view.abstained) or "none", queued=view.queued, runs_left=view.runs_left,
             done=", ".join(sorted(view.done)) or "nothing",
-            actions="\n".join(f"- {a}: {ACTION_HELP[Action(a)]}" for a in allowed))
+            actions="\n".join(f"- {a}: {_help(a, view)}" for a in allowed))
         fb = self.fallback.choose(state, allowed, view)
+        left = getattr(self.model, "remaining", None)
+        if callable(left) and left() <= self.reserve:
+            # steering must not spend the calls the real work needs: with only the reserve left, the fixed order answers
+            return Choice(fb.action, fb.why, "fixed-fallback", False,
+                          [f"{left()} model calls left, kept for follow-ups, re-plans and the review"])
         try:
             raw = self.model.generate(ToolInvocation(envelope=Envelope(experiment_branch_id="orchestrator"),
                                                      tool="c.fm.generate_molecules"), prompt).output["text"]

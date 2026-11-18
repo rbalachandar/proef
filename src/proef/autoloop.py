@@ -17,7 +17,7 @@ import json
 import logging
 import os
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable
 
@@ -767,7 +767,9 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
                  notify: Callable[[str], None] | None = None,
                  sandbox: Any = None) -> CampaignReport:
     """Start-to-finish: problem -> portfolio -> filter -> test -> verdict -> confirm."""
-    started = time.monotonic()           # the wall clock a budget's wall_clock_secs is measured against
+    clock = _Clock()                     # the wall clock a budget's wall_clock_secs is measured against, minus waits on people
+    approver = clock.timed(approver)
+    cfg = replace(cfg, plan_approver=clock.timed(cfg.plan_approver)) if cfg.plan_approver is not None else cfg
     if cfg.modality:
         from proef.modality import PACKS, get_pack
         if get_pack(cfg.modality) is None:   # never a silent fall-back to small molecule
@@ -799,6 +801,7 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
                "max_bsl": int((cfg.lab_requirement or {}).get("max_bsl", 2))}   # the campaign's own ceiling, as select_lab uses
 
     gateway = _build_gateway(cfg, lab, safety, store, actor, approver, say, gov)
+    getattr(gateway, "_gw", gateway).on_wait = clock.add_wait       # a pause that holds a submission does not use the campaign's time
 
     # 0. problem + portfolio + filter
     _durc_gate(cfg, store, actor)
@@ -825,14 +828,15 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
         "modality": cfg.modality, "prediction_tools": list(cfg.prediction_tools or []),
         "critic": cfg.critic_model is not None, "plan_review": cfg.plan_approver is not None,
         "orchestrator": cfg.orchestrator if isinstance(cfg.orchestrator, str) else "custom",
-        "lab_capabilities": _json_safe(lambda: lab.list_capabilities()),       # so a replay's lab declares the same assays
+        "lab_config": _json_safe(lambda: lab.replay_config()),       # the lab's own knobs, so a replay measures the same way
+        "lab_capabilities": _json_safe(lambda: lab.list_capabilities()),
         "labs": _json_safe(lambda: cfg.labs), "lab_requirement": _json_safe(lambda: cfg.lab_requirement),
         "budget": ({"max_total_runs": cfg.budget.max_total_runs, "max_hypotheses_total": cfg.budget.max_hypotheses_total,
                     "max_confirmations": cfg.budget.max_confirmations, "max_model_calls": cfg.budget.max_model_calls}
                    if cfg.budget else None),
     })
     from proef.model_guard import govern_models
-    cfg = govern_models(cfg, store, actor, gov, say)     # model calls obey halt, pause and the call budget, like lab submissions
+    cfg = govern_models(cfg, store, actor, gov, say, on_wait=clock.add_wait)     # model calls obey halt, pause and the call budget, like lab submissions
     from proef.campaign_fsm import FixedOrchestrator, ModelOrchestrator
     orch = (cfg.orchestrator if hasattr(cfg.orchestrator, "choose") else
             ModelOrchestrator(cfg.model) if cfg.orchestrator == "model" and cfg.model is not None else FixedOrchestrator())
@@ -894,7 +898,7 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
     tested: list = []
     stopped: str | None = None
     for round_no in range(1, max(1, cfg.rounds) + 1):
-        stopped = _limit_reason(cfg, gov, started, store, actor, say, round_no)
+        stopped = _limit_reason(cfg, gov, clock, store, actor, say, round_no)
         if stopped:
             break
         if not remaining:
@@ -1040,7 +1044,10 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
         from proef.campaign_fsm import Action, Choice, State, View, allowed_actions
         done: set[str] = set()
         while True:
-            stopped = _limit_reason(cfg, gov, started, store, actor, say, round_no)
+            stopped = _limit_reason(cfg, gov, clock, store, actor, say, round_no, final=round_no >= max(1, cfg.rounds))
+            if stopped == "final":
+                stopped = None            # the last round's work is done: carry on to the review, do not mark it stopped
+                break
             if stopped:
                 break
             view = View(round_no=round_no, rounds=max(1, cfg.rounds), verdicts={h.candidate: h.status for h in tested},
@@ -1104,7 +1111,34 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
                           rounds_run=len(history), history=history)
 
 
-def _limit_reason(cfg, gov, started, store, actor, say, round_no) -> str | None:
+class _Clock:
+    """The campaign's wall clock: elapsed time MINUS time it spent waiting on a person (a plan or a submission approval) or on a
+    pause, because those waits use no compute and are the operator's, not the campaign's."""
+
+    def __init__(self) -> None:
+        self.t0, self.waited = time.monotonic(), 0.0
+
+    def add_wait(self, seconds: float) -> None:
+        self.waited += max(0.0, seconds)
+
+    def elapsed(self) -> float:
+        return time.monotonic() - self.t0 - self.waited
+
+    def timed(self, fn):
+        """A callable that reports how long it blocked (an approver waits for a person)."""
+        if fn is None:
+            return None
+
+        def wrapper(*a, **kw):
+            t = time.monotonic()
+            try:
+                return fn(*a, **kw)
+            finally:
+                self.add_wait(time.monotonic() - t)
+        return wrapper
+
+
+def _limit_reason(cfg, gov, clock, store, actor, say, round_no, final: bool = False) -> str | None:
     """Checked at every transition. The halt switch and the wall clock end a campaign, and the reason is recorded. Neither is
     reachable by a tool or a model: the switch is a file only a person or the operator API writes, and the clock is the budget's."""
     why = None
@@ -1113,10 +1147,13 @@ def _limit_reason(cfg, gov, started, store, actor, say, round_no) -> str | None:
         why = ("halt", f"operator stop-condition engaged: {halt.get('reason', '')}")
     else:
         b = cfg.budget
-        if b is not None and b.wall_clock_secs is not None and time.monotonic() - started >= b.wall_clock_secs:
+        if b is not None and b.wall_clock_secs is not None and clock.elapsed() >= b.wall_clock_secs:
             why = ("wall_clock", f"the {b.wall_clock_secs:g}s wall-clock budget is spent")
     if not why:
         return None
+    if final:
+        # every round has already run: there is nothing left to end, so it is not an early stop and nothing is recorded as one
+        return "final"
     store.append(record_for(
         Envelope(experiment_branch_id=f"problem/{cfg.problem.problem_id}"), EventType.gate_decision, actor,
         decision={"kind": "campaign_stopped", "why": why[0], "round": round_no, "detail": why[1]}))

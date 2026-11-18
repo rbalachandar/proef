@@ -3124,6 +3124,14 @@
       "minimum": 1.0,
       "title": "Max Variants Per Family",
       "type": "integer"
+     },
+     "max_wall_minutes": {
+      "default": 0,
+      "description": "a campaign ends early once it has run this long, not counting time spent waiting for a person or on a pause. 0 means no limit",
+      "maximum": 10080.0,
+      "minimum": 0.0,
+      "title": "Max Wall Minutes",
+      "type": "integer"
      }
     },
     "title": "Limits",
@@ -3995,7 +4003,8 @@
        "max_model_calls": 200,
        "max_rounds": 3,
        "max_subproblems": 8,
-       "max_variants_per_family": 3
+       "max_variants_per_family": 3,
+       "max_wall_minutes": 0
       }
      },
      "metric": {
@@ -4060,7 +4069,8 @@
        "max_model_calls": 200,
        "max_rounds": 3,
        "max_subproblems": 8,
-       "max_variants_per_family": 3
+       "max_variants_per_family": 3,
+       "max_wall_minutes": 0
       }
      },
      "modality": {
@@ -4259,7 +4269,8 @@
        "max_model_calls": 200,
        "max_rounds": 3,
        "max_subproblems": 8,
-       "max_variants_per_family": 3
+       "max_variants_per_family": 3,
+       "max_wall_minutes": 0
       }
      },
      "modality": {

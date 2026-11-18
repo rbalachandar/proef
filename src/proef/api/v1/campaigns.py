@@ -714,6 +714,15 @@ def get_activity(eid: str, limit: int = Query(50, ge=1, le=500)
     return activity_items(recs, limit)
 
 
+def _served_detail(decision: dict | None) -> dict | None:
+    """A record's decision as the workbench serves it. The ledger keeps a model's answer so a run can be replayed, but the answer
+    can be large and can carry study data, so the workbench serves its size, not its text. Whoever needs it reads the ledger."""
+    if (decision or {}).get("kind") == "model_response":
+        n = decision.get("response_chars", len(decision.get("response") or ""))
+        return {**decision, "response": f"<{n} characters, sealed in the ledger>"}
+    return decision
+
+
 @router.get("/{eid}/provenance", response_model=S.ProvenanceView)
 def get_provenance(eid: str, limit: int = Query(500, ge=1, le=5000),
                    actor: str | None = Query(None, description="only this agent / person")
@@ -725,9 +734,10 @@ def get_provenance(eid: str, limit: int = Query(500, ge=1, le=5000),
         if actor and aid != actor:
             continue
         _, text, _ = summarize(r)
+        detail = _served_detail(r.decision)
         items.append(S.ProvenanceRecord(
             ts=_ts(r), event=r.event_type.value, summary=text, actor=aid,
-            actor_kind=kind, model_version=model, detail=r.decision))
+            actor_kind=kind, model_version=model, detail=detail))
     return S.ProvenanceView(chain=_chain(branch, recs), records=items[-limit:])
 
 

@@ -34,6 +34,7 @@ def reproduce(branch: str, db_path: str = "proef.db",
     responses: list[dict] = []            # sealed model answers, in call order
     plan_decisions: list[dict] = []       # the person's plan reviews, in order
     gen_contexts: list[str] = []          # what the flywheel put in each generation prompt
+    old_gen_contexts: list[str] = []      # branches recorded before attempts were: one per SUCCESSFUL generation
     predictions: list[dict] = []          # every prediction the original sealed, so a replay runs no tool
     first_score: dict[str, float] = {}          # hypothesis id -> the score it was first selected on
     for r in recs:
@@ -68,10 +69,12 @@ def reproduce(branch: str, db_path: str = "proef.db",
                     # submitted, and its replay must not submit it either
                     **({"metadata": {"lab_check": d["lab_check"]}} if d.get("lab_check") else {}),
                 }
-        elif et == "tool_invocation" and d.get("kind") == "model_response":
-            responses.append(d)
-        elif et == "tool_invocation" and d.get("kind") == "hypothesis_generation":
+        elif et == "tool_invocation" and d.get("kind") in ("model_response", "model_error"):
+            responses.append(d)                # a call that FAILED is replayed as a failure, so the same fallback runs
+        elif et == "tool_invocation" and d.get("kind") == "generation_attempt":
             gen_contexts.append(d.get("flywheel_context") or "")
+        elif et == "tool_invocation" and d.get("kind") == "hypothesis_generation":
+            old_gen_contexts.append(d.get("flywheel_context") or "")
         elif et == "gate_decision" and d.get("kind") == "followup_proposal" and d.get("executes") and d.get("validation", {}).get("ok"):
             followed_up = True
         elif et == "hypotheses_filtered" and d.get("kind") not in ("plan_review", "acquisition_selection"):
@@ -160,11 +163,12 @@ def reproduce(branch: str, db_path: str = "proef.db",
     rm = None
     if agent_replay:
         # an agent campaign replays with the model's sealed answers, never a model: re-plans and follow-ups included
-        cfg, rm = _agent_cfg(cfg, env, responses, plan_decisions, gen_contexts, first_score, predictions)
+        cfg, rm = _agent_cfg(cfg, env, responses, plan_decisions, gen_contexts or old_gen_contexts, first_score, predictions)
     _seed = env.get("lab_seed")
     if _seed is None:
         _seed = 7                       # pre-seed-capture branches default
-    lab = lab_cls(seed=_seed, **({"instruments": env["lab_capabilities"]} if agent_replay and env.get("lab_capabilities") else {}))
+    _knobs = (env.get("lab_config") or ({"instruments": env["lab_capabilities"]} if env.get("lab_capabilities") else {})) if agent_replay else {}
+    lab = lab_cls(seed=_seed, **_knobs)
     report = run_campaign(cfg, lab, SqliteProvenanceStore(),
                           approver=(lambda title: True) if cfg.autonomy == "gate" else None)
     divergences = list(getattr(rm, "divergences", []) or [])
@@ -283,7 +287,8 @@ class _RecordedPredictors:
 
     def run(self, requested, inputs, enabled, modality):
         out = []
-        for name in dict.fromkeys(str(n)[:80] for n in (requested or [])):
+        from proef.predictors import MAX_TOOLS_PER_VARIANT
+        for name in list(dict.fromkeys(str(n)[:80] for n in (requested or [])))[:MAX_TOOLS_PER_VARIANT]:
             hit = self._by.get((name, str((inputs or {}).get("smiles") or "")[:120])) or self._by.get((name, ""))
             if hit is None:
                 self._rm.divergences.append({"call": 0, "why": f"a prediction by {name} that the original did not make"})

@@ -1945,6 +1945,12 @@ export interface components {
              * @default 3
              */
             max_variants_per_family: number;
+            /**
+             * Max Wall Minutes
+             * @description a campaign ends early once it has run this long, not counting time spent waiting for a person or on a pause. 0 means no limit
+             * @default 0
+             */
+            max_wall_minutes: number;
         };
         /**
          * LlmUse
@@ -2390,7 +2396,8 @@ export interface components {
              *       "max_model_calls": 200,
              *       "max_rounds": 3,
              *       "max_subproblems": 8,
-             *       "max_variants_per_family": 3
+             *       "max_variants_per_family": 3,
+             *       "max_wall_minutes": 0
              *     }
              */
             limits: components["schemas"]["Limits"];
@@ -2438,7 +2445,8 @@ export interface components {
              *       "max_model_calls": 200,
              *       "max_rounds": 3,
              *       "max_subproblems": 8,
-             *       "max_variants_per_family": 3
+             *       "max_variants_per_family": 3,
+             *       "max_wall_minutes": 0
              *     }
              */
             limits: components["schemas"]["Limits"];
@@ -2509,7 +2517,8 @@ export interface components {
              *       "max_model_calls": 200,
              *       "max_rounds": 3,
              *       "max_subproblems": 8,
-             *       "max_variants_per_family": 3
+             *       "max_variants_per_family": 3,
+             *       "max_wall_minutes": 0
              *     }
              */
             limits: components["schemas"]["Limits"];

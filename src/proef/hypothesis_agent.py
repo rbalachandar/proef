@@ -171,6 +171,10 @@ def propose_families_with_agent(
                                   in negs.splitlines()[1:] if line.startswith("- ")]
             say("prompt includes previously ruled-out candidates (flywheel)")
     inv = ToolInvocation(envelope=env.model_copy(), tool="c.fm.generate_molecules")
+    # every ATTEMPT leaves its flywheel context, written before the call: a generation that fails or is refused writes no
+    # hypothesis_generation record, and a replay hands the contexts out one per attempt
+    tracker.store.append(record_for(env, EventType.tool_invocation, actor, decision={
+        "kind": "generation_attempt", "flywheel_context": (negs[:4000] if flywheel is not None and negs else "")}))
     raw = model.generate(inv, prompt).output["text"]
     # record the raw generation (agent reasoning is provenance too)
     store_append = tracker.store.append

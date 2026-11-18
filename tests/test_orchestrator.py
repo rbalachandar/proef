@@ -34,7 +34,7 @@ def test_the_allowed_actions_follow_from_what_is_permitted_and_what_remains():
     assert allowed(has_model=False) == ["replan", "next_round", "stop"]
     assert allowed(agent_source=False) == ["follow_up", "next_round", "stop"], "a candidate list has no model to re-plan with"
     assert allowed(view(abstained=[])) == ["replan", "next_round", "stop"], "nothing abstained, nothing to follow up"
-    assert allowed(view(round_no=2)) == ["follow_up", "next_round", "stop"], "no round left to run a re-plan in"
+    assert allowed(view(round_no=2)) == ["follow_up", "next_round"], "no round left to re-plan in, and nothing left to stop"
     assert allowed(view(done={"follow_up", "replan"})) == ["next_round", "stop"], "each action once per round"
     assert allowed(followups_permitted=False, replan_permitted=False, view=view(abstained=[])) == ["next_round", "stop"]
 
@@ -101,9 +101,10 @@ class OModel(F.Model):
 def _orch_run(tmp_path, script, **kw):
     import proef.autoloop as al
     store_model = OModel(F._answer, script)
+    gate_fn = kw.pop("autonomy_gate", None)          # a plan approver: the campaign then runs under approvals
     store = F.SqliteProvenanceStore(str(tmp_path / "prov.db"))
     cfg = F.CampaignConfig(problem=F.ProblemStatement(objective="o", constraints=[F.Constraint(name="potency", description="IC50 <= 20 uM", kind="hard", limit=20.0, unit="uM")]),
-                           hypothesis_source="agent", model=store_model, autonomy="act", k=8, max_families=8, rounds=kw.pop("rounds", 2), seed=1,
+                           hypothesis_source="agent", model=store_model, autonomy="gate" if gate_fn else "act", plan_approver=gate_fn, k=8, max_families=8, rounds=kw.pop("rounds", 2), seed=1,
                            followups=kw.pop("followups", True), replan=kw.pop("replan", False), orchestrator=kw.pop("orchestrator", "model"),
                            inbox=str(tmp_path / "inbox"), poll_secs=0.05, flywheel=F.Flywheel(":memory:"), **kw)
     report = run_campaign(cfg, kw.get("lab") or SimulatorLab(seed=3), store, approver=lambda t: True, notify=lambda m: None)
@@ -255,3 +256,76 @@ def test_a_campaign_ended_by_the_wall_clock_spends_no_more_model_calls(tmp_path)
     recs = store.branch_records(f"problem/{report.problem_id}")
     assert report.stopped == "wall_clock" and not [r for r in recs if (r.decision or {}).get("kind") == "review_report_llm"]
     assert len(model.prompts) == 1, "only the proposal was ever asked"
+
+
+# ---- found by the independent review of Phase 4 ----
+
+def test_stop_is_not_offered_on_the_last_round_and_the_prompt_says_what_a_last_round_follow_up_is():
+    assert "stop" not in allowed(view(round_no=2)) and "stop" in allowed(view(round_no=1))
+    m = Fake('{"action": "next_round"}')
+    ModelOrchestrator(m).choose(State.ROUND_JUDGED, ["follow_up", "next_round"], view(round_no=2))
+    assert "last round, so nothing can run" in m.prompts[0]
+
+
+def test_a_halt_during_the_last_round_is_not_recorded_as_ending_the_campaign_early(tmp_path, monkeypatch):
+    import proef.governance as G
+    monkeypatch.setattr(G, "HALT_FILE", tmp_path / "HALT")
+    monkeypatch.setattr(G, "HALT_HISTORY", tmp_path / "HALT-history.json")
+
+    class HaltsOnTheLastRound:
+        """Engages the switch and asks for a follow-up, so the decision loop goes round again and its next limit check sees the halt."""
+        def __init__(self):
+            self.asked = 0
+
+        def choose(self, state, allowed, view):
+            self.asked += 1
+            if self.asked == 1:
+                G.HaltSwitch().engage("end of shift")
+                return Choice("follow_up", "one more")
+            return Choice("next_round", "carry on")
+    orch = HaltsOnTheLastRound()
+    report, recs, _ = _orch_run(tmp_path, [], orchestrator=orch, followups=True, rounds=1)
+    assert orch.asked == 1, "the loop was cut short by the halt, not by the orchestrator"
+    assert report.stopped is None and not [r for r in recs if (r.decision or {}).get("kind") == "campaign_stopped"]
+    assert report.verdicts, "every round had run"
+
+
+def test_time_spent_waiting_for_a_person_does_not_count_against_the_wall_clock(tmp_path):
+    import time
+    from proef.plan import PlanDecision
+
+    def slow_human(plan, pid):
+        time.sleep(0.7)                  # a person takes a while over the plan
+        return PlanDecision(approved=True, by="kim")
+    # one round: the check that matters is the one before it starts, after the person's 0.7s. The campaign's own work takes longer than the
+    # 0.5s budget in total, which is why this does not look at the later checks
+    report, recs, _ = _orch_run(tmp_path, [], orchestrator="fixed", followups=False, rounds=1, budget=ResourceBudget(wall_clock_secs=0.5),
+                                autonomy_gate=slow_human)
+    assert report.stopped is None and any(r.event_type == EventType.lab_run for r in recs)
+
+
+def test_the_programs_time_limit_reaches_the_engine():
+    from proef.api.launch import build_cfg
+    from proef.api.v1 import schemas as S
+    from proef.api.v1.programs import campaign_doc
+    from proef.cli import _campaign_from_doc
+    p = {"slug": "s", "name": "n", "program": {"objective": "o", "metric": "ic50_um", "direction": "min", "gate_value": 20, "unit": "uM",
+                                                "limits": {"max_wall_minutes": 2}}}
+    doc = campaign_doc(p, S.CampaignCreate())
+    assert doc["budget"]["wall_clock_secs"] == 120.0 and _campaign_from_doc(build_cfg(doc)).budget.wall_clock_secs == 120.0
+    p["program"]["limits"] = {}
+    assert "wall_clock_secs" not in campaign_doc(p, S.CampaignCreate())["budget"], "0 means no limit"
+
+
+def test_the_orchestrator_keeps_a_reserve_of_model_calls_for_the_real_work():
+    class Gov(Fake):
+        def __init__(self, left, **kw):
+            super().__init__(**kw)
+            self.left = left
+
+        def remaining(self):
+            return self.left
+    low, ok = Gov(3, text='{"action": "stop"}'), Gov(30, text='{"action": "stop"}')
+    c = ModelOrchestrator(low).choose(State.ROUND_JUDGED, ["next_round", "stop"], view())
+    assert (c.source, c.action) == ("fixed-fallback", "next_round") and "kept for" in c.reasons[0] and not low.prompts, "no call was spent"
+    assert ModelOrchestrator(ok).choose(State.ROUND_JUDGED, ["next_round", "stop"], view()).action == "stop"

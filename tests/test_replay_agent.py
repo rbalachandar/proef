@@ -56,7 +56,9 @@ def test_every_model_answer_is_sealed_with_its_call_and_prompt(tmp_path):
     resp = [r.decision for r in recs if (r.decision or {}).get("kind") == "model_response"]
     assert len(calls) == len(resp) == len(model.prompts) and calls
     assert [c["n"] for c in calls] == [r["n"] for r in resp] and [c["prompt_hash"] for c in calls] == [r["prompt_hash"] for r in resp]
-    assert all(r["response"] and not r["truncated"] for r in resp)
+    sealed = [r for r in resp if r["sealed"]]
+    assert sealed and all(r["response"] and not r["truncated"] for r in sealed)
+    assert all(r["role"] == "reviewer" for r in resp if not r["sealed"]), "only the advisory reviewer's text is left out"
 
 
 def test_the_campaign_settings_a_replay_needs_are_in_the_recorded_environment(tmp_path):
@@ -130,3 +132,86 @@ def test_a_replay_reproduces_the_prompt_the_flywheel_shaped(tmp_path):
     report = run_campaign(cfg, SimulatorLab(seed=3), store, approver=lambda t: True, notify=lambda m: None)
     assert "RULEDOUT" in model.prompts[0], "the scenario: the flywheel shaped the prompt"
     assert reproduce(f"problem/{report.problem_id}", db_path=str(tmp_path / "prov.db"))["status"] == "match"
+
+
+# ---- found by the independent review of Phase 4 ----
+
+def test_a_call_that_failed_in_the_original_fails_the_same_way_in_the_replay(tmp_path):
+    """The critic is advisory, so its failure is swallowed. The original sealed the failure; a replay that skipped it would hand
+    the critic's slot the next recorded answer and shift every later call by one."""
+    from tests.test_model_guard import Scripted, _campaign
+
+    class FlakyCritic(Scripted):
+        def generate(self, inv, prompt, **kw):
+            raise RuntimeError("critic unavailable")
+    cfg, store = _campaign(tmp_path, critic=FlakyCritic())
+    report = run_campaign(cfg, SimulatorLab(seed=3), store, approver=lambda t: True, notify=lambda m: None)
+    recs = store.branch_records(f"problem/{report.problem_id}")
+    assert [r for r in recs if (r.decision or {}).get("kind") == "model_error"], "the failure is sealed"
+    res = reproduce(f"problem/{report.problem_id}", db_path=str(tmp_path / "prov.db"))
+    assert res["status"] == "match" and res["model_calls_replayed"] >= 3, res
+
+
+def test_a_replay_measures_with_the_same_lab_not_only_the_same_seed(tmp_path):
+    lab = SimulatorLab(seed=3, replicates=5, interference_rate=0.0)
+    report, store, recs, _, _ = F._run(tmp_path, lab=lab)
+    env = next(r.decision for r in recs if r.event_type.value == "problem_defined")["environment"]
+    assert env["lab_config"]["replicates"] == 5 and env["lab_config"]["interference_rate"] == 0.0
+    assert reproduce(f"problem/{report.problem_id}", db_path=str(tmp_path / "prov.db"))["status"] == "match"
+
+
+def test_a_generation_that_failed_still_leaves_its_flywheel_context_so_the_replay_stays_aligned(tmp_path):
+    """The re-plan's generation fails in the original and writes no hypothesis_generation record. A replay that took one context per
+    SUCCESSFUL generation would give the failed attempt's slot to the wrong prompt."""
+    fw = Flywheel(":memory:")
+    fw.submit("RULEDOUT", "old-family", "binding", "invalidated", 80.0, (60.0, 100.0), problem_id="earlier", threshold=20.0, evidence_run="r0")
+
+    class FailsTheReplan(F.Model):
+        def generate(self, inv, prompt, **kw):
+            if "RESULTS SO FAR" in prompt:
+                self.prompts.append(prompt)
+                raise RuntimeError("model down")
+            return super().generate(inv, prompt, **kw)
+    store = SqliteProvenanceStore(str(tmp_path / "prov.db"))
+    cfg = CampaignConfig(problem=F.ProblemStatement(objective="o", constraints=[F.Constraint(name="potency", description="IC50 <= 20 uM", kind="hard", limit=20.0, unit="uM")]),
+                         hypothesis_source="agent", model=FailsTheReplan(F._answer), autonomy="act", k=8, max_families=8, rounds=2, seed=1,
+                         replan=True, inbox=str(tmp_path / "inbox"), poll_secs=0.05, flywheel=fw)
+    report = run_campaign(cfg, SimulatorLab(seed=3), store, approver=lambda t: True, notify=lambda m: None)
+    recs = store.branch_records(f"problem/{report.problem_id}")
+    assert len([r for r in recs if (r.decision or {}).get("kind") == "generation_attempt"]) == 2
+    assert len([r for r in recs if (r.decision or {}).get("kind") == "hypothesis_generation"]) == 1, "only one generation succeeded"
+    assert reproduce(f"problem/{report.problem_id}", db_path=str(tmp_path / "prov.db"))["status"] == "match"
+
+
+def test_the_advisory_reviewers_answer_is_not_sealed_and_the_replay_still_matches(tmp_path):
+    report, store, recs, _, _ = F._run(tmp_path)
+    rev = [r.decision for r in recs if (r.decision or {}).get("kind") == "model_response" and r.decision["role"] == "reviewer"]
+    assert rev and all(r["sealed"] is False and r["response"] == "" and r["response_chars"] > 0 for r in rev)
+    assert reproduce(f"problem/{report.problem_id}", db_path=str(tmp_path / "prov.db"))["status"] == "match"
+
+
+def test_the_workbench_serves_the_size_of_a_sealed_answer_not_its_text():
+    from proef.api.v1.campaigns import _served_detail
+    d = {"kind": "model_response", "n": 1, "response": "SECRET STUDY DATA" * 100, "response_chars": 1700}
+    out = _served_detail(d)
+    assert "SECRET" not in str(out) and "1700 characters" in out["response"] and d["response"].startswith("SECRET"), "served masked, ledger untouched"
+    assert _served_detail({"kind": "lab_run", "x": 1}) == {"kind": "lab_run", "x": 1}
+
+
+def test_a_campaigns_model_is_called_with_generate_only():
+    """predict() was counted against the budget but never sealed, so it could not be replayed. It is refused."""
+    from proef.model_guard import GovernedModel, ModelGuard
+    from proef.core.interfaces import system_actor
+    guard = ModelGuard(SqliteProvenanceStore(), system_actor(), "p", {}, 10)
+    with pytest.raises(NotImplementedError, match="generate"):
+        GovernedModel(F.Model(F._answer), "model", guard).predict(None, "k", {})
+    assert guard.used() == 0, "nothing was counted"
+
+
+def test_the_replays_prediction_stand_in_keeps_the_same_tool_cap_as_the_real_registry():
+    from proef.predictors import MAX_TOOLS_PER_VARIANT
+    from proef.reproduce import _RecordedPredictors
+    rm = RecordedModel([])
+    recorded = [{"tool": f"t{i}", "input": "CCO", "status": "ok", "kind": "prediction", "evidence": False} for i in range(30)]
+    out = _RecordedPredictors(recorded, rm).run([f"t{i}" for i in range(30)], {"smiles": "CCO"}, None, None)
+    assert len(out) == MAX_TOOLS_PER_VARIANT and not rm.divergences, "the extras were never run by the original, so they are not looked up"

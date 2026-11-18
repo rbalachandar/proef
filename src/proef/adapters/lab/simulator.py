@@ -109,6 +109,11 @@ class SimulatorLab:
             "bsl_max": 2,
         }
 
+    def replay_config(self) -> dict[str, Any]:
+        """Everything about this lab that changes what it measures, as plain data, so a replay can build the same lab."""
+        return {"replicates": self.replicates, "interference_rate": self.interference_rate,
+                "method_bias": {s: dict(b) for s, b in self.method_bias.items()}, "instruments": dict(self._capabilities)}
+
     def replicates_for(self, protocol: ProtocolSubmission) -> int:
         """The replicate count this run uses: the protocol's own request when it has one (bounded), else the lab's."""
         want = (getattr(protocol, "constraints", None) or {}).get("replicates")

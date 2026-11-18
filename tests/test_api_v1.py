@@ -446,7 +446,7 @@ def test_limits_are_validated_and_old_programs_get_defaults(client):
                                      "mode": "autonomous"})          # no 'limits' key: created before limits existed
     got = client.get(f"/api/v1/programs/{program_cfg._slug(name)}").json()["limits"]
     assert got == {"max_rounds": 3, "max_lab_runs": 20, "max_hypotheses": 12, "max_families": 3,
-                   "max_variants_per_family": 3, "breadth": 3, "max_depth": 2, "max_subproblems": 8, "max_model_calls": 200}
+                   "max_variants_per_family": 3, "breadth": 3, "max_depth": 2, "max_subproblems": 8, "max_model_calls": 200, "max_wall_minutes": 0}
 
 
 def test_a_research_plan_is_reviewed_in_the_inbox_and_removals_are_sealed(client, seeded):

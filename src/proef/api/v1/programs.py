@@ -289,7 +289,8 @@ def campaign_doc(p: dict, body: S.CampaignCreate, *, runs: int | None = None, hy
            "max_families": lim.max_families, "max_variants_per_family": lim.max_variants_per_family,
            "budget": {"max_total_runs": min(runs or lim.max_lab_runs, lim.max_lab_runs),
                       "max_hypotheses_total": min(hypotheses or lim.max_hypotheses, lim.max_hypotheses),
-                      "max_model_calls": min(model_calls or lim.max_model_calls, lim.max_model_calls)},
+                      "max_model_calls": min(model_calls or lim.max_model_calls, lim.max_model_calls),
+                      **({"wall_clock_secs": float(lim.max_wall_minutes * 60)} if lim.max_wall_minutes else {})},
            "candidates": ",".join(c.strip() for c in body.candidates if c.strip())}
     if body.objective:
         doc["objective"] = body.objective

@@ -396,7 +396,7 @@ numbers say what happened to it.
 - [ ] `orch-replay`: an orchestrated campaign with follow-ups and a re-plan replays from the ledger and matches.
 
 **5C: tool-call evals, which need a driver first**
-- [ ] **A configured tool catalog, offered to the model, never assumed.** The operator configures which tools exist (Phase 6 is the page
+- [x] **A configured tool catalog, offered to the model, never assumed.** The operator configures which tools exist (Phase 6 is the page
       for it). The model learns what it may use from a short menu in its system prompt and from a `list_tools` call that returns the
       tools offered in the CURRENT state, with `describe_tool(name)` for a full schema (so the prompt stays small as the catalog
       grows). It chooses a tool, code validates the call, runs it, and the result comes back to the model. The catalog holds more than
@@ -413,11 +413,19 @@ numbers say what happened to it.
       Each catalog entry says its class, its effects (read, compute, physical, state), whether its output is trusted, whether data
       leaves the machine, its cost, the states it is offered in, the autonomy it needs, whether a person must approve it, and how its
       result is sealed. The evidence rule is the same as everywhere: only a measurement reaches a verdict.
+
+      **Built so far (`tools.py`, `toolloop.py`, `tests/test_tools.py`):** the catalog and its pipeline (offered by state and autonomy, strict
+      schema validation, egress permission and identifier check, executor, untrusted-output delimiting and capping, ledger record, sealed
+      results with replay), the five classes with the toolkit's eight tools and a PubMed tool registered, `submit_assay(instrument, ...)`,
+      the meta tools, and the loop with its step cap, repeated-refusal stop and guard stops. 13 guards mutation-checked.
+      **Still open in 5C:** the campaign engine does not call the loop yet (the evals use it first), `mcp_server.py` is not yet an adapter over
+      the catalog (two implementations remain), there is no web-search or sub-agent tool yet, and the instrument menu shown to a model does
+      not yet restrict the names an instrument's server supplied (the injection point described below).
 - [ ] **One tool surface.** Today `toolkit.py` (8 tools) and `mcp_server.py` (4 tools) are two implementations with their own copies of the
       guards, and the Phase 0 holes had to be fixed in both. They become one registry (`tools.py`): each tool has a name, an input schema,
       an executor, the states it is offered in, the autonomy levels it needs and its preconditions. The in-process loop and the MCP
       server are two adapters over it, so a guard is written once and the evals cover both doors.
-- [ ] **A state-scoped loop, because the flow stays deterministic.** The engine owns the states and the transitions (Phase 4). In each
+- [x] **A state-scoped loop, because the flow stays deterministic.** The engine owns the states and the transitions (Phase 4). In each
       state the model is offered only that state's tools and can only act inside it: propose (propose a hypothesis, predict, check
       synthesis, list lab capabilities), run (submit an assay, only for what a person approved), judge (read results and request an
       analysis, which the ENGINE turns into a verdict), decide (choose among the allowed actions). Planning review, the gates and the
@@ -428,7 +436,7 @@ numbers say what happened to it.
       lab adapter, and the adapter alone calls the instrument's read-only tools (mutating ones stay operator-only, as built in S-T4).
       Exposing an instrument's tools to the model directly would bypass every gate. The model sees the instruments as the capability
       menu of Phase 2, nothing more.
-- [ ] **Which instrument, and when: the model asks, code decides.** `submit_assay` takes an `instrument` argument (a name from the Phase 2
+- [x] **Which instrument, and when: the model asks, code decides.** `submit_assay` takes an `instrument` argument (a name from the Phase 2
       menu) and the assay, the doses and the replicates. Code decides what happens to it, in this order: (1) the operator's pool is the
       fence, nothing outside it exists; (2) the name must be in the pool and declare the assay (`check_pick`, the same facts-first
       check as the plan); (3) a person approved the candidate, in a plan or per submission; (4) the engine's own state allows a
@@ -444,7 +452,7 @@ numbers say what happened to it.
 - [ ] Proef's own MCP server (`proef mcp`) is for external clients and exposes the same single tool surface, the campaign state and
       the allowed actions, so an external client is held to the same
       flow as our own agent, with the same approval model.
-- [ ] A small tool loop (`toolloop.py`): the model emits a tool call as JSON, the loop executes it through the toolkit, returns the
+- [x] A small tool loop (`toolloop.py`): the model emits a tool call as JSON, the loop executes it through the toolkit, returns the
       result (or the refusal) to the model, and repeats until the model says it is done, a step cap is reached, or the model-call
       budget, halt or pause stops it. Every model call goes through the Phase 3A guard and is sealed. The tools offered follow the
       autonomy level. A malformed call or a tool that raises is returned to the model as an error, never a crash.

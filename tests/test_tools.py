@@ -110,7 +110,7 @@ def test_the_meta_tools_list_and_describe_only_what_this_step_offers():
     assert [t["name"] for t in cat.call(c, "list_tools", {})["result"]] == ["p"]
     assert cat.call(c, "describe_tool", {"name": "p"})["result"]["arguments"] == SCHEMA
     assert cat.call(c, "describe_tool", {"name": "r"})["status"] == "refused"
-    assert "p [compute]" in cat.menu_text(c) and "list_tools" in cat.menu_text(c) and "r [" not in cat.menu_text(c)
+    assert "p(name: string, n?: integer, kind?: string, tags?: array) [compute]" in cat.menu_text(c) and "list_tools" in cat.menu_text(c) and "r [" not in cat.menu_text(c)
 
 
 def test_a_tool_that_raises_is_an_error_result_not_a_crash():

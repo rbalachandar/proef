@@ -116,6 +116,25 @@ def cmd_run(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_audit(args: argparse.Namespace) -> int:
+    from proef.adapters.store.sqlite import SqliteProvenanceStore
+    from proef.audit import audit_campaign
+
+    store = SqliteProvenanceStore(args.db)
+    records = store.branch_records(args.branch)
+    if not records:
+        print(f"no records for branch '{args.branch}' in {args.db}")
+        return 1
+    violations = audit_campaign(records, store=store, branch=args.branch)
+    if not violations:
+        print(f"audit clean: {len(records)} records, 0 violations")
+        return 0
+    print(f"{len(violations)} violation(s) in {len(records)} records:")
+    for v in violations:
+        print(f"  - {v}")
+    return 2
+
+
 def cmd_prove(args: argparse.Namespace) -> int:
     from proef.adapters.store.sqlite import SqliteProvenanceStore
 
@@ -926,6 +945,11 @@ def _register_core(sub):
                        help="also write a self-contained HTML report")
     prove.add_argument("--eln", help="export branch as ELN CSV (+ .json sidecar)")
     prove.set_defaults(func=cmd_prove)
+
+    aud = sub.add_parser("audit", help="check a campaign branch against the checkpoint rules")
+    aud.add_argument("branch")
+    aud.add_argument("--db", default="proef.db")
+    aud.set_defaults(func=cmd_audit)
 
     sbxd = sub.add_parser("sandboxd",
                           help=argparse.SUPPRESS)  # internal worker

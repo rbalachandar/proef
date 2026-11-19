@@ -33,6 +33,8 @@ def reproduce(branch: str, db_path: str = "proef.db",
     followed_up = False
     responses: list[dict] = []            # sealed model answers, in call order
     plan_decisions: list[dict] = []       # the person's plan reviews, in order
+    sealed_tools: list[dict] = []         # knowledge-tool results the original sealed
+
     gen_contexts: list[str] = []          # what the flywheel put in each generation prompt
     old_gen_contexts: list[str] = []      # branches recorded before attempts were: one per SUCCESSFUL generation
     predictions: list[dict] = []          # every prediction the original sealed, so a replay runs no tool
@@ -71,6 +73,8 @@ def reproduce(branch: str, db_path: str = "proef.db",
                 }
         elif et == "tool_invocation" and d.get("kind") in ("model_response", "model_error"):
             responses.append(d)                # a call that FAILED is replayed as a failure, so the same fallback runs
+        elif et == "tool_invocation" and d.get("kind") == "tool_result":
+            sealed_tools.append(d)             # a knowledge result (PubMed, ChEMBL...) the original sealed, played back with no network
         elif et == "tool_invocation" and d.get("kind") == "generation_attempt":
             gen_contexts.append(d.get("flywheel_context") or "")
         elif et == "tool_invocation" and d.get("kind") == "hypothesis_generation":
@@ -163,7 +167,7 @@ def reproduce(branch: str, db_path: str = "proef.db",
     rm = None
     if agent_replay:
         # an agent campaign replays with the model's sealed answers, never a model: re-plans and follow-ups included
-        cfg, rm = _agent_cfg(cfg, env, responses, plan_decisions, gen_contexts or old_gen_contexts, first_score, predictions)
+        cfg, rm = _agent_cfg(cfg, env, responses, plan_decisions, gen_contexts or old_gen_contexts, first_score, predictions, sealed_tools)
     _seed = env.get("lab_seed")
     if _seed is None:
         _seed = 7                       # pre-seed-capture branches default
@@ -212,6 +216,11 @@ def reproduce(branch: str, db_path: str = "proef.db",
     }
 
 
+def _sealed_tool_results(sealed: list[dict]) -> dict:
+    """The knowledge results the original sealed, by (tool, arguments hash): a replay plays them back and never calls the network."""
+    return {(d.get("tool"), d.get("args_hash")): d.get("result") for d in sealed}
+
+
 class _FrozenFlywheel:
     """What a replay uses in place of the flywheel: the contexts the original put in its prompts, in order, and no priors. The
     original's priors are not reconstructible, so selection scores come from the recorded ones instead (`_agent_cfg`)."""
@@ -233,7 +242,7 @@ class _FrozenFlywheel:
 
 
 def _agent_cfg(cfg, env: dict, responses: list[dict], plan_decisions: list[dict], gen_contexts: list[str], first_score: dict,
-               predictions: list[dict] | None = None):
+               predictions: list[dict] | None = None, sealed_tools: list[dict] | None = None):
     """Turn the replay config into an AGENT campaign driven by the recorded model answers and the recorded plan reviews."""
     from dataclasses import replace
 
@@ -266,6 +275,7 @@ def _agent_cfg(cfg, env: dict, responses: list[dict], plan_decisions: list[dict]
         # the original's selection scores, by hypothesis id (ids are a hash of the statement, candidate and round, so a replay
         # that gets the same answers makes the same ids)
         score_fn=(lambda h: first_score.get(h.hypothesis_id, 0.5) - explanatory_bonus(h)) if first_score else None,
+        grounding_tools=tuple(env.get("grounding_tools") or ()), grounding_replay=_sealed_tool_results(sealed_tools or []),
         flywheel=_FrozenFlywheel(gen_contexts)), rm
 
 

@@ -15,25 +15,20 @@ QUERY = """
 query targetDetails($ensemblId: String!) {
   target(ensemblId: $ensemblId) {
     id
+    approvedSymbol
     approvedName
-    symbol
     biotype
-    knownDrugs
-    tractability {
-      label
-      modality
-      value
-    }
-    geneticConstraint
-    safeTarget
-    diseases {
-      rows {
-        disease { id name }
-        score
-        datatypeScores { datasourceId score }
-      }
-    }
+    tractability { label modality value }
+    geneticConstraint { constraintType score oe }
+    drugAndClinicalCandidates { count }
+    associatedDiseases(page: {index: 0, size: 10}) { rows { score disease { id name } } }
   }
+}
+"""
+
+SEARCH = """
+query findTarget($q: String!) {
+  search(queryString: $q, entityNames: ["target"], page: {index: 0, size: 5}) { hits { id name entity } }
 }
 """
 
@@ -62,23 +57,31 @@ class OpenTargetsAdapter:
         data = self._graphql(QUERY, {"ensemblId": ensembl_id})
         return data.get("target", {})
 
-    def summary(self, ensembl_id: str) -> dict[str, Any]:
-        """Compact summary for agent consumption."""
+    def find_target(self, symbol: str) -> str | None:
+        """The Ensembl id of the target whose name is exactly this symbol (case-insensitive), else None."""
+        hits = self._graphql(SEARCH, {"q": symbol}).get("search", {}).get("hits", [])
+        return next((h["id"] for h in hits if str(h.get("name", "")).lower() == symbol.strip().lower()), None)
+
+    def summary(self, ensembl_id: str | None = None, symbol: str | None = None) -> dict[str, Any]:
+        """Compact summary for agent consumption. Give an Ensembl gene id, or a gene symbol to look up first."""
+        if not ensembl_id and symbol:
+            ensembl_id = self.find_target(symbol)
+            if not ensembl_id:
+                return {"error": f"no Open Targets target named {symbol!r}"}
+        if not ensembl_id:
+            return {"error": "give an ensembl_id or a symbol"}
         t = self.target_by_ensembl(ensembl_id)
         if not t:
             return {"error": "target not found"}
-        diseases = [
-            {"name": d["disease"]["name"], "score": d["score"]}
-            for d in t.get("diseases", {}).get("rows", [])[:10]
-        ]
-        tractable = [x["label"] for x in t.get("tractability", []) if x.get("value")]
+        diseases = [{"name": d["disease"]["name"], "score": round(d["score"], 3)}
+                    for d in (t.get("associatedDiseases") or {}).get("rows", [])[:10]]
+        tractable = sorted({f"{x['modality']}: {x['label']}" for x in t.get("tractability") or [] if x.get("value")})
         return {
             "ensembl_id": t.get("id"),
-            "symbol": t.get("symbol"),
+            "symbol": t.get("approvedSymbol"),
             "name": t.get("approvedName"),
             "biotype": t.get("biotype"),
-            "known_drugs": t.get("knownDrugs"),
-            "safe_target": t.get("safeTarget"),
+            "known_drugs": (t.get("drugAndClinicalCandidates") or {}).get("count"),
             "genetic_constraint": t.get("geneticConstraint"),
             "tractability_modalities": tractable,
             "top_diseases": diseases,
@@ -94,7 +97,6 @@ def validate_target(ensembl_id: str) -> dict[str, Any]:
     return {
         "symbol": s.get("symbol"),
         "known_drugs": s.get("known_drugs", 0),
-        "safe_target": s.get("safe_target"),
         "tractability": s.get("tractability_modalities", []),
         "top_disease_score": (s.get("top_diseases") or [{}])[0].get("score", 0),
     }

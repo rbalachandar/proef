@@ -383,7 +383,7 @@ numbers say what happened to it.
       it, an orchestrator's choice was allowed, nothing runs after a stop, budgets hold, every model call is sealed and numbered,
       accept and drop are never executed and a follow-up has a valid proposal, an unserved hypothesis never runs, the chain verifies).
 - [x] Every rule has a synthetic violation it must catch, and real campaigns run every way the engine can be driven audit clean.
-- [ ] `proef audit <branch>` prints the violations for any campaign, so a reader does not need the test suite. Built AFTER the tool
+- [x] `proef audit <branch>` prints the violations for any campaign, so a reader does not need the test suite. Built AFTER the tool
       catalog and loop (5C): the audit already exists as a library and is what the evals use, so the command is only a front end.
 
 **5B: agent-loop evals (the campaign loop and its orchestration)**, a new `orchestration` suite
@@ -563,6 +563,39 @@ What the model may and may not do with what it finds:
 - [ ] Blinding rules for knowledge tools in eval and case-study arms.
 - [ ] Evals: grounding precision (a supporting item really supports), recall of a planted contradiction, and a leakage test that a blinded
       run cannot retrieve its held-out truth.
+
+**5I: the engine uses the tool loop, and a real model is measured on which tool it calls (added Nov 19; built first)**
+Finding: 5C built the catalog and loop and the evals drive them with scripted models, but nothing in a campaign called them, so "does
+the model call the right tool at the right stage" had no answer. Order of work:
+- [x] Knowledge tools in the catalog: `chembl_search` (`adapters/databases/chembl_lookup.py`) and `opentargets_summary`, beside
+      `pubmed_search`. Same rules: delimited, sealed, egress-checked, offered in `propose` and `decide`.
+- [x] The engine calls the loop at `propose`: `CampaignConfig.grounding_tools` (off by default) runs `grounding.gather`, a
+      `propose`-scoped loop offered ONLY the enabled knowledge tools (no flow tool, no lab door). What it read goes into the proposal prompt as
+      untrusted background. `tests/test_grounding.py`: a scripted model's calls reach the adapters, are on the ledger as sealed results, a
+      hostile abstract moves nothing, a lab call is refused as not offered, a protected id never leaves, the audit is clean.
+- [x] **Replay of a grounded campaign.** The grounding calls are sealed model calls like any other, the knowledge results are sealed
+      tool results, and the envelope records `grounding_tools`. `reproduce` plays both back: no model, no network, verdicts match
+      (`tests/test_grounding.py`, with the adapters asserted not called again).
+- [x] **First real-model checks** (`gpt-6-luna`, simulated lab, Nov 19; two runs, so indicative only). Found and fixed three tool faults the scripted
+      evals could not: the PubMed adapter asked efetch for JSON (never worked live; now parses XML), the Open Targets query used a retired
+      schema (HTTP 400; now current fields plus a symbol lookup), and ChEMBL activities had no molecule names. Prompt fixes: argument
+      signatures in the menu (no `describe_tool` calls), a stated step budget and a forced summary on the last step.
+      Measured: the summary is faithful (every id and value in it is in a tool result the model saw), but use in proposals was
+      mixed: one run cited a PMID and proposed a compound from the literature, one used none of it. Open: repeat over more seeds with
+      the fixed tools before saying grounding changes proposals.
+- [x] **Recent-paper test** (`gpt-6-luna`, Nov 19; 4 runs per arm, `scripts/grounding_real_model.py` + `grounding_compare.py`). The objective named only a target and
+      indication (DYRK1B, ovarian cancer); the answer was a paper published Nov 5, 2026 (PMID 43005627, fisetin, IC50 1.2 uM), after the
+      model's training. Ungrounded: fisetin proposed 0/4, 2 distinct candidates, one DOI citation that did not resolve. Grounded: the paper
+      retrieved 4/4, used in the summary and the proposals 2/4 (cited, verified), 5 distinct candidates, 4 of 5 distinct citations verified.
+      An earlier test on EGFR showed no benefit because the model already knew the answer: grounding only shows value past the model's
+      knowledge. Limits: one target, one paper, four runs, one model; the ChEMBL-id citations cannot be verified (the verifier handles PMID and DOI only).
+- [ ] The same loop at `decide` (explain a result, suggest the next step) and the `ground` state of 5H.
+- [ ] Web search tool (needs a provider and an operator choice of which) and a sub-agent tool (critic exists as `critic_model`, not
+      as a catalog tool).
+- [ ] **Real-model tool-selection measurement** (opt-in, costs money, asked first): per stage, which tool the model picked, whether a
+      knowledge tool was used at all, invalid-call rate, wasted calls, and whether the proposals differ with and without grounding. The
+      scripted evals only prove the guards, not this.
+- [ ] `grounding` as a CLI/API option and a workbench toggle (Phase 6 settings).
 
 **5D: the real-data case study (opt-in, costs money, asked first)**
 - [ ] Case study 09 reuses case study 04's `ReplayLab` and 36-candidate library with its published truth. Arms: the fixed loop, and

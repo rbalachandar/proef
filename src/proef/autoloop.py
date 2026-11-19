@@ -72,6 +72,9 @@ class CampaignConfig:
     max_variants_per_family: int = 3
     prediction_registry: Any = None        # a replay's stand-in that plays recorded predictions back instead of running tools
     prediction_tools: list[str] | None = None   # prediction tools the operator enables (priors, never evidence)
+    grounding_tools: tuple[str, ...] = ()  # knowledge tools (pubmed, chembl, opentargets) a model may use BEFORE it proposes; () = off
+    knowledge_services: dict[str, Any] = field(default_factory=dict)   # the adapters behind them, e.g. {'pubmed': PubMedAdapter()}
+    grounding_replay: dict | None = None   # a replay's sealed knowledge results {(tool, args_hash): result}: played back, no network
     modality: str | None = None            # selects the domain pack (assays, prompt wording); None = small molecule
     orchestrator: Any = "fixed"           # 'fixed' (the configured order), 'model' (a model chooses among the allowed actions) or an object with choose()
     followups: bool = False                # after each round the model suggests what to do with each abstained hypothesis
@@ -312,8 +315,16 @@ def _propose_and_score(cfg, tracker, problem, store, flywheel, say, lab_ctx=None
         budget = cfg.budget or ResourceBudget()
         used = budget.lab_runs_used(store, cfg.problem.problem_id or "")
         remaining_runs = max(0, budget.max_total_runs - used)
+        grounding_text = None
+        if cfg.grounding_tools:
+            from proef.grounding import gather
+            g = gather(cfg.model, cfg.problem, store, cfg.knowledge_services, cfg.grounding_tools,
+                       protected={str(c.get("id") or c.get("candidate") or "") for c in (cfg.candidates or []) if isinstance(c, dict)}
+                       | {cfg.problem.problem_id or ""}, replay=cfg.grounding_replay)
+            grounding_text = g.text or None
+            say(f"grounding: {len(g.calls)} knowledge call(s), {len(g.used)} answered" + (f" (stopped: {g.stopped})" if g.stopped else ""))
         portfolio, family_scores = propose_families_with_agent(
-            tracker, cfg.problem, cfg.model, candidates=cfg.candidates,
+            tracker, cfg.problem, cfg.model, candidates=cfg.candidates, grounding=grounding_text,
             modality=cfg.modality,
             max_families=cfg.max_families,
             max_variants_per_family=cfg.max_variants_per_family,
@@ -832,6 +843,7 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
         "hypothesis_source": cfg.hypothesis_source, "followups": cfg.followups, "replan": cfg.replan,
         "max_families": cfg.max_families, "max_variants_per_family": cfg.max_variants_per_family,
         "modality": cfg.modality, "prediction_tools": list(cfg.prediction_tools or []),
+        "grounding_tools": list(cfg.grounding_tools or []),
         "critic": cfg.critic_model is not None, "plan_review": cfg.plan_approver is not None,
         "orchestrator": cfg.orchestrator if isinstance(cfg.orchestrator, str) else "custom",
         "lab_config": _json_safe(lambda: lab.replay_config()),       # the lab's own knobs, so a replay measures the same way

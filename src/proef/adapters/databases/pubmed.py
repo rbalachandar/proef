@@ -56,27 +56,11 @@ class PubMedAdapter:
         return data.get("esearchresult", {}).get("idlist", [])
 
     def fetch_abstracts(self, pmids: list[str]) -> list[dict[str, str]]:
-        """Fetch titles and abstracts for a list of PMIDs."""
+        """Fetch titles and abstracts for a list of PMIDs. efetch returns XML (it has no JSON mode)."""
         if not pmids:
             return []
-        params = {
-            "id": ",".join(pmids), "rettype": "abstract", "retmode": "json",
-        }
-        raw = self._get("efetch.fcgi", params)
-        data = json.loads(raw)
-        articles = []
-        for pmid, item in data.get("result", {}).items():
-            if pmid == "uids":
-                continue
-            articles.append({
-                "pmid": pmid,
-                "title": item.get("title", ""),
-                "abstract": item.get("abstract", "")[:2000],
-                "journal": item.get("source", ""),
-                "pub_date": item.get("pubdate", ""),
-                "authors": ", ".join(a.get("name", "") for a in item.get("authors", [])[:5]),
-            })
-        return articles
+        raw = self._get("efetch.fcgi", {"id": ",".join(pmids), "rettype": "abstract", "retmode": "xml"})
+        return parse_efetch(raw)
 
     def search_and_fetch(self, query: str, max_results: int = 10) -> list[dict[str, str]]:
         """Search + fetch in one call."""
@@ -84,3 +68,25 @@ class PubMedAdapter:
         if not pmids:
             return []
         return self.fetch_abstracts(pmids)
+
+
+def parse_efetch(raw: bytes | str) -> list[dict[str, str]]:
+    """Parse efetch XML into article dicts. Text from outside: entity declarations are refused, not expanded."""
+    import xml.etree.ElementTree as ET
+    data = raw if isinstance(raw, bytes) else raw.encode()
+    if b"<!ENTITY" in data:
+        raise ValueError("refusing XML with entity declarations")
+    root = ET.fromstring(data)
+    txt = lambda el: "".join(el.itertext()).strip() if el is not None else ""   # noqa: E731
+    out = []
+    for art in root.iter("PubmedArticle"):
+        names = [f"{txt(a.find('LastName'))} {txt(a.find('Initials'))}".strip() for a in art.iter("Author")][:5]
+        out.append({
+            "pmid": txt(art.find(".//MedlineCitation/PMID")),
+            "title": txt(art.find(".//ArticleTitle")),
+            "abstract": " ".join(txt(x) for x in art.iterfind(".//Abstract/AbstractText"))[:2000],
+            "journal": txt(art.find(".//Journal/Title")),
+            "pub_date": txt(art.find(".//JournalIssue/PubDate/Year")) or txt(art.find(".//JournalIssue/PubDate/MedlineDate")),
+            "authors": ", ".join(n for n in names if n),
+        })
+    return out

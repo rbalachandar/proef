@@ -98,6 +98,7 @@ def propose_families_with_agent(
     instruments: dict | None = None,
     predictors: list[str] | None = None,
     registry: Any = None,
+    grounding: str | None = None,
 ) -> tuple[list[Hypothesis], dict[str, float]]:
     """max_total_hypotheses: hard cap on hypotheses this generation may add.
     existing_keys: (candidate, statement) pairs already tried — duplicates the
@@ -159,6 +160,8 @@ def propose_families_with_agent(
         max_families=max_families,
         max_variants_per_family=max_variants_per_family,
     ) + instrument_block + tools_block + ("\n\n" + guidance_block if guidance_block else "")
+    if grounding:
+        prompt += "\n\n" + grounding[:3000]
     if findings:
         prompt += ("\n\nRESULTS SO FAR (re-plan from these: do not repeat a refuted idea, "
                    "build on what held up, and pick candidates not yet tested)\n" + findings)

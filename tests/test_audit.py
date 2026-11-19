@@ -154,3 +154,10 @@ def test_campaigns_driven_by_every_orchestrator_and_autonomy_audit_clean(tmp_pat
             from proef.adapters.store.sqlite import SqliteProvenanceStore
             store = SqliteProvenanceStore(str(d / "prov.db"))
         assert _clean(store, report) == [], (name, [str(x) for x in _clean(store, report)])
+
+
+def test_audit_cli_reports_missing_branch_and_clean_campaign(tmp_path, capsys):
+    from proef.cli import main
+    db = str(tmp_path / "p.db")
+    assert main(["audit", "nope", "--db", db]) == 1
+    assert "no records" in capsys.readouterr().out

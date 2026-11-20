@@ -151,5 +151,6 @@ def test_the_plan_api_schema_accepts_grounding_and_the_untraced_citation_warning
     _, _, _, _, _, seen = _run(tmp_path)
     p = Plan.model_validate(seen[0])
     assert p.families[0].grounding.items[0].source == f"PMID {PMID}" and p.families[0].grounding.dropped == 2
-    assert p.families[0].citation_traced is False and [w.kind for w in p.warnings] == ["untraced_citation"]
-    assert p.warnings[0].family == "f" and p.warnings[0].candidate == ""
+    assert p.families[0].citation_traced is False
+    w = next(w for w in p.warnings if w.kind == "untraced_citation")
+    assert w.family == "f" and w.candidate == ""

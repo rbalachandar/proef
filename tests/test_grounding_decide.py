@@ -96,7 +96,7 @@ def _tested(value=20.883, cand="PRIV-7"):
 def _bg(model, tested, public=(), cache=None, **cfgkw):
     pm = Pubmed()
     cfg = NS(grounding_tools=("pubmed",), model=model, problem=ProblemStatement(objective="o", problem_id="prob-1"),
-             knowledge_services={"pubmed": pm}, grounding_public_names=tuple(public), grounding_replay=None, **cfgkw)
+             knowledge_services={"pubmed": pm}, grounding_public_names=tuple(public), grounding_replay=None, candidates=cfgkw.pop("candidates", None), **cfgkw)
     store = SqliteProvenanceStore(":memory:")
     return _round_background(cfg, store, cfg.problem, tested, 1, lambda m: None, {} if cache is None else cache), pm
 
@@ -174,3 +174,11 @@ def test_a_campaign_grounded_at_decide_replays_from_the_ledger_with_no_network(t
     out = reproduce(f"problem/{report.problem_id}", db_path=str(tmp_path / "prov.db"), inbox=str(tmp_path / "rin"))
     assert out.get("status") == "match", out
     assert pm.queries == ["EGFR", DECIDE_Q], "the replay called no adapter"
+
+
+def test_a_private_librarys_ids_are_protected_at_decide_too():
+    lib = [{"sample_id": "LIB-42", "smiles": "CC(=O)Oc1ccccc1C(=O)O"}]
+    _, pm = _bg(Asking("LIB-42 solubility"), _tested(cand="other"), candidates=lib)
+    assert pm.queries == []
+    _, pm = _bg(Asking("CC(=O)Oc1ccccc1C(=O)O solubility"), _tested(cand="other"), candidates=lib)
+    assert pm.queries == []

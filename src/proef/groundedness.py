@@ -51,3 +51,136 @@ def verify_items(items: Any, bodies: list[Any], max_items: int = 8) -> tuple[lis
         elif len(kept) < max_items:
             kept.append({"kind": kind, "claim": claim, "source": source})
     return kept, dropped
+
+
+# ---- detectors for what a model says (5F, 5G narrative kinds) -----------------------------------------------------------------------------
+# Each is lexical and deterministic. They catch what can be checked mechanically against facts Proef holds (a library, a gate, a ledger,
+# a finding); they do NOT judge whether an argument is good. Their precision limits are stated in each docstring and measured in the
+# `hallucination` eval on a labelled fixture, so a number here is a measured one.
+
+_UNIT_TO_UM = {"pm": 1e-6, "nm": 1e-3, "um": 1.0, "µm": 1.0, "μm": 1.0, "mm": 1e3}
+_NUM_UNIT = re.compile(r"(\d+(?:\.\d+)?)\s*(pM|nM|[uµμ]M|mM)\b", re.I)
+
+
+def to_um(value: float, unit: str) -> float:
+    return float(value) * _UNIT_TO_UM[unit.lower().replace("u", "u")] if unit.lower() in _UNIT_TO_UM else float(value)
+
+
+def not_in_library(name: str, library: list[str]) -> bool:
+    """True when a compound name is not one the library offered (case and surrounding space ignored). Only meaningful when a library was
+    offered: with no library every name is the model's own and this says nothing."""
+    return bool(library) and name.strip().lower() not in {x.strip().lower() for x in library}
+
+
+def structure_problem(smiles: str, name: str = "", library: dict[str, str] | None = None) -> str | None:
+    """None when the structure is fine; else why not: it does not parse, or it disagrees with the structure the library holds for the name
+    (compared as canonical SMILES, so a different spelling of the same molecule passes)."""
+    from proef.predictors import _check_smiles
+    bad = _check_smiles(smiles)
+    if bad:
+        return bad
+    held = (library or {}).get(name) or (library or {}).get(name.lower())
+    if held:
+        try:
+            from rdkit import Chem
+            a, b = Chem.MolFromSmiles(smiles), Chem.MolFromSmiles(held)
+            if a is not None and b is not None and Chem.MolToSmiles(a) != Chem.MolToSmiles(b):
+                return f"the library holds a different structure for {name}"
+        except ImportError:
+            return None
+    return None
+
+
+_OBSERVABLE = re.compile(
+    r"\d|<|>|≤|≥|\b(below|above|under|over|exceed\w*|less than|greater than|fewer|more than|no (saturable|specific|measurable|detectable|binding|"
+    r"inhibition|activity|shift|effect|dose)|fails? to (reach|show|inhibit|bind)|ic50|ec50|kd|ki|potency|fold|ratio|signal|curve|"
+    r"saturat\w*|plateau|competition|shift)\b", re.I)
+_CIRCULAR = re.compile(r"^\W*(if|when|should)\b.{0,40}\b(does not|doesn'?t|fails?|is wrong|is false|is incorrect|is not (true|correct|valid)|"
+                       r"does not work|isn'?t (true|correct|right)|turns out (wrong|false))\b", re.I)
+
+
+def untestable_refutation(text: str) -> str | None:
+    """None when a 'refuted if' clause names something that could be observed; else why not. Lexical: empty, circular ('if it does not
+    work') with nothing observable, or nothing observable at all. It cannot tell a sharp clause from a vague one that happens to contain a
+    number or the word 'binding'; it catches the obviously empty and obviously circular."""
+    t = (text or "").strip()
+    if len(t) < 8:
+        return "empty"
+    if not _OBSERVABLE.search(t):
+        return "circular" if _CIRCULAR.search(t) else "no observable or threshold"
+    return None
+
+
+_STATE_WORDS = re.compile(r"\b(gate|threshold|cut-?off|criterion|criteria|success|hit|goal|target|requirement)\b|ic50|potency", re.I)
+_CMP = re.compile(r"(below|under|less than|at most|up to|within|sub-?|<=?|≤|above|over|greater than|at least|>=?|≥)\s*(?:an? )?(\d+(?:\.\d+)?)\s*(pM|nM|[uµμ]M|mM)\b", re.I)
+
+
+def gate_misstated(text: str, threshold_um: float | None, tol: float = 0.01) -> list[dict]:
+    """A threshold written in the text that is not the gate's, after converting units ('below 20 nM' against a gate of 20 µM). Only a number
+    with a concentration unit and a comparison word, in a sentence that talks about the gate, is considered, so a dose or a measurement
+    is not mistaken for a threshold. Does not check direction."""
+    if not threshold_um:
+        return []
+    out = []
+    for sent in re.split(r"(?<=[.;!?])\s+|\n", text or ""):
+        if not _STATE_WORDS.search(sent):
+            continue
+        for m in _CMP.finditer(sent):
+            val = to_um(float(m.group(2)), m.group(3))
+            if abs(val - threshold_um) > tol * threshold_um:
+                out.append({"stated": f"{m.group(2)} {m.group(3)}", "stated_um": val, "gate_um": threshold_um})
+    return out
+
+
+_QUOTE_CTX = re.compile(r"(ic50|ec50|kd|\bki\b|observed|measured|potency|gave|showed|yielded|reported|value|=)"
+                        r"(?:[\s:=~≈]|\b(?:of|was|is|at|about|around|near|approximately|roughly|only|just|to be)\b){0,6}$", re.I)
+
+
+def quoted_number_problems(text: str, findings: list[dict], gate_um: float | None = None, tol: float = 0.05) -> list[dict]:
+    """A value quoted for a named candidate that the data does not show. `findings`: [{'candidate', 'observed_um', 'ci_um': (lo, hi)|None}].
+    Only a number with a concentration unit, introduced by a measurement word (IC50, observed, measured, gave...), and within 80 characters
+    after a candidate's name is checked; it must match the candidate's observed value or a bound of its interval within `tol`. The gate's own
+    value is allowed. Names and numbers only: it does not judge whether the claim built on them is right."""
+    out = []
+    by = {str(f["candidate"]).lower(): f for f in findings}
+    low = (text or "").lower()
+    for name, f in by.items():
+        for nm in re.finditer(re.escape(name), low):
+            window = (text or "")[nm.end(): nm.end() + 80]
+            for m in _NUM_UNIT.finditer(window):
+                if not _QUOTE_CTX.search(window[: m.start()]):
+                    continue
+                val = to_um(float(m.group(1)), m.group(2))
+                known = [x for x in [f.get("observed_um"), *(f.get("ci_um") or ()), gate_um] if x is not None]
+                if not any(abs(val - k) <= tol * abs(k) for k in known):
+                    out.append({"candidate": f["candidate"], "quoted": f"{m.group(1)} {m.group(2)}", "quoted_um": val,
+                                "observed_um": f.get("observed_um")})
+    return out
+
+
+def ruled_out(candidate: str, family: str | None, negatives: list[dict]) -> dict | None:
+    """The flywheel negative a proposal repeats: the same candidate, or the same mechanistic family, already refuted or invalidated."""
+    c, fam = (candidate or "").strip().lower(), (family or "").strip().lower()
+    for n in negatives or []:
+        if c and str(n.get("candidate", "")).strip().lower() == c:
+            return {**n, "match": "candidate"}
+        if fam and str(n.get("family") or "").strip().lower() == fam:
+            return {**n, "match": "family"}
+    return None
+
+
+_NEG = re.compile(r"(\bnot\b|n't\b|\bnever\b|\bno need to\b|\bwithout\b|\bfailed to\b|\bunable to\b)\W+(?:\w+\W+){0,2}$", re.I)
+
+
+def phantom_tool_claims(text: str, called: set[str], offered: set[str]) -> list[str]:
+    """Tool names a narrative says it used that the ledger has no call for. A name must be an offered tool and sit within 40 characters
+    after a verb of use (ran, called, used, queried, searched, submitted), and the verb must not be negated ('did not run', 'never used').
+    Name-based: it cannot tell a call that failed from one that never happened, only that none is on the record. The negation handling was
+    added AFTER the first fixture run showed a false positive on 'I did not run predict', so that category is no longer an untouched test."""
+    out = []
+    for tool in sorted(offered - called):
+        for m in re.finditer(rf"\b(ran|run|called|used|queried|searched|submitted|invoked|checked)\b.{{0,40}}\b{re.escape(tool)}\b", text or "", re.I):
+            if not _NEG.search((text or "")[max(0, m.start() - 30): m.start()]):
+                out.append(tool)
+                break
+    return out

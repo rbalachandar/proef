@@ -320,10 +320,10 @@ def _propose_and_score(cfg, tracker, problem, store, flywheel, say, lab_ctx=None
         remaining_runs = max(0, budget.max_total_runs - used)
         grounding_text = None
         if cfg.grounding_tools or cfg.loop_compute:
-            from proef.grounding import gather
+            from proef.grounding import gather, library_secrets
             g = gather(cfg.model, cfg.problem, store, cfg.knowledge_services, cfg.grounding_tools,
-                       protected={str(c.get("id") or c.get("candidate") or "") for c in (cfg.candidates or []) if isinstance(c, dict)}
-                       | {cfg.problem.problem_id or ""}, replay=cfg.grounding_replay,
+                       protected=library_secrets(cfg.candidates, cfg.grounding_public_names) | {cfg.problem.problem_id or ""},
+                       replay=cfg.grounding_replay,
                        compute=cfg.loop_compute, registry=cfg.prediction_registry, predictors=cfg.prediction_tools, modality=cfg.modality)
             grounding_text = g.text or None
             say(f"grounding: {len(g.calls)} knowledge call(s), {len(g.used)} answered" + (f" (stopped: {g.stopped})" if g.stopped else ""))
@@ -751,8 +751,15 @@ def _plan_gate(cfg, tracker, portfolio, store, actor, say, label=None, tested=No
         # everything this run's tools returned (propose and ground steps), for the citation trace
         retrieved = [(r.decision or {}).get("result") for r in store.branch_records(f"problem/{pid}")
                      if (r.decision or {}).get("kind") == "tool_result"]
+    lib_rows = [c for c in (cfg.candidates or []) if isinstance(c, dict)]
+    lib_names = [str(c.get(k)) for c in lib_rows for k in ("sample_id", "id", "name", "candidate") if c.get(k)][: len(lib_rows) * 4]
+    lib_struct = {str(c.get("sample_id") or c.get("id") or c.get("name")): c["smiles"] for c in lib_rows if c.get("smiles")}
+    try:
+        negs = cfg.flywheel.negative_summary(limit=50) if cfg.flywheel is not None else []
+    except Exception:  # noqa: BLE001 - an unreadable memory must not stop plan review
+        negs = []
     plan = build_plan(portfolio, getattr(tracker, "family_info", {}), getattr(tracker, "family_scores", {}), tested=tested,
-                      grounding=grounded, retrieved=retrieved)
+                      grounding=grounded, retrieved=retrieved, library=lib_names, structures=lib_struct, negatives=negs)
     if label:
         plan["label"] = label
     critic = cfg.critic_model
@@ -1229,9 +1236,10 @@ def _round_background(cfg, store, problem, tested, round_no, say, cache: dict) -
     if callable(left) and left() <= ModelOrchestrator.RESERVE + 6:
         say(f"round {round_no}: background reading skipped, the remaining model calls are kept for the decision itself")
         return ""
-    from proef.grounding import gather, value_strings
+    from proef.grounding import gather, library_secrets, value_strings
     public = {n.lower() for n in cfg.grounding_public_names}
     protected = ({str(h.candidate) for h in tested if str(h.candidate).lower() not in public}
+                 | library_secrets(cfg.candidates, cfg.grounding_public_names)
                  | {cfg.problem.problem_id or ""} | value_strings([h.observed_value for h in tested]))
     results = "\n".join(f"- {h.candidate}: {h.status}" + (f", observed {h.observed_value:g}" if h.observed_value is not None else "")
                         + f", {h.statement}" for h in tested)

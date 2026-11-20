@@ -410,7 +410,7 @@ def test_the_plan_warns_when_one_compound_is_proposed_under_two_families():
     warn = duplicate_compounds(port)
     assert [(w["candidate"], w["families"], w["hypothesis_ids"]) for w in warn] == [("erlotinib", ["atp_site", "covalent"], ["a", "b"])], \
         "case and spacing differences are the same compound"
-    assert build_plan(port, {}, {})["warnings"] == warn
+    assert [w for w in build_plan(port, {}, {})["warnings"] if w["kind"] == "duplicate_compound"] == warn
     assert duplicate_compounds(port[2:]) == [], "no warning when every compound appears once"
 
 
@@ -447,7 +447,7 @@ def test_a_replan_that_proposes_an_already_tested_compound_is_flagged_with_its_v
     new = [NS(hypothesis_id="n1", candidate="gefitinib", family="competition", statement="s", predicted="", rationale="",
               assay_type="binding", metadata={}, mechanism="", refutation_condition="", citation="", citation_status="")]
     tested = [NS(candidate="gefitinib", family="atp_site", status="invalidated")]
-    w = build_plan(new, {}, {}, tested=tested)["warnings"]
+    w = [x for x in build_plan(new, {}, {}, tested=tested)["warnings"] if x["kind"] == "already_tested"]
     assert w == [{"kind": "already_tested", "candidate": "gefitinib", "families": ["competition"], "hypothesis_ids": ["n1"],
                   "verdict": "invalidated", "prior_family": "atp_site"}]
-    assert build_plan(new, {}, {})["warnings"] == [], "the first plan has no earlier rounds to compare with"
+    assert [w for w in build_plan(new, {}, {})["warnings"] if w["kind"] in ("duplicate_compound", "already_tested")] == [], "the first plan has no earlier rounds to compare with"

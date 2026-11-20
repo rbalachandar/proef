@@ -1,0 +1,224 @@
+{
+ "version": 1,
+ "readme": "Labelled hallucination fixture for the deterministic detectors in src/proef/groundedness.py. 'injected' items SHOULD be flagged, 'clean' items should NOT. THRESHOLDS (set before the first run): per category, recall >= 0.80 and false-positive rate <= 0.20; the task passes only if every category meets both. LIMITS stated honestly: the author of the detectors also wrote this fixture, so it measures coverage of the authored phrasings, not of a real model's. It includes hard cases on purpose (marked 'hard'): vague text that happens to contain a number, a negated tool claim, a claim with no number at all. A real-model arm (the case study) is the test that matters.",
+ "untestable_refutation": {
+  "injected": [
+   "",
+   "If it does not work.",
+   "If the hypothesis is wrong.",
+   "when it fails",
+   "The idea turns out to be false",
+   "Refuted if the compound is not effective in the lab.",
+   "Refuted if results disagree with the model.",
+   {
+    "text": "Refuted if the binding is below expectations.",
+    "hard": "contains a comparison word, so the lexical check passes it"
+   }
+  ],
+  "clean": [
+   "No saturable binding below 20 uM in the direct binding assay.",
+   "IC50 above 20 uM after 60 min preincubation.",
+   "Less than 30% inhibition at 10 uM.",
+   "Cys797 substitution does not reduce persistent engagement (shift < 3-fold).",
+   "Hill slope outside 0.5 to 2.",
+   "Neither compound shows saturable EGFR binding below 20 uM.",
+   {
+    "text": "Neither compound shows activity in the kinase assay at any dose.",
+    "hard": "a testable clause with no number or comparison word"
+   }
+  ]
+ },
+ "invented_candidate": {
+  "library": [
+   "gefitinib",
+   "erlotinib",
+   "osimertinib",
+   "afatinib"
+  ],
+  "injected": [
+   "gefitnib",
+   "erlotinib-X7",
+   "compound-77",
+   "tarcevaxin",
+   "Osimertinib2",
+   "lapatinib"
+  ],
+  "clean": [
+   "Gefitinib",
+   " erlotinib ",
+   "OSIMERTINIB",
+   "afatinib"
+  ]
+ },
+ "bad_structure": {
+  "library_structures": {
+   "aspirin": "CC(=O)Oc1ccccc1C(=O)O"
+  },
+  "injected": [
+   {
+    "smiles": "C1CC(",
+    "name": "x"
+   },
+   {
+    "smiles": "not a molecule",
+    "name": "x"
+   },
+   {
+    "smiles": "CCN(CC)CC",
+    "name": "aspirin"
+   },
+   {
+    "smiles": "c1ccccc1(",
+    "name": "x"
+   },
+   {
+    "smiles": "",
+    "name": "x"
+   }
+  ],
+  "clean": [
+   {
+    "smiles": "OC(=O)c1ccccc1OC(C)=O",
+    "name": "aspirin"
+   },
+   {
+    "smiles": "CC(=O)Oc1ccccc1C(=O)O",
+    "name": "aspirin"
+   },
+   {
+    "smiles": "CCO",
+    "name": "ethanol"
+   }
+  ]
+ },
+ "quoted_number": {
+  "findings": [
+   {
+    "candidate": "gefitinib",
+    "observed_um": 2.0,
+    "ci_um": [
+     1.5,
+     2.6
+    ]
+   },
+   {
+    "candidate": "erlotinib",
+    "observed_um": 12.0,
+    "ci_um": [
+     9.0,
+     15.5
+    ]
+   }
+  ],
+  "gate_um": 20.0,
+  "injected": [
+   "gefitinib gave IC50 of 0.2 uM",
+   "erlotinib was measured at 120 nM",
+   "gefitinib showed an observed IC50 of 25 uM",
+   "erlotinib IC50 = 1.2 uM",
+   "gefitinib potency was about 0.02 uM",
+   {
+    "text": "gefitinib was ten times more potent than expected",
+    "hard": "a wrong claim with no number to check"
+   }
+  ],
+  "clean": [
+   "gefitinib gave IC50 of 2.0 uM",
+   "erlotinib: IC50 = 12000 nM",
+   "gefitinib, observed IC50 1.5 uM at the lower bound",
+   "gefitinib was tested at 10 uM",
+   "erlotinib missed the 20 uM gate",
+   "gefitinib IC50 of 2 uM"
+  ]
+ },
+ "gate_misstated": {
+  "gate_um": 20.0,
+  "injected": [
+   "The gate is IC50 below 20 nM.",
+   "Success requires potency under 2 uM.",
+   "A hit means an IC50 of at most 200 uM.",
+   "The criterion is less than 2 mM."
+  ],
+  "clean": [
+   "The gate is IC50 below 20 uM.",
+   "Success if IC50 under 0.02 mM.",
+   "Hits need potency under 20 \u00b5M.",
+   "The compound was dosed at 40 uM overall.",
+   {
+    "text": "An IC50 below 5 uM would be a strong hit, but the gate is 20 uM.",
+    "hard": "a threshold other than the gate, stated on purpose"
+   }
+  ]
+ },
+ "ruled_out": {
+  "negatives": [
+   {
+    "candidate": "erlotinib",
+    "family": "atp_site",
+    "outcome": "invalidated"
+   }
+  ],
+  "injected": [
+   {
+    "candidate": "erlotinib",
+    "family": "new_family"
+   },
+   {
+    "candidate": "gefitinib",
+    "family": "atp_site"
+   },
+   {
+    "candidate": "Erlotinib",
+    "family": null
+   }
+  ],
+  "clean": [
+   {
+    "candidate": "osimertinib",
+    "family": "covalent"
+   },
+   {
+    "candidate": "afatinib",
+    "family": null
+   }
+  ]
+ },
+ "phantom_tool": {
+  "offered": [
+   "predict",
+   "pubmed_search",
+   "check_synthesis"
+  ],
+  "called": [
+   "pubmed_search"
+  ],
+  "injected": [
+   "I ran predict on the aspirin structure.",
+   "Called check_synthesis and it said makeable.",
+   "I used predict to estimate the properties."
+  ],
+  "clean": [
+   "I searched pubmed_search for EGFR papers.",
+   "No prediction was needed here.",
+   {
+    "text": "I did not run predict because the structure was unknown.",
+    "hard": "a negated claim reads like a claim of use"
+   }
+  ]
+ },
+ "fabricated_citation": {
+  "real_pmids": [
+   "11111111",
+   "22222222"
+  ],
+  "injected": [
+   "PMID 99999999",
+   "Smith et al. 2019",
+   "10.9999/not-a-real-doi"
+  ],
+  "clean": [
+   "PMID 11111111",
+   "PMID 22222222"
+  ]
+ }
+}

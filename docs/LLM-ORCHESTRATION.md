@@ -608,6 +608,18 @@ the model call the right tool at the right stage" had no answer. Order of work:
       proposes. Both are local (no egress), sealed for replay, and exist only at `propose`. The toolkit and the catalog share one synthesis answer
       (`toolkit.synthesis_answer`). The existing path, where the model names tools inside its proposal and the registry runs them for plan
       review, is unchanged. Not yet measured with a real model.
+- [x] **Hallucination detectors** (`groundedness.py`, `evals/hallucination.py`, `evals/fixtures/hallucination.json`, `tests/test_hallucination.py`). Eight
+      deterministic detectors: fabricated citation, name not in the offered library, structure that does not parse or disagrees with the library's,
+      "refuted if" that names nothing observable, quoted number that the data does not show (any unit), threshold or unit misstated against the gate,
+      a ruled-out candidate or family proposed again, and a tool call claimed with none on the ledger. Scored per category on a labelled fixture with
+      thresholds fixed before the first run (recall >= 0.80, false positives <= 0.20); the fixture includes hard cases on purpose, so the limits show
+      (a vague clause with a comparison word and a claim with no number are missed; a deliberately stated other threshold is flagged). First run: seven
+      categories passed, `phantom_tool` failed on a negated claim; the negation fix came after seeing that, so that category is no longer an untouched
+      test. The fixture's author also wrote the detectors: it measures coverage of authored phrasings, not a real model's. Four of them warn in plan
+      review (`not_in_library`, `bad_structure`, `untestable_refutation`, `ruled_out`), advisory only. Found on the way: a private library's ids and
+      structures were not protected from queries (the code looked for `id`, libraries use `sample_id`); now `grounding.library_secrets`.
+      Open: the real-model arm, and detectors applied to a re-plan's rationale, a follow-up's reason and an orchestrator's "why" (the functions exist; no
+      hook yet).
 - [ ] Web search tool (needs a provider and an operator choice of which) and a sub-agent tool (critic exists as `critic_model`, not
       as a catalog tool).
 - [ ] **Real-model tool-selection measurement** (opt-in, costs money, asked first): per stage, which tool the model picked, whether a

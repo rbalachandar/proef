@@ -4066,7 +4066,11 @@
       "enum": [
        "duplicate_compound",
        "already_tested",
-       "untraced_citation"
+       "untraced_citation",
+       "untestable_refutation",
+       "not_in_library",
+       "bad_structure",
+       "ruled_out"
       ],
       "title": "Kind",
       "type": "string"
@@ -4081,6 +4085,18 @@
        }
       ],
       "title": "Prior Family"
+     },
+     "reason": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "why a check fired (untestable_refutation, bad_structure, ruled_out)",
+      "title": "Reason"
      },
      "verdict": {
       "anyOf": [

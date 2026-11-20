@@ -1007,3 +1007,4 @@ def _t_sandbox_isolation():
 # orchestration and tool-calling evals (Phase 5): registered by import
 from proef.evals import orchestration as _orchestration  # noqa: E402,F401
 from proef.evals import toolcalls as _toolcalls  # noqa: E402,F401
+from proef.evals import hallucination as _hallucination  # noqa: E402,F401

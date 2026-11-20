@@ -251,11 +251,12 @@ class PlanCritique(BaseModel):
 
 class PlanWarning(BaseModel):
     """A deterministic check on the plan, shown before approval."""
-    kind: Literal["duplicate_compound", "already_tested", "untraced_citation"]
+    kind: Literal["duplicate_compound", "already_tested", "untraced_citation", "untestable_refutation", "not_in_library", "bad_structure", "ruled_out"]
     candidate: str = ""
     family: str | None = Field(None, description="untraced_citation: the family whose citation this run never retrieved")
     citation: str | None = None
     citation_status: str | None = Field(None, description="untraced_citation: whether the citation resolves (it may still be real)")
+    reason: str | None = Field(None, description="why a check fired (untestable_refutation, bad_structure, ruled_out)")
     families: list[str] = []
     hypothesis_ids: list[str] = []
     verdict: str | None = Field(None, description="already_tested: the verdict an earlier round reached on this compound")

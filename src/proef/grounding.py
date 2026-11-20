@@ -25,6 +25,21 @@ DECIDE_TASK = ("A round of experiments has just been judged. Look up published i
                "found and which tool it came from.\n\nOBJECTIVE: {objective}\n\nRESULTS OF THIS ROUND\n{results}")
 
 
+def library_secrets(candidates, public=()) -> set[str]:
+    """What a campaign's own library must never send out in a query: each entry's id (`sample_id`, `id`, `candidate` or `name`), its structure
+    (`smiles`) and its `sequence`, except names the operator declared public."""
+    pub = {str(n).lower() for n in public}
+    out: set[str] = set()
+    for c in candidates or []:
+        if not isinstance(c, dict):
+            continue
+        ident = next((str(c[k]) for k in ("sample_id", "id", "candidate", "name") if c.get(k)), "")
+        if ident.lower() in pub:
+            continue
+        out |= {str(c[k]) for k in ("sample_id", "id", "candidate", "name", "smiles", "sequence") if c.get(k)}
+    return {x for x in out if len(x) >= 3}
+
+
 def value_strings(values) -> set[str]:
     """The ways a measured number could be written in a query, so egress checking can refuse it (three characters or more)."""
     out: set[str] = set()
@@ -109,8 +124,7 @@ def ground_families(cfg, portfolio, tracker, store, actor, say, label: str | Non
     for h in portfolio:
         by_family.setdefault(h.family or "ungrouped", []).append(h)
     public = {n.lower() for n in getattr(cfg, "grounding_public_names", ())}
-    protected = {str(c.get("id") or c.get("candidate") or "") for c in (cfg.candidates or []) if isinstance(c, dict)
-                 if str(c.get("id") or c.get("candidate") or "").lower() not in public} | {pid}
+    protected = library_secrets(cfg.candidates, public) | {pid}
     names = {KNOWLEDGE_TOOL_NAMES[k] for k in cfg.grounding_tools}
     out: dict[str, dict] = {}
     for fid, hyps in by_family.items():

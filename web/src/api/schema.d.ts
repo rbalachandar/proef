@@ -2425,9 +2425,14 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "duplicate_compound" | "already_tested" | "untraced_citation";
+            kind: "duplicate_compound" | "already_tested" | "untraced_citation" | "untestable_refutation" | "not_in_library" | "bad_structure" | "ruled_out";
             /** Prior Family */
             prior_family?: string | null;
+            /**
+             * Reason
+             * @description why a check fired (untestable_refutation, bad_structure, ruled_out)
+             */
+            reason?: string | null;
             /**
              * Verdict
              * @description already_tested: the verdict an earlier round reached on this compound

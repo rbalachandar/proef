@@ -43,6 +43,10 @@ export function PlanReview({ item, compact }: { item: Item; compact?: boolean })
         const dup = ws.filter((w) => w.kind === 'duplicate_compound')
         const again = ws.filter((w) => w.kind === 'already_tested')
         const untraced = ws.filter((w) => w.kind === 'untraced_citation')
+        const untestable = ws.filter((w) => w.kind === 'untestable_refutation')
+        const notInLib = ws.filter((w) => w.kind === 'not_in_library')
+        const badStruct = ws.filter((w) => w.kind === 'bad_structure')
+        const ruledOut = ws.filter((w) => w.kind === 'ruled_out')
         const note = 'mt-3 border border-warn/50 bg-warn-soft px-3 py-2 text-[13px] text-warn'
         return <>
           {!!dup.length && (
@@ -70,6 +74,33 @@ export function PlanReview({ item, compact }: { item: Item; compact?: boolean })
                 <span key={w.family}>{i > 0 && ', '}<span className="num">{w.family}</span> ({w.citation}{w.citation_status === 'invalid' ? ', does not resolve' : w.citation_status === 'verified' ? ', resolves' : ''})</span>
               ))}
               . A real paper can still be cited from memory, but nothing the model retrieved contains it.
+            </div>
+          )}
+          {!!untestable.length && (
+            <div role="note" className={note}>
+              <b className="font-medium">A “refuted if” that nothing could observe.</b>{' '}
+              {untestable.map((w, i) => (<span key={w.family}>{i > 0 && ', '}<span className="num">{w.family}</span> ({w.reason})</span>))}
+              . As written, no result could refute it.
+            </div>
+          )}
+          {!!notInLib.length && (
+            <div role="note" className={note}>
+              <b className="font-medium">Not in the offered library.</b>{' '}
+              {notInLib.map((w, i) => (<span key={w.candidate}>{i > 0 && ', '}<span className="num">{w.candidate}</span></span>))}
+              . The model named a compound it was not offered. A simulator would still measure it; a real lab cannot.
+            </div>
+          )}
+          {!!badStruct.length && (
+            <div role="note" className={note}>
+              <b className="font-medium">Structure problem.</b>{' '}
+              {badStruct.map((w, i) => (<span key={w.candidate}>{i > 0 && ', '}<span className="num">{w.candidate}</span> ({w.reason})</span>))}
+            </div>
+          )}
+          {!!ruledOut.length && (
+            <div role="note" className={note}>
+              <b className="font-medium">Already ruled out.</b>{' '}
+              {ruledOut.map((w, i) => (<span key={`${w.candidate}-${i}`}>{i > 0 && ', '}<span className="num">{w.candidate}</span> ({w.reason})</span>))}
+              . An earlier campaign judged it a refutation. Approving tests it again.
             </div>
           )}
         </>

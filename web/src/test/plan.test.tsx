@@ -57,6 +57,23 @@ describe('plan review', () => {
     expect(note).toHaveTextContent('A real paper can still be cited from memory')
   })
 
+  it('warns about what a model made up: an unobservable refuted-if, a compound not offered, a bad structure, a repeated ruled-out idea', () => {
+    wrap(<PlanReview item={{ id: 'x', title: 't', ts: 1, plan: plan([
+      { kind: 'untestable_refutation', family: 'atp_site', reason: 'circular' },
+      { kind: 'not_in_library', candidate: 'tarcevaxin', families: ['atp_site'], hypothesis_ids: ['a'] },
+      { kind: 'bad_structure', candidate: 'erlotinib', reason: 'RDKit cannot parse this SMILES', hypothesis_ids: ['b'] },
+      { kind: 'ruled_out', candidate: 'gefitinib', families: ['covalent'], hypothesis_ids: ['c'], reason: 'same candidate as an earlier invalidated' }]) }} />)
+    const notes = screen.getAllByRole('note').map((n) => n.textContent ?? '').join(' | ')
+    expect(notes).toContain('A “refuted if” that nothing could observe')
+    expect(notes).toContain('atp_site (circular)')
+    expect(notes).toContain('Not in the offered library')
+    expect(notes).toContain('tarcevaxin')
+    expect(notes).toContain('Structure problem')
+    expect(notes).toContain('RDKit cannot parse this SMILES')
+    expect(notes).toContain('Already ruled out')
+    expect(notes).toContain('same candidate as an earlier invalidated')
+  })
+
   it('shows where each hypothesis runs, and says plainly when one will not be submitted', () => {
     const lab = (over: object) => ({ pick: null, runs_on: 'plate-reader', status: 'ok', ok: true, reasons: [], flags: [], eligible: ['plate-reader'], ...over })
     const p = {

@@ -63,7 +63,8 @@ class ToolContext:
     protected: set = field(default_factory=set)        # strings that must never leave the machine in a query
     egress_ok: set = field(default_factory=set)        # tool names an operator allowed to send data out
     enabled: set | None = None                         # the operator's catalog (None: everything registered)
-    replay: dict | None = None                         # sealed results to play back: {(tool, args_hash): result}
+    replay: dict | None = None                         # sealed results to play back: {(tool, args_hash): result}, or (tool, args_hash, scope)
+    scope: str = ""                                    # where in a campaign these calls happen (e.g. 'decide-2'), so the same query in two rounds is two records
     max_tool_calls: int = 50
     calls: int = 0
     step: int = 0
@@ -212,7 +213,7 @@ class ToolCatalog:
             leaks = egress_violations(args, ctx.protected)
             if leaks:
                 return self._refuse(ctx, name, tool, "egress_blocked", "the query contains identifiers of this campaign that must not leave the machine", args=args)
-        key = (name, _hash(args))
+        key = (name, _hash(args)) + ((ctx.scope,) if ctx.scope else ())
         if ctx.replay is not None:                       # a replay plays the sealed result back and runs nothing
             if key not in ctx.replay:
                 return self._refuse(ctx, name, tool, "not_in_recording", "this call was not made in the original run", args)
@@ -255,7 +256,8 @@ class ToolCatalog:
         rec = self._record(ctx, tool, args, res, status)
         if tool.seal and not sealed_already and ctx.store is not None and status == "ok":
             ctx.store.append(record_for(Envelope(experiment_branch_id=ctx.branch), EventType.tool_invocation, ctx.actor, decision={
-                "kind": "tool_result", "tool": tool.name, "args_hash": _hash(args), "result": body, "step": ctx.step}))
+                "kind": "tool_result", "tool": tool.name, "args_hash": _hash(args), "result": body, "step": ctx.step,
+                **({"scope": ctx.scope} if ctx.scope else {})}))
         return rec
 
     def _refuse(self, ctx: ToolContext, name: str, tool: ToolDef | None, code: str, *reasons: str, args: Any = None) -> dict:

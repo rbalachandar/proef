@@ -589,7 +589,15 @@ the model call the right tool at the right stage" had no answer. Order of work:
       retrieved 4/4, used in the summary and the proposals 2/4 (cited, verified), 5 distinct candidates, 4 of 5 distinct citations verified.
       An earlier test on EGFR showed no benefit because the model already knew the answer: grounding only shows value past the model's
       knowledge. Limits: one target, one paper, four runs, one model; the ChEMBL-id citations cannot be verified (the verifier handles PMID and DOI only).
-- [ ] The same loop at `decide` (explain a result, suggest the next step) and the `ground` state of 5H.
+- [x] **The same loop at `decide`** (`autoloop._round_background`, `grounding.gather(state="decide")`, `tests/test_grounding_decide.py`). At a round's
+      decision point a `decide`-scoped loop, offered only the knowledge tools, reads about the round's open results (abstained, refuted),
+      ONCE per round and cached, whoever asks first. A model orchestrator reads it before it chooses (it steers the whole campaign, so it
+      must judge whether to go on with what is known); under the fixed order it is read only if a follow-up or re-plan runs. It also feeds the
+      follow-up and re-plan prompts. Rules: nothing open means no reading; the model-call reserve is kept (the skip reads the ledger, so
+      replay agrees); a measured value (in the ways a number is written) and any private candidate name is protected from queries, and
+      `grounding_public_names` is how an operator declares a name searchable; verdicts never change; sealed results carry a round scope,
+      so the same query in two rounds replays as two records.
+      Open: the citation-traces-to-a-result check (`groundedness.py`) for suggestions that cite sources.
 - [ ] Web search tool (needs a provider and an operator choice of which) and a sub-agent tool (critic exists as `critic_model`, not
       as a catalog tool).
 - [ ] **Real-model tool-selection measurement** (opt-in, costs money, asked first): per stage, which tool the model picked, whether a

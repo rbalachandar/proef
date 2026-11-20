@@ -47,11 +47,11 @@ def describe_abstained(hyps: list[Any]) -> str:
     return "\n".join(lines)[:4000]
 
 
-def propose_followups(model: Any, abstained: list[Any], gate_text: str) -> list[dict]:
+def propose_followups(model: Any, abstained: list[Any], gate_text: str, background: str | None = None) -> list[dict]:
     """Ask the model. Returns the raw proposals (untrusted): at most one per abstained hypothesis is looked at later."""
     from proef.core.contracts import Envelope, ToolInvocation
     prompt = PROMPT.format(gate=gate_text or "the program's gate", items=describe_abstained(abstained),
-                           lo=MIN_REPLICATES, hi=MAX_REPLICATES)
+                           lo=MIN_REPLICATES, hi=MAX_REPLICATES) + ("\n\n" + background[:3000] if background else "")
     inv = ToolInvocation(envelope=Envelope(experiment_branch_id="followup"), tool="c.fm.generate_molecules")
     raw = model.generate(inv, prompt).output["text"]
     m = re.search(r"\{.*\}", raw, re.S)

@@ -46,15 +46,31 @@ def citation_check(runs: list[dict], name: str) -> None:
         print(f"     {st:9} {c[:60]:60} in this run's tool results: {any(i in seen for i in ids)}")
 
 
+def decide_report(runs: list[dict]) -> None:
+    from collections import Counter
+    for i, r in enumerate(runs):
+        calls = r.get("tool_calls") or []
+        sealed = [d for d in (r.get("sealed_tool_results") or []) if d.get("scope")]
+        bg = Counter((p["role"], p["has_background"]) for p in r.get("role_prompts") or [])
+        print(f"  run {i}: model_calls={r.get('model_calls')} violations={r.get('audit_violations')} decide-loop model calls={r.get('decide_loop_prompts')}")
+        print(f"     tool calls: {dict(Counter(c['tool'] + ':' + str(c['status']) + ('/' + c['code'] if c.get('code') else '') for c in calls))}")
+        print(f"     sealed decide results by scope: {dict(Counter(d['scope'] for d in sealed))}")
+        print(f"     prompts by (role, had background): {dict(bg)}")
+        print(f"     orchestrator choices: {[(c['round'], c['chosen'], c['source']) for c in r.get('orchestrator_choices') or []]}")
+
+
 def main() -> None:
     global D
     ap = argparse.ArgumentParser()
     ap.add_argument("--dir", default=str(D))
     ap.add_argument("--find", default="", help="comma-separated terms from the recent paper, e.g. fisetin,43005627")
     ap.add_argument("--verify-citations", action="store_true")
+    ap.add_argument("--decide", action="store_true")
     a = ap.parse_args()
     D = Path(a.dir)
     ung, gr = load("ungrounded"), load("grounded")
+    if a.decide:
+        print("DECIDE-STEP GROUNDING"); decide_report(gr); return
     if a.find:
         print("USE OF THE RECENT PAPER")
         recency([t for t in a.find.split(",") if t], ung, gr)

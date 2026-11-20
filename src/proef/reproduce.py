@@ -218,7 +218,7 @@ def reproduce(branch: str, db_path: str = "proef.db",
 
 def _sealed_tool_results(sealed: list[dict]) -> dict:
     """The knowledge results the original sealed, by (tool, arguments hash): a replay plays them back and never calls the network."""
-    return {(d.get("tool"), d.get("args_hash")): d.get("result") for d in sealed}
+    return {(d.get("tool"), d.get("args_hash")) + ((d["scope"],) if d.get("scope") else ()): d.get("result") for d in sealed}
 
 
 class _FrozenFlywheel:

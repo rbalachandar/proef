@@ -46,6 +46,7 @@ class View:
     queued: int
     runs_left: int
     done: set[str] = field(default_factory=set)
+    background: str = ""          # outside information read for this round (untrusted context; empty when grounding is off)
 
 
 @dataclass
@@ -127,6 +128,8 @@ class ModelOrchestrator:
             abstained=", ".join(view.abstained) or "none", queued=view.queued, runs_left=view.runs_left,
             done=", ".join(sorted(view.done)) or "nothing",
             actions="\n".join(f"- {a}: {_help(a, view)}" for a in allowed))
+        if view.background:
+            prompt += "\n\n" + view.background[:3000]
         fb = self.fallback.choose(state, allowed, view)
         left = getattr(self.model, "remaining", None)
         if callable(left) and left() <= self.reserve:

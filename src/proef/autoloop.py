@@ -74,6 +74,7 @@ class CampaignConfig:
     prediction_tools: list[str] | None = None   # prediction tools the operator enables (priors, never evidence)
     grounding_tools: tuple[str, ...] = ()  # knowledge tools (pubmed, chembl, opentargets) a model may use BEFORE it proposes; () = off
     knowledge_services: dict[str, Any] = field(default_factory=dict)   # the adapters behind them, e.g. {'pubmed': PubMedAdapter()}
+    grounding_public_names: tuple[str, ...] = ()   # candidate names the operator says are public, so a query may contain them; others are blocked
     grounding_replay: dict | None = None   # a replay's sealed knowledge results {(tool, args_hash): result}: played back, no network
     modality: str | None = None            # selects the domain pack (assays, prompt wording); None = small molecule
     orchestrator: Any = "fixed"           # 'fixed' (the configured order), 'model' (a model chooses among the allowed actions) or an object with choose()
@@ -913,6 +914,7 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
 
     remaining = list(portfolio)
     history: list[dict] = []
+    _bg_cache: dict = {}                  # round -> the background read for that round's decision (read once)
     tested: list = []
     stopped: str | None = None
     for round_no in range(1, max(1, cfg.rounds) + 1):
@@ -1061,6 +1063,7 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
         # operator permits and what remains, an orchestrator (fixed or a model) chooses among them, and every choice is recorded
         from proef.campaign_fsm import Action, Choice, State, View, allowed_actions
         done: set[str] = set()
+        _bg = lambda: _round_background(cfg, store, problem, tested, round_no, say, _bg_cache)   # noqa: E731
         while True:
             stopped = _limit_reason(cfg, gov, clock, store, actor, say, round_no, final=round_no >= max(1, cfg.rounds))
             if stopped == "final":
@@ -1070,7 +1073,10 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
                 break
             view = View(round_no=round_no, rounds=max(1, cfg.rounds), verdicts={h.candidate: h.status for h in tested},
                         abstained=[h.candidate for h in selected if h.status == "inconclusive"], queued=len(remaining),
-                        runs_left=_runs_left(cfg, store, problem), done=set(done))
+                        runs_left=_runs_left(cfg, store, problem), done=set(done),
+                        # a model that steers the whole campaign must judge whether to go on with what is known, so it reads the
+                        # round's background too; a fixed order has no choice to inform, and reads it only if a follow-up or re-plan runs
+                        background=(_bg() if getattr(orch, "model", None) is not None else ""))
             allowed = allowed_actions(State.ROUND_JUDGED, view=view, followups_permitted=cfg.followups,
                                       replan_permitted=cfg.replan, has_model=cfg.model is not None,
                                       agent_source=cfg.hypothesis_source == "agent")
@@ -1089,14 +1095,14 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
                 _queued = min(len(remaining), cfg.k * max(0, cfg.rounds - round_no))
                 new_f = _followups(cfg, tracker, selected, store, actor, say, lab, _crit, round_no,
                                    followed_up, runs_left=max(0, _runs_left(cfg, store, problem) - _queued),
-                                   last_round=round_no >= max(1, cfg.rounds), tested=tested)
+                                   last_round=round_no >= max(1, cfg.rounds), tested=tested, background=_bg)
                 remaining.extend(new_f)
                 _install_score_for_new(new_f, tracker)
                 if new_f and cfg.plan_approver is not None and cfg.plan_covers_submissions and isinstance(gateway, _GatedGateway):
                     gateway.covered |= {h.candidate for h in new_f}
             elif choice.action == Action.REPLAN.value:
                 done.add(choice.action)
-                new = _replan(cfg, tracker, problem, store, actor, flywheel, tested, round_no, say, lab_ctx)
+                new = _replan(cfg, tracker, problem, store, actor, flywheel, tested, round_no, say, lab_ctx, background=_bg)
                 remaining.extend(new)
                 _install_score_for_new(new, tracker)
                 if cfg.plan_approver is not None and cfg.plan_covers_submissions and isinstance(gateway, _GatedGateway):
@@ -1194,7 +1200,37 @@ def _runs_left(cfg, store, problem) -> int:
     return max(0, budget.max_total_runs - budget.lab_runs_used(store, problem.problem_id or ""))
 
 
-def _followups(cfg, tracker, round_hyps, store, actor, say, lab, crit, round_no, followed_up, runs_left, last_round, tested):
+def _round_background(cfg, store, problem, tested, round_no, say, cache: dict) -> str:
+    """Outside information for this round's decision (`decide` grounding): read ONCE per round, whoever asks first (a model
+    orchestrator, the follow-up or the re-plan), and cached. Empty when grounding is off, when there is nothing open, or when the
+    model-call budget has only the reserve left. The round's measured values and its private candidate names never go in a query."""
+    if not cfg.grounding_tools or cfg.model is None:
+        return ""
+    if round_no in cache:
+        return cache[round_no]
+    cache[round_no] = ""
+    open_ = [h for h in tested if h.status in ("inconclusive", "refuted", "invalidated")]
+    if not open_:
+        return ""
+    from proef.campaign_fsm import ModelOrchestrator
+    left = getattr(cfg.model, "remaining", None)
+    if callable(left) and left() <= ModelOrchestrator.RESERVE + 6:
+        say(f"round {round_no}: background reading skipped, the remaining model calls are kept for the decision itself")
+        return ""
+    from proef.grounding import gather, value_strings
+    public = {n.lower() for n in cfg.grounding_public_names}
+    protected = ({str(h.candidate) for h in tested if str(h.candidate).lower() not in public}
+                 | {cfg.problem.problem_id or ""} | value_strings([h.observed_value for h in tested]))
+    results = "\n".join(f"- {h.candidate}: {h.status}" + (f", observed {h.observed_value:g}" if h.observed_value is not None else "")
+                        + f", {h.statement}" for h in tested)
+    g = gather(cfg.model, problem, store, cfg.knowledge_services, cfg.grounding_tools, protected=protected,
+               replay=cfg.grounding_replay, state="decide", round_no=round_no, results=results)
+    say(f"round {round_no} grounding: {len(g.calls)} knowledge call(s), {len(g.used)} answered" + (f" (stopped: {g.stopped})" if g.stopped else ""))
+    cache[round_no] = g.text
+    return g.text
+
+
+def _followups(cfg, tracker, round_hyps, store, actor, say, lab, crit, round_no, followed_up, runs_left, last_round, tested, background=None):
     """The model SUGGESTS what to do with each abstained hypothesis; code validates and records every suggestion. Only a
     validated follow-up can run: under `act` directly, under `gate` after a person approves it in plan review, never under
     `observe`. Accept and drop are a person's recorded decision and are never executed here. Returns the new hypotheses."""
@@ -1204,7 +1240,7 @@ def _followups(cfg, tracker, round_hyps, store, actor, say, lab, crit, round_no,
         return []
     gate_txt = "; ".join(c.description for c in cfg.problem.constraints if c.kind == "hard")
     try:
-        raw = propose_followups(cfg.model, list(abstained.values()), gate_txt)
+        raw = propose_followups(cfg.model, list(abstained.values()), gate_txt, background=background() if background else None)
     except Exception as exc:  # noqa: BLE001 - a refused or failed suggestion must not stop the campaign
         say(f"follow-up suggestions unavailable ({type(exc).__name__}): the abstentions wait for a person")
         return []
@@ -1258,7 +1294,7 @@ def _install_score_for_new(new, tracker) -> None:
         scores.setdefault(h.family or "", 0.5)
 
 
-def _replan(cfg, tracker, problem, store, actor, flywheel, tested, round_no, say, lab_ctx=None):
+def _replan(cfg, tracker, problem, store, actor, flywheel, tested, round_no, say, lab_ctx=None, background=None):
     """After a round, the model proposes what to try next FROM the results; a person approves it
     (the same plan gate) before anything is added. Returns the approved new hypotheses."""
     from proef.hypothesis_agent import propose_families_with_agent
@@ -1280,7 +1316,8 @@ def _replan(cfg, tracker, problem, store, actor, flywheel, tested, round_no, say
             existing_keys={(h.candidate, h.statement) for h in tracker.hypotheses.values()},
             skill_guidance=cfg.skill_guidance, flywheel=flywheel, notify=say, findings=findings,
             modality=cfg.modality, instruments=lab_ctx, predictors=cfg.prediction_tools,
-            registry=cfg.prediction_registry)
+            registry=cfg.prediction_registry,
+            grounding=(background() if background else None) or None)
     except Exception as exc:  # noqa: BLE001 - a failed re-plan must not abort the campaign
         say(f"re-plan failed ({type(exc).__name__}): continuing with the existing plan")
         return []

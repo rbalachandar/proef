@@ -72,7 +72,14 @@ OUT = Path("/tmp/grounding_compare")
 OBJECTIVE = {"objective": "Find a confirmed sub-20uM EGFR binder", "context": "No candidate list: the model proposes mechanistic families and variants"}
 
 
-def _persist(label: str, spy: "Spy", dec: list) -> None:
+def _role(prompt: str) -> str:
+    for marker, role in (("You steer a research campaign", "orchestrator"), ("ABSTAINED HYPOTHESES", "followup"), ("hypothesis lead", "propose_or_replan"), ("RESULTS SO FAR (re-plan", "replan")):
+        if marker in prompt:
+            return role
+    return "other"
+
+
+def _persist(label: str, spy: "Spy", dec: list, recs=None) -> None:
     """Everything a later comparison could need, raw, so analysis never requires another model run."""
     OUT.mkdir(parents=True, exist_ok=True)
     loop = [(p, t) for p, t in spy.log if "TOOLS OFFERED IN THIS STEP" in p]
@@ -87,27 +94,35 @@ def _persist(label: str, spy: "Spy", dec: list) -> None:
         "proposal_prompt": prop[0][0] if prop else None,
         "proposal_response": prop[0][1] if prop else None,
         "all_proposal_responses": [t for _, t in prop],
+        "role_prompts": [{"role": _role(p), "has_background": "BACKGROUND READ" in p, "after_round": "BACKGROUND READ AFTER ROUND" in p}
+                         for p, _ in spy.log if "TOOLS OFFERED IN THIS STEP" not in p],
+        "orchestrator_choices": [{k: d.get(k) for k in ("round", "chosen", "source", "valid", "why", "allowed")} for d in dec if d.get("kind") == "orchestrator_choice"],
+        "decide_loop_prompts": sum(1 for p, _ in spy.log if "one step (decide)" in p),
+        "model_calls": sum(1 for d in dec if d.get("kind") == "model_call"),
+        "audit_violations": [str(v) for v in audit_campaign(recs)] if recs is not None else None,
     }, indent=1, default=str))
 
 
-def arm(tools: tuple[str, ...], max_calls: int, tmp: Path, label: str) -> dict:
+def arm(tools: tuple[str, ...], max_calls: int, tmp: Path, label: str, **cfg_extra) -> dict:
     store = SqliteProvenanceStore(str(tmp / f"{label}.db"))
     prob = ProblemStatement(objective=OBJECTIVE["objective"], context=OBJECTIVE["context"],
                             constraints=[Constraint(name="potency", description="IC50 <= 20 uM", kind="hard", limit=20.0, unit="uM")],
                             success_metric="orthogonal confirmation")
     spy = Spy(model_from_env())
-    cfg = CampaignConfig(problem=prob, hypothesis_source="agent", model=spy, autonomy="act", k=2, rounds=1, seed=1,
-                         inbox=str(tmp / f"{label}-in"), poll_secs=0.05, flywheel=Flywheel(":memory:"),
-                         budget=ResourceBudget(max_model_calls=max_calls), grounding_tools=tools,
-                         knowledge_services={k: SERVICES[k]() for k in tools},
-                         plan_approver=lambda plan, pid: PlanDecision(approved=True, by="script"))
+    kw = dict(problem=prob, hypothesis_source="agent", model=spy, autonomy="act", k=2, rounds=1, seed=1,
+              inbox=str(tmp / f"{label}-in"), poll_secs=0.05, flywheel=Flywheel(":memory:"),
+              budget=ResourceBudget(max_model_calls=max_calls), grounding_tools=tools,
+              knowledge_services={k: SERVICES[k]() for k in tools},
+              plan_approver=lambda plan, pid: PlanDecision(approved=True, by="script"))
+    kw.update(cfg_extra)
+    cfg = CampaignConfig(**kw)
     log: list[str] = []
     rep = run_campaign(cfg, SimulatorLab(seed=3), store, approver=lambda t: True, notify=log.append)
     recs = store.branch_records(f"problem/{rep.problem_id}")
     dec = [r.decision or {} for r in recs]
     calls = [d for d in dec if d.get("kind") == "tool_call"]
     props = [r.decision.get("statement") or r.decision.get("candidate") for r in recs if r.event_type.value == "hypothesis_proposed" and r.decision]
-    _persist(label, spy, dec)
+    _persist(label, spy, dec, recs)
     return {"arm": label, "tools": list(tools), "model_calls": sum(1 for d in dec if d.get("kind") == "model_call"),
             "tool_calls": Counter(f'{d["tool"]}:{d["status"]}' + (f'/{d["code"]}' if d.get("code") else "") for d in calls),
             "sealed_results": sum(1 for d in dec if d.get("kind") == "tool_result"), "proposals": props,
@@ -122,6 +137,7 @@ def main() -> None:
     ap.add_argument("--repeats", type=int, default=1)
     ap.add_argument("--objective", default=None)
     ap.add_argument("--context", default=None)
+    ap.add_argument("--decide", action="store_true", help="2 rounds, a model orchestrator, follow-ups and re-plan, so the decide loop can fire")
     ap.add_argument("--out", default=None, help="directory for the raw per-run files")
     a = ap.parse_args()
     tools = tuple(t for t in a.tools.split(",") if t)
@@ -134,7 +150,7 @@ def main() -> None:
     with tempfile.TemporaryDirectory() as d:
         for i in range(a.repeats):
             for label, t in ([] if a.grounded_only else [("ungrounded", ())]) + [("grounded", tools)]:
-                r = arm(t, a.max_model_calls, Path(d), f"{label}-{i}")
+                r = arm(t, a.max_model_calls, Path(d), f"{label}-{i}", **({"rounds": 2, "orchestrator": "model", "followups": True, "replan": True} if a.decide else {}))
                 r["arm"] = label
                 r["proposals"] = len(r["proposals"])
                 runs.append(r)

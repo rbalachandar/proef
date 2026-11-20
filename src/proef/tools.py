@@ -373,6 +373,42 @@ def opentargets_tool() -> ToolDef:
         execute=run)
 
 
+def predict_tool(registry, enabled: list[str] | None, modality: str | None = None) -> ToolDef:
+    """A compute tool: run one registered prediction tool on a SMILES. The registry validates on facts (enabled, applies to the modality, a valid
+    structure, first-party unless the operator accepts the risk) and every result says it is a prior, with its version and uncertainty. A
+    model uses it to decide WHAT to propose; it never becomes evidence for a verdict."""
+    specs = [s for s in registry.menu(enabled, modality) if s.input_kind == "smiles"]
+
+    def run(ctx: ToolContext, args: dict) -> Any:
+        out = registry.run([args["tool"]], {"smiles": args["smiles"]}, [s.name for s in specs], modality)
+        return out[0] if out else {"tool": args["tool"], "status": "unknown_tool", "evidence": False}
+    return ToolDef(
+        name="predict", tool_class="compute", states=("propose",), trusted_output=True, seal=True,
+        description="Run a prediction tool on a structure. Returns a PRIOR with its version and uncertainty, never evidence: only a measurement "
+                    "judges a hypothesis. Tools: " + (registry.menu_text(specs).replace("\n", " | ") or "none enabled"),
+        input_schema={"type": "object", "properties": {"tool": {"type": "string", "maxLength": 80, "enum": [s.name for s in specs] or ["none"]},
+                                                       "smiles": {"type": "string", "maxLength": 400}},
+                      "required": ["tool", "smiles"]},
+        execute=run)
+
+
+def synthesis_tool() -> ToolDef:
+    """A compute tool: can this compound be made, by which modelled route, at what yield, lead time and cost. A prior about feasibility."""
+    def run(ctx: ToolContext, args: dict) -> Any:
+        from proef.adapters.retrosynthesis import get_retrosynthesis_adapter
+        from proef.predictors import _check_smiles
+        bad = _check_smiles(args["smiles"])
+        if bad:
+            raise ToolRefused("invalid_input", bad)
+        from proef.toolkit import synthesis_answer
+        return synthesis_answer(get_retrosynthesis_adapter("rule-based"), args["smiles"])
+    return ToolDef(
+        name="check_synthesis", tool_class="compute", states=("propose",), trusted_output=True, seal=True,
+        description="Check whether a compound can be made: modelled routes, yield, lead time and cost. A prior about feasibility, not a measurement.",
+        input_schema={"type": "object", "properties": {"smiles": {"type": "string", "maxLength": 400}}, "required": ["smiles"]},
+        execute=run)
+
+
 KNOWLEDGE_TOOLS = {"pubmed": pubmed_tool, "chembl": chembl_tool, "opentargets": opentargets_tool}
 KNOWLEDGE_TOOL_NAMES = {"pubmed": "pubmed_search", "chembl": "chembl_search", "opentargets": "opentargets_summary"}
 

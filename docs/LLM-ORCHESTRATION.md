@@ -602,6 +602,12 @@ the model call the right tool at the right stage" had no answer. Order of work:
       `grounding_public_names` is how an operator declares a name searchable; verdicts never change; sealed results carry a round scope,
       so the same query in two rounds replays as two records.
       Open: the citation-traces-to-a-result check (`groundedness.py`) for suggestions that cite sources.
+- [x] **Compute tools in the `propose` loop** (`tools.predict_tool`, `tools.synthesis_tool`, `CampaignConfig.loop_compute`, `tests/test_loop_compute.py`). A
+      model can run a registered predictor (the same `PredictorRegistry`: validated on facts, first-party only in-process, every result a prior with its
+      version and uncertainty and `evidence: False`) or the synthesis check BEFORE it proposes, so a feasibility or property prior can shape WHAT it
+      proposes. Both are local (no egress), sealed for replay, and exist only at `propose`. The toolkit and the catalog share one synthesis answer
+      (`toolkit.synthesis_answer`). The existing path, where the model names tools inside its proposal and the registry runs them for plan
+      review, is unchanged. Not yet measured with a real model.
 - [ ] Web search tool (needs a provider and an operator choice of which) and a sub-agent tool (critic exists as `critic_model`, not
       as a catalog tool).
 - [ ] **Real-model tool-selection measurement** (opt-in, costs money, asked first): per stage, which tool the model picked, whether a

@@ -74,6 +74,7 @@ class CampaignConfig:
     prediction_tools: list[str] | None = None   # prediction tools the operator enables (priors, never evidence)
     grounding_tools: tuple[str, ...] = ()  # knowledge tools (pubmed, chembl, opentargets) a model may use BEFORE it proposes; () = off
     knowledge_services: dict[str, Any] = field(default_factory=dict)   # the adapters behind them, e.g. {'pubmed': PubMedAdapter()}
+    loop_compute: tuple[str, ...] = ()     # compute tools a model may call BEFORE it proposes: 'predict' (the enabled prediction tools) and/or 'synthesis'
     ground_hypotheses: bool = False        # before plan review, look for evidence for and against each family (needs grounding_tools)
     grounding_public_names: tuple[str, ...] = ()   # candidate names the operator says are public, so a query may contain them; others are blocked
     grounding_replay: dict | None = None   # a replay's sealed knowledge results {(tool, args_hash): result}: played back, no network
@@ -318,11 +319,12 @@ def _propose_and_score(cfg, tracker, problem, store, flywheel, say, lab_ctx=None
         used = budget.lab_runs_used(store, cfg.problem.problem_id or "")
         remaining_runs = max(0, budget.max_total_runs - used)
         grounding_text = None
-        if cfg.grounding_tools:
+        if cfg.grounding_tools or cfg.loop_compute:
             from proef.grounding import gather
             g = gather(cfg.model, cfg.problem, store, cfg.knowledge_services, cfg.grounding_tools,
                        protected={str(c.get("id") or c.get("candidate") or "") for c in (cfg.candidates or []) if isinstance(c, dict)}
-                       | {cfg.problem.problem_id or ""}, replay=cfg.grounding_replay)
+                       | {cfg.problem.problem_id or ""}, replay=cfg.grounding_replay,
+                       compute=cfg.loop_compute, registry=cfg.prediction_registry, predictors=cfg.prediction_tools, modality=cfg.modality)
             grounding_text = g.text or None
             say(f"grounding: {len(g.calls)} knowledge call(s), {len(g.used)} answered" + (f" (stopped: {g.stopped})" if g.stopped else ""))
         portfolio, family_scores = propose_families_with_agent(
@@ -853,7 +855,7 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
         "hypothesis_source": cfg.hypothesis_source, "followups": cfg.followups, "replan": cfg.replan,
         "max_families": cfg.max_families, "max_variants_per_family": cfg.max_variants_per_family,
         "modality": cfg.modality, "prediction_tools": list(cfg.prediction_tools or []),
-        "grounding_tools": list(cfg.grounding_tools or []), "ground_hypotheses": cfg.ground_hypotheses,
+        "grounding_tools": list(cfg.grounding_tools or []), "ground_hypotheses": cfg.ground_hypotheses, "loop_compute": list(cfg.loop_compute or []),
         "grounding_public_names": list(cfg.grounding_public_names or []),
         "critic": cfg.critic_model is not None, "plan_review": cfg.plan_approver is not None,
         "orchestrator": cfg.orchestrator if isinstance(cfg.orchestrator, str) else "custom",

@@ -127,6 +127,21 @@ TOOL_SCHEMAS: list[dict[str, Any]] = [
 ]
 
 
+def synthesis_answer(retro, smiles: str) -> dict:
+    """Can this compound be made, and how: the answer both the toolkit and the tool catalog give (one implementation)."""
+    plans = retro.plan_routes(smiles)
+    viable = [p for p in plans if p.feasible]
+    best = max(plans, key=lambda p: (p.feasible, p.yield_pct))
+    return {"smiles": smiles, "makeable": bool(viable),
+            "num_routes": len(plans), "viable_routes": len(viable),
+            "best_route": best.summary(),
+            "routes": [p.summary() for p in plans],
+            "answer": (f"{'can make' if viable else 'CANNOT MAKE at acceptable yield/lead-time'}"
+                       f" via {len(viable)}/{len(plans)} modeled route(s): "
+                       f"{best.lead_time_days} d, ~${best.cost_usd:.0f}"),
+            "data_origin": best.data_origin}
+
+
 class AgentToolkit:
     """Builds tool executors bound to live Proef services.
 
@@ -260,17 +275,7 @@ class AgentToolkit:
         return out
 
     def _tool_synthesis(self, smiles: str) -> dict:
-        plans = self.retro.plan_routes(smiles)
-        viable = [p for p in plans if p.feasible]
-        best = max(plans, key=lambda p: (p.feasible, p.yield_pct))
-        return {"smiles": smiles, "makeable": bool(viable),
-                "num_routes": len(plans), "viable_routes": len(viable),
-                "best_route": best.summary(),
-                "routes": [p.summary() for p in plans],
-                "answer": (f"{'can make' if viable else 'CANNOT MAKE at acceptable yield/lead-time'}"
-                           f" via {len(viable)}/{len(plans)} modeled route(s): "
-                           f"{best.lead_time_days} d, ~${best.cost_usd:.0f}"),
-                "data_origin": best.data_origin}
+        return synthesis_answer(self.retro, smiles)
 
     def _refuse(self, tool: str, reason: str, **extra) -> dict:
         return {"status": "refused", "tool": tool, "reason": reason, **extra}

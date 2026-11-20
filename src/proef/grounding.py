@@ -47,17 +47,30 @@ class Grounding:
 
 def gather(model, problem, store, services: dict, tools: tuple[str, ...], egress_ok: set | None = None, protected: set | None = None,
            branch: str | None = None, replay: dict | None = None, max_steps: int = 6, max_tool_calls: int = 8,
-           state: str = "propose", round_no: int | None = None, results: str = "") -> Grounding:
+           state: str = "propose", round_no: int | None = None, results: str = "", compute: tuple[str, ...] = (),
+           registry=None, predictors: list[str] | None = None, modality: str | None = None) -> Grounding:
     cat = ToolCatalog()
     for k in tools:
         cat.register(KNOWLEDGE_TOOLS[k]())
     names = {KNOWLEDGE_TOOL_NAMES[k] for k in tools}
+    if "predict" in compute and state == "propose":
+        from proef.predictors import DEFAULT
+        from proef.tools import predict_tool
+        cat.register(predict_tool(registry or DEFAULT, predictors, modality))
+        names.add("predict")
+    if "synthesis" in compute and state == "propose":
+        from proef.tools import synthesis_tool
+        cat.register(synthesis_tool())
+        names.add("check_synthesis")
     ctx = ToolContext(state=state, autonomy="act", scope=(f"{state}-{round_no}" if state != "propose" else ""), store=store, actor=system_actor("grounding"),
                       branch=branch or f"problem/{problem.problem_id}", services=services, enabled=names,
                       egress_ok=set(egress_ok if egress_ok is not None else names), protected=set(protected or ()),
                       max_tool_calls=max_tool_calls, replay=replay)
     task = (DECIDE_TASK.format(objective=problem.objective, results=results[:3000] or "(none)") if state == "decide"
             else TASK.format(objective=problem.objective, context=problem.context or "-"))
+    if "predict" in names or "check_synthesis" in names:
+        task += ("\n\nYou may also run prediction tools on a structure and check whether a compound can be made. What they return are priors "
+                 "with uncertainty, never evidence: a measurement is what judges a hypothesis.")
     res = ToolLoop(model, cat, ctx, max_steps=max_steps).run(task)
     g = Grounding(calls=[s for s in res.steps if s.get("tool")], stopped=res.stopped)
     if res.done or g.used:

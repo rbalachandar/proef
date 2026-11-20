@@ -35,6 +35,28 @@ describe('plan review', () => {
     expect(note).not.toHaveTextContent('Same compound')
   })
 
+  it('shows the evidence a model found for a family, only what traced to a source, and says how much was not shown', () => {
+    const p = plan([]) as unknown as { families: { grounding?: object }[] }
+    p.families[0].grounding = { calls: 3, dropped: 2, items: [
+      { kind: 'supports', claim: 'a paper reports activity', source: 'PMID 7654321' },
+      { kind: 'contradicts', claim: 'reports no binding', source: 'CHEMBL553' }] }
+    wrap(<PlanReview item={{ id: 'x', title: 't', ts: 1, plan: p as never }} />)
+    const g = screen.getByTestId('grounding')
+    expect(g).toHaveTextContent('3 lookups')
+    expect(g).toHaveTextContent('a paper reports activity')
+    expect(g).toHaveTextContent('PMID 7654321')
+    expect(g).toHaveTextContent('contradicts')
+    expect(g).toHaveTextContent('2 further claims not shown: no source in anything the model retrieved')
+  })
+
+  it('flags a citation the run never retrieved, without calling it fake', () => {
+    wrap(<PlanReview item={{ id: 'x', title: 't', ts: 1, plan: plan([{ kind: 'untraced_citation', family: 'atp_site', citation: 'PMID 1111111', citation_status: 'verified' }]) }} />)
+    const note = screen.getByRole('note')
+    expect(note).toHaveTextContent('Cited, but not read in this run')
+    expect(note).toHaveTextContent('atp_site (PMID 1111111, resolves)')
+    expect(note).toHaveTextContent('A real paper can still be cited from memory')
+  })
+
   it('shows where each hypothesis runs, and says plainly when one will not be submitted', () => {
     const lab = (over: object) => ({ pick: null, runs_on: 'plate-reader', status: 'ok', ok: true, reasons: [], flags: [], eligible: ['plate-reader'], ...over })
     const p = {

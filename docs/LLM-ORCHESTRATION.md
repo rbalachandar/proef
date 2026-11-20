@@ -557,8 +557,12 @@ What the model may and may not do with what it finds:
   an exclusion list, and the run records which. The contamination probes already in the eval suite extend to cover it.
 - Everything in the Phase 5 tool rules applies: results are untrusted data, queries are egress-checked, results are sealed for replay,
   calls count against the model-call and tool-call budgets, and halt and pause hold them.
-- [ ] A `ground` state and a `grounding` record, with plan review showing it.
-- [ ] The citation-traces-to-a-result check, in `groundedness.py`, and in the hallucination evals.
+- [x] A `ground` step and a `grounding` record, with plan review showing it (`grounding.ground_families`, `CampaignConfig.ground_hypotheses`, opt-in). One
+      loop per FAMILY, not per hypothesis (a per-hypothesis loop would be ~6 calls x every variant; variants of a family share a mechanism). The model
+      returns structured items (supports, contradicts, prior measurement, already known) each with a source id; the ENGINE keeps only items whose id
+      appears in a result this loop retrieved, and records the rest as dropped. The plan carries each family's grounding and flags a citation the
+      run never retrieved; the workbench shows both. `tests/test_ground_step.py`, `web/src/test/plan.test.tsx`.
+- [x] The citation-traces-to-a-result check, in `groundedness.py` (`traces`, `verify_items`). Still open: using it in the hallucination evals (5F).
 - [ ] Knowledge tools in the `propose` and `decide` states of the engine's own flow.
 - [ ] Blinding rules for knowledge tools in eval and case-study arms.
 - [ ] Evals: grounding precision (a supporting item really supports), recall of a planted contradiction, and a leakage test that a blinded

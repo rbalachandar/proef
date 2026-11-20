@@ -40,6 +40,7 @@ class LoopResult:
     done: str | None = None
     stopped: str | None = None            # step_cap | repeated_refusal | bad_output | halted | budget | refused_model | None
     steps: list[dict] = field(default_factory=list)
+    results: list[dict] = field(default_factory=list)   # what each ok call returned (tool, args, body), in memory, so a caller can check claims against it
 
     @property
     def calls(self) -> int:
@@ -52,7 +53,8 @@ class LoopResult:
 
 class ToolLoop:
     def __init__(self, model: Any, catalog: ToolCatalog, ctx: ToolContext, max_steps: int = 12, repeat_limit: int = 2,
-                 max_bad_outputs: int = 2):
+                 max_bad_outputs: int = 2, done_chars: int = 500):
+        self.done_chars = done_chars
         self.model, self.catalog, self.ctx = model, catalog, ctx
         self.max_steps, self.repeat_limit, self.max_bad = max_steps, repeat_limit, max_bad_outputs
 
@@ -88,11 +90,14 @@ class ToolLoop:
                 continue
             bad = 0
             if "done" in call:
-                out.done = str(call["done"])[:500]
+                d = call["done"]
+                out.done = (d if isinstance(d, str) else json.dumps(d, default=str))[: self.done_chars]
                 return out
             name, args = call.get("tool"), call.get("args", {})
             res = self.catalog.call(self.ctx, name, args)
             out.steps.append({"tool": str(name)[:80], "status": res.get("status"), "code": res.get("code")})
+            if res.get("status") == "ok" and name not in ("list_tools", "describe_tool"):
+                out.results.append({"tool": str(name)[:80], "args": args, "body": res.get("result")})
             transcript.append(f"CALL {json.dumps({'tool': str(name)[:80], 'args': args}, default=str)[:500]}")
             transcript.append("RESULT " + json.dumps(res, default=str)[:4000])
             if res.get("status") == "refused":

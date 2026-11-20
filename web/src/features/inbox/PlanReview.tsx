@@ -42,6 +42,7 @@ export function PlanReview({ item, compact }: { item: Item; compact?: boolean })
         const ws = item.plan.warnings ?? []
         const dup = ws.filter((w) => w.kind === 'duplicate_compound')
         const again = ws.filter((w) => w.kind === 'already_tested')
+        const untraced = ws.filter((w) => w.kind === 'untraced_citation')
         const note = 'mt-3 border border-warn/50 bg-warn-soft px-3 py-2 text-[13px] text-warn'
         return <>
           {!!dup.length && (
@@ -60,6 +61,15 @@ export function PlanReview({ item, compact }: { item: Item; compact?: boolean })
                 <span key={w.candidate}>{i > 0 && ', '}<span className="num">{w.candidate}</span> ({w.verdict}{w.prior_family ? `, ${w.prior_family}` : ''})</span>
               ))}
               . Approving measures it again.
+            </div>
+          )}
+          {!!untraced.length && (
+            <div role="note" className={note}>
+              <b className="font-medium">Cited, but not read in this run.</b>{' '}
+              {untraced.map((w, i) => (
+                <span key={w.family}>{i > 0 && ', '}<span className="num">{w.family}</span> ({w.citation}{w.citation_status === 'invalid' ? ', does not resolve' : w.citation_status === 'verified' ? ', resolves' : ''})</span>
+              ))}
+              . A real paper can still be cited from memory, but nothing the model retrieved contains it.
             </div>
           )}
         </>
@@ -96,6 +106,20 @@ export function PlanReview({ item, compact }: { item: Item; compact?: boolean })
               {f.claim && <p className="font-medium">{f.claim}</p>}
               {f.mechanism && <p className="text-muted"><span className="text-faint">Mechanism · </span>{f.mechanism}</p>}
               {f.refuted_if && <p><span className="bg-bad-soft px-1.5 py-0.5 text-bad">Refuted if · {f.refuted_if}</span></p>}
+              {f.grounding && (
+                <div className="mt-1 border-l-2 border-line pl-2" data-testid="grounding">
+                  <div className="text-xs text-faint">Evidence the model looked for · {f.grounding.calls} lookup{f.grounding.calls === 1 ? '' : 's'}</div>
+                  {f.grounding.items.length === 0
+                    ? <p className="text-muted">Nothing found that traces to a source.</p>
+                    : <ul className="space-y-0.5">{f.grounding.items.map((g, i) => (
+                        <li key={i} className="flex flex-wrap items-baseline gap-1.5">
+                          <Tag tone={g.kind === 'contradicts' ? 'bad' : g.kind === 'supports' ? 'ok' : undefined}>{g.kind.replace('_', ' ')}</Tag>
+                          <span>{g.claim}</span> <span className="num text-xs text-faint">{g.source}</span>
+                        </li>))}
+                      </ul>}
+                  {f.grounding.dropped > 0 && <p className="text-xs text-faint">{f.grounding.dropped} further claim{f.grounding.dropped === 1 ? '' : 's'} not shown: no source in anything the model retrieved.</p>}
+                </div>
+              )}
             </div>
             <ul className="divide-y divide-line border-t border-line">
               {f.variants.map((v) => {

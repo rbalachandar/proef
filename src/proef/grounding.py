@@ -68,3 +68,63 @@ def gather(model, problem, store, services: dict, tools: tuple[str, ...], egress
                   "Where a family, variant or suggestion rests on something above, name its source (a PMID or ChEMBL id) in its citation or rationale. "
                   "Where nothing above applies, propose from your own knowledge and do not invent a source.")
     return g
+
+
+# ---- the `ground` step: evidence for and against each family, checked against what was retrieved ----------------------------------------
+
+GROUND_TASK = ("A research plan has proposed this family of hypotheses. Before a person reviews it, use the tools to look for: evidence that "
+               "SUPPORTS it, evidence that CONTRADICTS it, PRIOR MEASUREMENTS of its compounds, and whether the idea is ALREADY KNOWN.\n\n"
+               "FAMILY: {family}\nCLAIM: {claim}\nMECHANISM: {mechanism}\nCOMPOUNDS: {compounds}\n\n"
+               "When you have looked, reply done with ONE JSON object (not a string):\n"
+               '  {{"items": [{{"kind": "supports|contradicts|prior_measurement|already_known", "claim": "one sentence", '
+               '"source": "the PMID, ChEMBL id or Ensembl id of the tool result it comes from"}}]}}\n'
+               "Include only what you can point to in a tool result you received in this step. An item with no such source is thrown away. "
+               "If you found nothing, return an empty list: that is a useful answer. Never put a measured value or this campaign's own "
+               "identifiers in a query.")
+
+
+def ground_families(cfg, portfolio, tracker, store, actor, say, label: str | None = None) -> dict[str, dict]:
+    """One `propose`-style loop per family of the plan. Returns {family_id: {"items": kept, "dropped": n, "calls": n}}; every family's
+    outcome is a ledger record. Only the knowledge tools are offered. Nothing here changes a hypothesis, a verdict or an approval."""
+    from proef.core.contracts import Envelope, EventType
+    from proef.core.interfaces import record_for
+    from proef.groundedness import verify_items
+
+    info = getattr(tracker, "family_info", {}) or {}
+    pid = cfg.problem.problem_id or "unnamed"
+    by_family: dict[str, list] = {}
+    for h in portfolio:
+        by_family.setdefault(h.family or "ungrouped", []).append(h)
+    public = {n.lower() for n in getattr(cfg, "grounding_public_names", ())}
+    protected = {str(c.get("id") or c.get("candidate") or "") for c in (cfg.candidates or []) if isinstance(c, dict)
+                 if str(c.get("id") or c.get("candidate") or "").lower() not in public} | {pid}
+    names = {KNOWLEDGE_TOOL_NAMES[k] for k in cfg.grounding_tools}
+    out: dict[str, dict] = {}
+    for fid, hyps in by_family.items():
+        cat = ToolCatalog()
+        for k in cfg.grounding_tools:
+            cat.register(KNOWLEDGE_TOOLS[k]())
+        ctx = ToolContext(state="propose", autonomy="act", store=store, actor=system_actor("grounding"), branch=f"problem/{pid}",
+                          services=cfg.knowledge_services, enabled=names, egress_ok=set(names), protected=protected, max_tool_calls=8,
+                          scope=f"ground-{label or 'initial'}-{fid}", replay=getattr(cfg, "grounding_replay", None))
+        f = info.get(fid, {})
+        task = GROUND_TASK.format(family=fid[:80], claim=str(f.get("parent_statement", ""))[:300], mechanism=str(f.get("mechanism", ""))[:300],
+                                  compounds=", ".join(sorted({str(h.candidate) for h in hyps}))[:300])
+        res = ToolLoop(cfg.model, cat, ctx, max_steps=6, done_chars=4000).run(task)
+        parsed = {}
+        if res.done:
+            import json
+            import re
+            m = re.search(r"\{.*\}", res.done, re.S)
+            try:
+                parsed = json.loads(m.group(0)) if m else {}
+            except ValueError:
+                parsed = {}
+        kept, dropped = verify_items(parsed.get("items") if isinstance(parsed, dict) else None, [r["body"] for r in res.results])
+        out[fid] = {"items": kept, "dropped": len(dropped), "calls": len(res.results), "stopped": res.stopped}
+        store.append(record_for(Envelope(experiment_branch_id=f"problem/{pid}"), EventType.gate_decision, actor, decision={
+            "kind": "grounding", "advisory": True, "family": fid, "stage": label or "initial", "items": kept, "dropped": dropped[:8],
+            "n_dropped": len(dropped), "tool_calls": len(res.results), "stopped": res.stopped}))
+    say(f"grounding: {len(out)} family(ies), {sum(len(v['items']) for v in out.values())} item(s) traced, "
+        f"{sum(v['dropped'] for v in out.values())} dropped as untraced")
+    return out

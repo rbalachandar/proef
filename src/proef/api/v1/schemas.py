@@ -209,6 +209,20 @@ class PlanPrediction(BaseModel):
     evidence: Literal[False] = False
 
 
+class GroundingItem(BaseModel):
+    kind: Literal["supports", "contradicts", "prior_measurement", "already_known"]
+    claim: str
+    source: str = Field("", description="the PMID, ChEMBL id or Ensembl id of a tool result this run retrieved")
+
+
+class PlanGrounding(BaseModel):
+    """What the model found when it looked for evidence for and against a family. Only items that trace to a retrieved result."""
+    items: list[GroundingItem] = []
+    dropped: int = Field(0, description="items the model offered that did not trace to anything it retrieved")
+    calls: int = 0
+    stopped: str | None = None
+
+
 class PlanFamily(BaseModel):
     """One mechanistic bet a model proposed, with the variants that test it."""
     id: str
@@ -218,6 +232,8 @@ class PlanFamily(BaseModel):
     confidence: float | None = None
     citation: str = ""
     citation_status: str = ""
+    citation_traced: bool | None = Field(None, description="whether the citation appears in a result this run retrieved (None: grounding was off)")
+    grounding: PlanGrounding | None = None
     variants: list[PlanVariant] = []
 
 
@@ -235,8 +251,11 @@ class PlanCritique(BaseModel):
 
 class PlanWarning(BaseModel):
     """A deterministic check on the plan, shown before approval."""
-    kind: Literal["duplicate_compound", "already_tested"]
-    candidate: str
+    kind: Literal["duplicate_compound", "already_tested", "untraced_citation"]
+    candidate: str = ""
+    family: str | None = Field(None, description="untraced_citation: the family whose citation this run never retrieved")
+    citation: str | None = None
+    citation_status: str | None = Field(None, description="untraced_citation: whether the citation resolves (it may still be real)")
     families: list[str] = []
     hypothesis_ids: list[str] = []
     verdict: str | None = Field(None, description="already_tested: the verdict an earlier round reached on this compound")

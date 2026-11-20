@@ -1654,6 +1654,22 @@ export interface components {
              */
             refuted: number;
         };
+        /** GroundingItem */
+        GroundingItem: {
+            /** Claim */
+            claim: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "supports" | "contradicts" | "prior_measurement" | "already_known";
+            /**
+             * Source
+             * @description the PMID, ChEMBL id or Ensembl id of a tool result this run retrieved
+             * @default
+             */
+            source: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -2144,12 +2160,18 @@ export interface components {
              */
             citation_status: string;
             /**
+             * Citation Traced
+             * @description whether the citation appears in a result this run retrieved (None: grounding was off)
+             */
+            citation_traced?: boolean | null;
+            /**
              * Claim
              * @default
              */
             claim: string;
             /** Confidence */
             confidence?: number | null;
+            grounding?: components["schemas"]["PlanGrounding"] | null;
             /** Id */
             id: string;
             /**
@@ -2168,6 +2190,30 @@ export interface components {
              * @default []
              */
             variants: components["schemas"]["PlanVariant"][];
+        };
+        /**
+         * PlanGrounding
+         * @description What the model found when it looked for evidence for and against a family. Only items that trace to a retrieved result.
+         */
+        PlanGrounding: {
+            /**
+             * Calls
+             * @default 0
+             */
+            calls: number;
+            /**
+             * Dropped
+             * @description items the model offered that did not trace to anything it retrieved
+             * @default 0
+             */
+            dropped: number;
+            /**
+             * Items
+             * @default []
+             */
+            items: components["schemas"]["GroundingItem"][];
+            /** Stopped */
+            stopped?: string | null;
         };
         /**
          * PlanLab
@@ -2348,13 +2394,28 @@ export interface components {
          * @description A deterministic check on the plan, shown before approval.
          */
         PlanWarning: {
-            /** Candidate */
+            /**
+             * Candidate
+             * @default
+             */
             candidate: string;
+            /** Citation */
+            citation?: string | null;
+            /**
+             * Citation Status
+             * @description untraced_citation: whether the citation resolves (it may still be real)
+             */
+            citation_status?: string | null;
             /**
              * Families
              * @default []
              */
             families: string[];
+            /**
+             * Family
+             * @description untraced_citation: the family whose citation this run never retrieved
+             */
+            family?: string | null;
             /**
              * Hypothesis Ids
              * @default []
@@ -2364,7 +2425,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "duplicate_compound" | "already_tested";
+            kind: "duplicate_compound" | "already_tested" | "untraced_citation";
             /** Prior Family */
             prior_family?: string | null;
             /**

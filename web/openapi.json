@@ -2354,6 +2354,36 @@
     "title": "Goal",
     "type": "object"
    },
+   "GroundingItem": {
+    "properties": {
+     "claim": {
+      "title": "Claim",
+      "type": "string"
+     },
+     "kind": {
+      "enum": [
+       "supports",
+       "contradicts",
+       "prior_measurement",
+       "already_known"
+      ],
+      "title": "Kind",
+      "type": "string"
+     },
+     "source": {
+      "default": "",
+      "description": "the PMID, ChEMBL id or Ensembl id of a tool result this run retrieved",
+      "title": "Source",
+      "type": "string"
+     }
+    },
+    "required": [
+     "kind",
+     "claim"
+    ],
+    "title": "GroundingItem",
+    "type": "object"
+   },
    "HTTPValidationError": {
     "properties": {
      "detail": {
@@ -3526,6 +3556,18 @@
       "title": "Citation Status",
       "type": "string"
      },
+     "citation_traced": {
+      "anyOf": [
+       {
+        "type": "boolean"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "whether the citation appears in a result this run retrieved (None: grounding was off)",
+      "title": "Citation Traced"
+     },
      "claim": {
       "default": "",
       "title": "Claim",
@@ -3541,6 +3583,16 @@
        }
       ],
       "title": "Confidence"
+     },
+     "grounding": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/PlanGrounding"
+       },
+       {
+        "type": "null"
+       }
+      ]
      },
      "id": {
       "title": "Id",
@@ -3570,6 +3622,43 @@
      "id"
     ],
     "title": "PlanFamily",
+    "type": "object"
+   },
+   "PlanGrounding": {
+    "description": "What the model found when it looked for evidence for and against a family. Only items that trace to a retrieved result.",
+    "properties": {
+     "calls": {
+      "default": 0,
+      "title": "Calls",
+      "type": "integer"
+     },
+     "dropped": {
+      "default": 0,
+      "description": "items the model offered that did not trace to anything it retrieved",
+      "title": "Dropped",
+      "type": "integer"
+     },
+     "items": {
+      "default": [],
+      "items": {
+       "$ref": "#/components/schemas/GroundingItem"
+      },
+      "title": "Items",
+      "type": "array"
+     },
+     "stopped": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Stopped"
+     }
+    },
+    "title": "PlanGrounding",
     "type": "object"
    },
    "PlanLab": {
@@ -3918,8 +4007,32 @@
     "description": "A deterministic check on the plan, shown before approval.",
     "properties": {
      "candidate": {
+      "default": "",
       "title": "Candidate",
       "type": "string"
+     },
+     "citation": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "title": "Citation"
+     },
+     "citation_status": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "untraced_citation: whether the citation resolves (it may still be real)",
+      "title": "Citation Status"
      },
      "families": {
       "default": [],
@@ -3928,6 +4041,18 @@
       },
       "title": "Families",
       "type": "array"
+     },
+     "family": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "untraced_citation: the family whose citation this run never retrieved",
+      "title": "Family"
      },
      "hypothesis_ids": {
       "default": [],
@@ -3940,7 +4065,8 @@
      "kind": {
       "enum": [
        "duplicate_compound",
-       "already_tested"
+       "already_tested",
+       "untraced_citation"
       ],
       "title": "Kind",
       "type": "string"
@@ -3970,8 +4096,7 @@
      }
     },
     "required": [
-     "kind",
-     "candidate"
+     "kind"
     ],
     "title": "PlanWarning",
     "type": "object"

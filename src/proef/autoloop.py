@@ -74,6 +74,7 @@ class CampaignConfig:
     prediction_tools: list[str] | None = None   # prediction tools the operator enables (priors, never evidence)
     grounding_tools: tuple[str, ...] = ()  # knowledge tools (pubmed, chembl, opentargets) a model may use BEFORE it proposes; () = off
     knowledge_services: dict[str, Any] = field(default_factory=dict)   # the adapters behind them, e.g. {'pubmed': PubMedAdapter()}
+    ground_hypotheses: bool = False        # before plan review, look for evidence for and against each family (needs grounding_tools)
     grounding_public_names: tuple[str, ...] = ()   # candidate names the operator says are public, so a query may contain them; others are blocked
     grounding_replay: dict | None = None   # a replay's sealed knowledge results {(tool, args_hash): result}: played back, no network
     modality: str | None = None            # selects the domain pack (assays, prompt wording); None = small molecule
@@ -741,7 +742,15 @@ def _plan_gate(cfg, tracker, portfolio, store, actor, say, label=None, tested=No
     Every outcome is recorded: approval, removals (with a reason) and decline."""
     from proef.plan import build_plan
     pid = cfg.problem.problem_id or "unnamed"
-    plan = build_plan(portfolio, getattr(tracker, "family_info", {}), getattr(tracker, "family_scores", {}), tested=tested)
+    grounded, retrieved = None, None
+    if cfg.ground_hypotheses and cfg.grounding_tools and cfg.model is not None:
+        from proef.grounding import ground_families
+        grounded = ground_families(cfg, portfolio, tracker, store, actor, say, label)
+        # everything this run's tools returned (propose and ground steps), for the citation trace
+        retrieved = [(r.decision or {}).get("result") for r in store.branch_records(f"problem/{pid}")
+                     if (r.decision or {}).get("kind") == "tool_result"]
+    plan = build_plan(portfolio, getattr(tracker, "family_info", {}), getattr(tracker, "family_scores", {}), tested=tested,
+                      grounding=grounded, retrieved=retrieved)
     if label:
         plan["label"] = label
     critic = cfg.critic_model
@@ -844,7 +853,8 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
         "hypothesis_source": cfg.hypothesis_source, "followups": cfg.followups, "replan": cfg.replan,
         "max_families": cfg.max_families, "max_variants_per_family": cfg.max_variants_per_family,
         "modality": cfg.modality, "prediction_tools": list(cfg.prediction_tools or []),
-        "grounding_tools": list(cfg.grounding_tools or []),
+        "grounding_tools": list(cfg.grounding_tools or []), "ground_hypotheses": cfg.ground_hypotheses,
+        "grounding_public_names": list(cfg.grounding_public_names or []),
         "critic": cfg.critic_model is not None, "plan_review": cfg.plan_approver is not None,
         "orchestrator": cfg.orchestrator if isinstance(cfg.orchestrator, str) else "custom",
         "lab_config": _json_safe(lambda: lab.replay_config()),       # the lab's own knobs, so a replay measures the same way

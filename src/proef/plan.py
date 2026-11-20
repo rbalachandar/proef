@@ -40,7 +40,8 @@ def already_tested(portfolio, tested) -> list[dict]:
     return list(out.values())
 
 
-def build_plan(portfolio, family_info: dict | None, family_scores: dict | None, tested=None) -> dict:
+def build_plan(portfolio, family_info: dict | None, family_scores: dict | None, tested=None, grounding: dict | None = None,
+               retrieved: list | None = None) -> dict:
     """A JSON-safe plan from the proposed variants. Pure: no I/O. `tested`: hypotheses earlier rounds already judged."""
     family_info, family_scores = family_info or {}, family_scores or {}
     fams: dict[str, dict] = {}
@@ -54,6 +55,7 @@ def build_plan(portfolio, family_info: dict | None, family_scores: dict | None, 
             "confidence": family_scores.get(fid),
             "citation": h.citation or info.get("citation") or "",
             "citation_status": h.citation_status if (h.citation or info.get("citation")) else "",
+            "grounding": (grounding or {}).get(fid),
             "variants": []})
         f["variants"].append({
             "hypothesis_id": h.hypothesis_id, "candidate": h.candidate, "statement": h.statement,
@@ -61,7 +63,16 @@ def build_plan(portfolio, family_info: dict | None, family_scores: dict | None, 
             "protocol": describe((h.metadata or {}).get("protocol")),
             "lab": (h.metadata or {}).get("lab_check"),
             "predictions": (h.metadata or {}).get("predictions") or []})
-    return {"families": list(fams.values()), "n_hypotheses": len(portfolio), "warnings": duplicate_compounds(portfolio) + already_tested(portfolio, tested)}
+    warnings = duplicate_compounds(portfolio) + already_tested(portfolio, tested)
+    if retrieved is not None:          # grounding ran: a citation that is not in anything this run read is flagged (it may still be real)
+        from proef.groundedness import traces
+        for f in fams.values():
+            if f["citation"]:
+                f["citation_traced"] = traces(f["citation"], retrieved)
+                if not f["citation_traced"]:
+                    warnings.append({"kind": "untraced_citation", "family": f["id"], "citation": f["citation"],
+                                     "citation_status": f["citation_status"]})
+    return {"families": list(fams.values()), "n_hypotheses": len(portfolio), "warnings": warnings}
 
 
 def duplicate_compounds(portfolio) -> list[dict]:

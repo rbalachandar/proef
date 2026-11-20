@@ -54,13 +54,36 @@ expected-improvement** acquisition (with an optional BoTorch/GP posterior),
 scored against naive baselines in CI and sealed to provenance with its
 reasoning.
 
-**Contents:** [What is Proef](#what-is-proef) · [Installation](#installation) · [CLI](#cli) ·
+**Contents:** [What is Proef](#what-is-proef) · [How it works](#how-it-works-at-a-glance) · [Installation](#installation) · [CLI](#cli) ·
 [Evals](#evaluation-suite) ·
 [Case studies](#case-studies) ·
 [Using Proef](#using-proef) · [The virtual lab](#the-virtual-lab) ·
 [Five core interfaces](#five-core-interfaces) · [Agent Skills and MCP](#agent-skills-and-mcp) ·
 [Architecture](#architecture) · [Documentation](#documentation) ·
 [Architectural principles](#architectural-principles) · [References](#references--sources)
+
+## How it works at a glance
+
+One campaign, from question to verdict. The rule to read this table by: **models propose and advise; code decides and enforces; a
+person approves what reaches the lab.** A model never writes a verdict, never approves its own submission and never moves a gate.
+
+| Stage | What happens | Who acts | What it uses |
+|---|---|---|---|
+| **1. Read the field** *(opt-in)* | Before proposing, a model looks up what is already known: literature, target biology, published activities. A second pass can look for evidence for and against each hypothesis family, and every item must trace to something actually retrieved | **Model**, in a loop that is offered only read-only knowledge tools | PubMed, ChEMBL, Open Targets. Queries are checked so nothing identifying the study leaves the machine, and every result is sealed so a replay never touches the network |
+| **2. Propose** | A portfolio of mechanistic, falsifiable hypotheses, each with a refuted-if clause and a predicted outcome. Citations are checked against PubMed | **Model** (one prompt) | Any OpenAI-compatible or Anthropic model; Agent Skills for domain procedure; the flywheel's memory of ruled-out families |
+| **3. Prior predictions** | Optional specialist-model numbers (ADMET, properties) attached to a hypothesis, with their uncertainty and applicability domain. They are priors, never evidence | **Registered prediction tools** | RDKit, local ADMET models |
+| **4. Select** | Rank, apply a diversity cap, and optionally choose the batch by applicability-domain-gated Bayesian expected improvement | **Engine** | Deterministic scoring, optional BoTorch/GP |
+| **5. Plan review** | A person sees the plan, the critic model's concerns and the warnings (duplicates, already tested, citations that were not retrieved), removes hypotheses and approves or declines | **A person**, advised by a critic model | The workbench or the CLI |
+| **6. Check, then submit** | Readiness review, safety screening (toxicophores, regulated agents, biosafety level), governance (halt, pause, authorization, budget) | **Engine** and policy code the agent cannot reach | `SafetyEngine`, `HaltSwitch`, budgets |
+| **7. Run** | The assay runs and raw evidence comes back | **Lab adapter** | The simulator, Opentrons, a plate-reader share, or your own `LabAdapter` |
+| **8. Analyze and judge** | A dose-response fit with a confidence interval, quality control, then a verdict against criteria registered **before** the experiment: validated, invalidated, or **abstain** when the interval straddles the gate | **Engine** (deterministic rule) | `labread`, small-n statistics; an orthogonal assay confirms before a result counts as confirmed |
+| **9. Decide what next** | After a round: follow up an abstention, re-plan from the results, run the next round or stop. A model can steer this, always within a list of actions the engine allows | **Model** (opt-in) or the fixed order, validated by the engine; a person decides accept and drop | The same knowledge tools can be read here, once per round |
+| **10. Record and audit** | Every decision, call, result and verdict goes on a hash-chained ledger. A campaign can be replayed from it with no model and no network, and an audit checks its rules over the record | **Provenance store** | SQLite with engine triggers, Merkle anchoring, `proef prove`, `proef audit`, `proef campaign reproduce` |
+
+Models are swappable (`PROEF_LLM_PRESET`, `PROEF_LLM_MODEL`); so are labs, sandboxes and tools, behind five small interfaces
+([below](#five-core-interfaces)). Stages 1 and 9 reading outside knowledge are off by default and set in the campaign
+configuration. For the same flow with the enforcement column, see
+[How a campaign runs](#how-a-campaign-runs-who-acts-and-what-proef-enforces).
 
 ## Installation
 

@@ -4070,7 +4070,9 @@
        "untestable_refutation",
        "not_in_library",
        "bad_structure",
-       "ruled_out"
+       "ruled_out",
+       "quoted_number",
+       "gate_misstated"
       ],
       "title": "Kind",
       "type": "string"

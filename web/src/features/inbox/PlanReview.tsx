@@ -47,6 +47,7 @@ export function PlanReview({ item, compact }: { item: Item; compact?: boolean })
         const notInLib = ws.filter((w) => w.kind === 'not_in_library')
         const badStruct = ws.filter((w) => w.kind === 'bad_structure')
         const ruledOut = ws.filter((w) => w.kind === 'ruled_out')
+        const misquote = ws.filter((w) => w.kind === 'quoted_number' || w.kind === 'gate_misstated')
         const note = 'mt-3 border border-warn/50 bg-warn-soft px-3 py-2 text-[13px] text-warn'
         return <>
           {!!dup.length && (
@@ -101,6 +102,13 @@ export function PlanReview({ item, compact }: { item: Item; compact?: boolean })
               <b className="font-medium">Already ruled out.</b>{' '}
               {ruledOut.map((w, i) => (<span key={`${w.candidate}-${i}`}>{i > 0 && ', '}<span className="num">{w.candidate}</span> ({w.reason})</span>))}
               . An earlier campaign judged it a refutation. Approving tests it again.
+            </div>
+          )}
+          {!!misquote.length && (
+            <div role="note" className={note}>
+              <b className="font-medium">A number or threshold that does not match.</b>{' '}
+              {misquote.map((w, i) => (<span key={`${w.candidate}-${i}`}>{i > 0 && ', '}<span className="num">{w.candidate}</span> ({w.reason})</span>))}
+              . Checked against the results and the gate, not against whether the argument is right.
             </div>
           )}
         </>

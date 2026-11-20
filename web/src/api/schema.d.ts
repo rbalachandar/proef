@@ -2425,7 +2425,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "duplicate_compound" | "already_tested" | "untraced_citation" | "untestable_refutation" | "not_in_library" | "bad_structure" | "ruled_out";
+            kind: "duplicate_compound" | "already_tested" | "untraced_citation" | "untestable_refutation" | "not_in_library" | "bad_structure" | "ruled_out" | "quoted_number" | "gate_misstated";
             /** Prior Family */
             prior_family?: string | null;
             /**

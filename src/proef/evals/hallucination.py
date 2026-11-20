@@ -41,6 +41,7 @@ def _detectors(fx: dict) -> dict:
         "quoted_number": lambda x: bool(g.quoted_number_problems(_text(x), [{**q, "ci_um": tuple(q["ci_um"])} for q in f["quoted_number"]["findings"]],
                                                                  f["quoted_number"]["gate_um"])),
         "gate_misstated": lambda x: bool(g.gate_misstated(_text(x), f["gate_misstated"]["gate_um"])),
+        "state_claims": lambda x: bool(g.state_claims(x["text"], x["verdicts"], x.get("queued"), x.get("runs_left"))),
         "ruled_out": lambda x: g.ruled_out(x["candidate"], x["family"], f["ruled_out"]["negatives"]) is not None,
         "phantom_tool": lambda x: bool(g.phantom_tool_claims(_text(x), set(f["phantom_tool"]["called"]), set(f["phantom_tool"]["offered"]))),
         "fabricated_citation": lambda x: citation_flag(x),
@@ -68,7 +69,7 @@ def score() -> dict[str, dict]:
 
 @register("hallucination-detectors",
           "deterministic detectors for what a model fabricates (invented candidate, bad structure, untestable refuted-if, misquoted number, misstated "
-          "gate, repeated ruled-out idea, phantom tool call, fabricated citation): recall and false-positive rate per category on a labelled fixture that "
+          "gate, wrong claim about the campaign's own state, repeated ruled-out idea, phantom tool call, fabricated citation): recall and false-positive rate per category on a labelled fixture that "
           "includes hard cases on purpose", suite="hallucination")
 def _t_hallucination_detectors():
     res = score()

@@ -42,7 +42,7 @@ def already_tested(portfolio, tested) -> list[dict]:
 
 def build_plan(portfolio, family_info: dict | None, family_scores: dict | None, tested=None, grounding: dict | None = None,
                retrieved: list | None = None, library: list[str] | None = None, structures: dict[str, str] | None = None,
-               negatives: list[dict] | None = None) -> dict:
+               negatives: list[dict] | None = None, findings: list[dict] | None = None, gate_um: float | None = None) -> dict:
     """A JSON-safe plan from the proposed variants. Pure: no I/O. `tested`: hypotheses earlier rounds already judged."""
     family_info, family_scores = family_info or {}, family_scores or {}
     fams: dict[str, dict] = {}
@@ -65,7 +65,7 @@ def build_plan(portfolio, family_info: dict | None, family_scores: dict | None, 
             "lab": (h.metadata or {}).get("lab_check"),
             "predictions": (h.metadata or {}).get("predictions") or []})
     warnings = duplicate_compounds(portfolio) + already_tested(portfolio, tested)
-    warnings += fabrication_warnings(portfolio, fams, library or [], structures or {}, negatives or [])
+    warnings += fabrication_warnings(portfolio, fams, library or [], structures or {}, negatives or [], findings or [], gate_um)
     if retrieved is not None:          # grounding ran: a citation that is not in anything this run read is flagged (it may still be real)
         from proef.groundedness import traces
         for f in fams.values():
@@ -77,7 +77,8 @@ def build_plan(portfolio, family_info: dict | None, family_scores: dict | None, 
     return {"families": list(fams.values()), "n_hypotheses": len(portfolio), "warnings": warnings}
 
 
-def fabrication_warnings(portfolio, fams: dict, library: list[str], structures: dict[str, str], negatives: list[dict]) -> list[dict]:
+def fabrication_warnings(portfolio, fams: dict, library: list[str], structures: dict[str, str], negatives: list[dict],
+                         findings: list[dict] | None = None, gate_um: float | None = None) -> list[dict]:
     """Deterministic checks on what a model made up, shown to a person before approval (the detectors in `groundedness`): a name the offered
     library does not hold, a structure that does not parse or disagrees with the library's, a 'refuted if' that names nothing observable, and
     a candidate or family an earlier campaign already ruled out. Advisory: nothing is removed or blocked."""
@@ -99,6 +100,13 @@ def fabrication_warnings(portfolio, fams: dict, library: list[str], structures: 
             if bad and ("smi", name.lower()) not in seen:
                 seen.add(("smi", name.lower()))
                 out.append({"kind": "bad_structure", "candidate": name, "reason": bad, "hypothesis_ids": [h.hypothesis_id]})
+        text = " ".join(str(x or "") for x in (h.statement, h.predicted, h.rationale))
+        for q in g.quoted_number_problems(text, findings or [], gate_um):
+            out.append({"kind": "quoted_number", "candidate": q["candidate"], "hypothesis_ids": [h.hypothesis_id],
+                        "reason": f"says {q['quoted']}, the data shows {q['observed_um']:g} uM"})
+        for m in g.gate_misstated(text, gate_um):
+            out.append({"kind": "gate_misstated", "candidate": name, "hypothesis_ids": [h.hypothesis_id],
+                        "reason": f"says {m['stated']}, the gate is {m['gate_um']:g} uM"})
         hit = g.ruled_out(name, h.family, negatives)
         if hit and ("neg", name.lower(), h.family) not in seen:
             seen.add(("neg", name.lower(), h.family))

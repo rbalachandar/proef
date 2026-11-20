@@ -739,6 +739,35 @@ def _collect_round(monitor, agent, selected, adaptive, cfg, terminal) -> None:
             break
 
 
+def _gate_um(cfg) -> float | None:
+    """The program's hard potency limit in micromolar, for checking what a narrative says about the gate."""
+    from proef.groundedness import to_um
+    for c in cfg.problem.constraints:
+        if c.kind == "hard" and c.limit:
+            return to_um(float(c.limit), str(c.unit or "uM")) if str(c.unit or "").lower() in ("pm", "nm", "um", "µm", "μm", "mm") else None
+    return None
+
+
+def _findings(hyps) -> list[dict]:
+    """The measured results narratives can be checked against: candidate, observed value and interval (micromolar for a dose-response assay)."""
+    return [{"candidate": h.candidate, "observed_um": h.observed_value,
+             "ci_um": tuple(h.observed_ci) if getattr(h, "observed_ci", None) else None}
+            for h in hyps if isinstance(getattr(h, "observed_value", None), (int, float))]
+
+
+def _narrative_flags(text: str, cfg, findings=None, verdicts=None, queued=None, runs_left=None) -> list[dict]:
+    """Advisory flags on what a model wrote about results, the gate or the campaign's state. Never changes what runs."""
+    from proef import groundedness as g
+    out: list[dict] = []
+    gate = _gate_um(cfg)
+    if findings:
+        out += [{"kind": "quoted_number", **x} for x in g.quoted_number_problems(text, findings, gate)]
+    out += [{"kind": "gate_misstated", **x} for x in g.gate_misstated(text, gate)]
+    if verdicts is not None:
+        out += [{"kind": f"state_{x['kind']}", **{k: v for k, v in x.items() if k != "kind"}} for x in g.state_claims(text, verdicts, queued, runs_left)]
+    return out
+
+
 def _plan_gate(cfg, tracker, portfolio, store, actor, say, label=None, tested=None):
     """Pause for the person's decision on the proposed plan. Returns (portfolio to run, declined?).
     Every outcome is recorded: approval, removals (with a reason) and decline."""
@@ -759,7 +788,8 @@ def _plan_gate(cfg, tracker, portfolio, store, actor, say, label=None, tested=No
     except Exception:  # noqa: BLE001 - an unreadable memory must not stop plan review
         negs = []
     plan = build_plan(portfolio, getattr(tracker, "family_info", {}), getattr(tracker, "family_scores", {}), tested=tested,
-                      grounding=grounded, retrieved=retrieved, library=lib_names, structures=lib_struct, negatives=negs)
+                      grounding=grounded, retrieved=retrieved, library=lib_names, structures=lib_struct, negatives=negs,
+                      findings=_findings(tested or []), gate_um=_gate_um(cfg))
     if label:
         plan["label"] = label
     critic = cfg.critic_model
@@ -1107,7 +1137,9 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
                 Envelope(experiment_branch_id=f"problem/{problem.problem_id}"), EventType.gate_decision, actor,
                 decision={"kind": "orchestrator_choice", "state": State.ROUND_JUDGED.value, "round": round_no, "allowed": allowed,
                           "chosen": choice.action, "source": choice.source, "valid": choice.valid, "reasons": choice.reasons,
-                          "why": choice.why[:300]}))
+                          "why": choice.why[:300],
+                          "flags": _narrative_flags(choice.why, cfg, findings=_findings(tested), verdicts=dict(view.verdicts),
+                                                    queued=view.queued, runs_left=view.runs_left)}))
             if choice.action == Action.FOLLOW_UP.value:
                 done.add(choice.action)
                 # a follow-up must not crowd out what is already queued: runs the remaining hypotheses are likely to need come first
@@ -1271,7 +1303,9 @@ def _followups(cfg, tracker, round_hyps, store, actor, say, lab, crit, round_no,
     env = Envelope(experiment_branch_id=f"problem/{cfg.problem.problem_id}")
     proposals = [validate_followup(r, ctx) for r in raw]
     for p in proposals:
-        store.append(record_for(env, EventType.gate_decision, actor, decision={**p, "kind": "followup_proposal", "proposal_kind": p["kind"], "round": round_no}))
+        store.append(record_for(env, EventType.gate_decision, actor, decision={
+            **p, "kind": "followup_proposal", "proposal_kind": p["kind"], "round": round_no,
+            "flags": _narrative_flags(p.get("rationale", ""), cfg, findings=_findings(abstained.values()))}))
     ok = [p for p in proposals if p["validation"]["ok"]]
     say(f"model suggested {len(proposals)} follow-up action(s) on {len(abstained)} abstained hypothes"
         f"{'is' if len(abstained) == 1 else 'es'}: {len(ok)} valid")

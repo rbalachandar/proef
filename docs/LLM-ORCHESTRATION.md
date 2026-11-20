@@ -618,8 +618,16 @@ the model call the right tool at the right stage" had no answer. Order of work:
       test. The fixture's author also wrote the detectors: it measures coverage of authored phrasings, not a real model's. Four of them warn in plan
       review (`not_in_library`, `bad_structure`, `untestable_refutation`, `ruled_out`), advisory only. Found on the way: a private library's ids and
       structures were not protected from queries (the code looked for `id`, libraries use `sample_id`); now `grounding.library_secrets`.
-      Open: the real-model arm, and detectors applied to a re-plan's rationale, a follow-up's reason and an orchestrator's "why" (the functions exist; no
-      hook yet).
+      **Real-text audit** (`gpt-6-luna`, the saved DYRK1B and decide runs: 14 "refuted if" clauses, ~150 other texts, 8 orchestrator reasons): 0 of 14
+      clauses flagged, and on reading, all 14 do name an observable (no false positive). One false positive in `gate_misstated`: "IC50 below 1 uM and
+      therefore below the 20-uM gate" (a correct prediction in a sentence that states the right gate, written with a hyphen my pattern did not read).
+      Fixed: a sentence that states the right gate is not misstating it, and the pattern reads "20-uM". That fix came after seeing real text. What this does
+      NOT show: recall on real fabrications, because the model made none in this sample. Real-model flags now accumulate for free (below), and a
+      weaker model, or a larger sample, is the way to measure recall.
+      **Hooks** (advisory, nothing changes what runs): plan review (initial and re-plan) flags a quoted value that the results do not show and a
+      misstated gate (`quoted_number`, `gate_misstated`); each follow-up proposal record carries `flags` for its reason; each orchestrator choice
+      record carries `flags` for its "why", checked against the verdicts, the queue length and the runs left it was shown (`state_claims`).
+      Open: the real-model arm over a larger sample.
 - [ ] Web search tool (needs a provider and an operator choice of which) and a sub-agent tool (critic exists as `critic_model`, not
       as a catalog tool).
 - [ ] **Real-model tool-selection measurement** (opt-in, costs money, asked first): per stage, which tool the model picked, whether a

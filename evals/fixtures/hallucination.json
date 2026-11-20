@@ -147,7 +147,8 @@
    {
     "text": "An IC50 below 5 uM would be a strong hit, but the gate is 20 uM.",
     "hard": "a threshold other than the gate, stated on purpose"
-   }
+   },
+   "At ATP near the Km, AZ191 has an IC50 below 1 uM and therefore below the 20-uM gate."
   ]
  },
  "ruled_out": {
@@ -219,6 +220,114 @@
   "clean": [
    "PMID 11111111",
    "PMID 22222222"
+  ]
+ },
+ "state_claims": {
+  "injected": [
+   {
+    "text": "AZ191 was confirmed, so we proceed.",
+    "verdicts": {
+     "AZ191": "inconclusive"
+    },
+    "queued": 2,
+    "runs_left": 40
+   },
+   {
+    "text": "Because harmine was refuted we should stop.",
+    "verdicts": {
+     "harmine": "validated"
+    },
+    "queued": 2,
+    "runs_left": 40
+   },
+   {
+    "text": "Three hypotheses are queued for the next round.",
+    "verdicts": {},
+    "queued": 1,
+    "runs_left": 40
+   },
+   {
+    "text": "Only 12 lab runs remain, so be careful.",
+    "verdicts": {},
+    "queued": 1,
+    "runs_left": 48
+   },
+   {
+    "text": "No hypotheses are queued, so replan.",
+    "verdicts": {},
+    "queued": 4,
+    "runs_left": 10
+   },
+   {
+    "text": "AZ191 is still inconclusive and needs a follow-up.",
+    "verdicts": {
+     "AZ191": "confirmed"
+    },
+    "queued": 0,
+    "runs_left": 5
+   },
+   {
+    "text": "The lead looked weaker than before.",
+    "verdicts": {
+     "AZ191": "confirmed"
+    },
+    "queued": 0,
+    "runs_left": 5,
+    "hard": "a wrong claim with no name, number or verdict word"
+   }
+  ],
+  "clean": [
+   {
+    "text": "AZ191 was invalidated, so it is useful to propose alternatives.",
+    "verdicts": {
+     "AZ191": "invalidated"
+    },
+    "queued": 3,
+    "runs_left": 48
+   },
+   {
+    "text": "Three hypotheses are queued and 48 lab runs remain, so the next round can evaluate them.",
+    "verdicts": {},
+    "queued": 3,
+    "runs_left": 48
+   },
+   {
+    "text": "AZ191 was refuted by the orthogonal assay.",
+    "verdicts": {
+     "AZ191": "invalidated"
+    },
+    "queued": 1,
+    "runs_left": 9
+   },
+   {
+    "text": "Proceed with the one queued hypothesis and use the remaining lab budget.",
+    "verdicts": {},
+    "queued": 1,
+    "runs_left": 48
+   },
+   {
+    "text": "harmine was confirmed.",
+    "verdicts": {
+     "harmine": "validated"
+    },
+    "queued": 0,
+    "runs_left": 3
+   },
+   {
+    "text": "Two hypotheses are already queued and 48 lab runs remain.",
+    "verdicts": {},
+    "queued": 2,
+    "runs_left": 48
+   },
+   {
+    "text": "AZ191 was abstained on, but fisetin was confirmed.",
+    "verdicts": {
+     "AZ191": "inconclusive",
+     "fisetin": "confirmed"
+    },
+    "queued": 1,
+    "runs_left": 20
+   }
   ]
  }
 }

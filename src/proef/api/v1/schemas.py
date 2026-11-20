@@ -251,7 +251,8 @@ class PlanCritique(BaseModel):
 
 class PlanWarning(BaseModel):
     """A deterministic check on the plan, shown before approval."""
-    kind: Literal["duplicate_compound", "already_tested", "untraced_citation", "untestable_refutation", "not_in_library", "bad_structure", "ruled_out"]
+    kind: Literal["duplicate_compound", "already_tested", "untraced_citation", "untestable_refutation", "not_in_library", "bad_structure", "ruled_out",
+                  "quoted_number", "gate_misstated"]
     candidate: str = ""
     family: str | None = Field(None, description="untraced_citation: the family whose citation this run never retrieved")
     citation: str | None = None

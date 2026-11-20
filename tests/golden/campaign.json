@@ -918,6 +918,7 @@
       "stop"
      ],
      "chosen": "next_round",
+     "flags": [],
      "kind": "orchestrator_choice",
      "reasons": [],
      "round": 1,
@@ -1279,6 +1280,7 @@
       "next_round"
      ],
      "chosen": "next_round",
+     "flags": [],
      "kind": "orchestrator_choice",
      "reasons": [],
      "round": 2,

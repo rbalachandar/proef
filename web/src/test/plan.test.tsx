@@ -74,6 +74,16 @@ describe('plan review', () => {
     expect(notes).toContain('same candidate as an earlier invalidated')
   })
 
+  it('flags a number or threshold that does not match the results or the gate', () => {
+    wrap(<PlanReview item={{ id: 'x', title: 't', ts: 1, plan: plan([
+      { kind: 'quoted_number', candidate: 'gefitinib', hypothesis_ids: ['a'], reason: 'says 0.2 uM, the data shows 2 uM' },
+      { kind: 'gate_misstated', candidate: 'erlotinib', hypothesis_ids: ['b'], reason: 'says 20 nM, the gate is 20 uM' }]) }} />)
+    const note = screen.getByRole('note')
+    expect(note).toHaveTextContent('A number or threshold that does not match')
+    expect(note).toHaveTextContent('gefitinib (says 0.2 uM, the data shows 2 uM)')
+    expect(note).toHaveTextContent('erlotinib (says 20 nM, the gate is 20 uM)')
+  })
+
   it('shows where each hypothesis runs, and says plainly when one will not be submitted', () => {
     const lab = (over: object) => ({ pick: null, runs_on: 'plate-reader', status: 'ok', ok: true, reasons: [], flags: [], eligible: ['plate-reader'], ...over })
     const p = {

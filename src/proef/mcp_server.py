@@ -108,6 +108,13 @@ class McpSession:
                                   governance=execution_governance())
         self.tracker = HypothesisTracker(self.store, self.actor)
         self._hypotheses = self.tracker
+        # ONE implementation of the guards (approval, the ladder bound, governance, the program gate): the toolkit's. The MCP tools below
+        # are adapters that keep this server's names and response shapes. They call the toolkit's raw executors, because this session
+        # writes its own ledger record for every call (a second record per call would double the trail).
+        from proef.toolkit import AgentToolkit
+        self.toolkit = AgentToolkit(self.gateway, self.store, self.actor, gate=self.gate, approved=self.approved,
+                                    branch_id=self.branch, modality=self.modality, autonomy="act")
+        self.toolkit._tracker = self.tracker
 
     # ------------------------------------------------------------ dispatch
 
@@ -179,36 +186,23 @@ class McpSession:
         out = self.registry.model.generate(inv, f"generate {n} candidates for {args['target']}", n=n)
         return out.output["text"]
 
+    def _sync_toolkit(self) -> None:
+        """The session's gate, approved set and modality are what a person set (and what tests and callers change on it); the toolkit reads them."""
+        self.toolkit.gate, self.toolkit.approved, self.toolkit.modality = self.gate, set(self.approved), self.modality
+
     def _tool_assay(self, args: dict[str, Any]) -> str:
-    
+        """The toolkit's guarded `submit_assay` does the checking and the submitting; this adds only the presentation this server has always
+        returned (per-compound points and a fitted IC50)."""
         compounds = [str(c) for c in args["compounds"]]
-        unapproved = [c for c in compounds if c not in self.approved]
-        if not compounds or unapproved:
-            return json.dumps({"status": "refused", "reason": "not in a set a person approved (PROEF_MCP_APPROVED)",
-                               "candidates": unapproved})
-        concs = args.get("concentrations") or ["0.5uM", "2uM", "10uM", "40uM"]
-        from proef.protocol_design import sanitize_protocol
-        ladder = sanitize_protocol({"concentrations": concs})
-        concs = ladder["concentrations"] if ladder else ["0.5uM", "2uM", "10uM", "40uM"]
+        self._sync_toolkit()
+        out = self.toolkit._raw_executors()["submit_assay"](compounds=compounds, assay_type=args["assay"],
+                                                            concentrations=args.get("concentrations") or None)
+        if out.get("status") != "submitted":
+            return json.dumps({k: v for k, v in out.items() if k != "tool"})
+        run_id = out["run_id"]
         from proef.adapters.lab.simulator import parse_concentration_um
-        from proef.core.contracts import (
-            Envelope, ProtocolOp, ProtocolStep, ProtocolSubmission,
-            ReagentSpec, SampleKind, SampleSpec,
-        )
-        protocol = ProtocolSubmission(
-            envelope=Envelope(experiment_branch_id=self.branch),
-            title=f"mcp-{args['assay']}",
-            assay_type=args["assay"],
-            steps=[ProtocolStep(seq=1, op=ProtocolOp.dispense)],
-            samples=[SampleSpec(sample_id=c, kind=SampleKind.compound, concentration=cc)
-                     for c in compounds for cc in concs]
-            + [SampleSpec(sample_id="ctrl-neg", kind=SampleKind.buffer, concentration="10uM")],
-            reagents=[ReagentSpec(name="assay-buffer", amount="5 mL", bsl_level=1)],
-        )
-        run_id, rejection = self.gateway.submit(protocol)
-        if rejection:
-            return json.dumps({"status": "rejected", "reason": rejection})
-        result = self.gateway.results(protocol.envelope, run_id)
+        from proef.core.contracts import Envelope
+        result = self.gateway.results(Envelope(experiment_branch_id=self.branch), run_id)
         by: dict[str, list[tuple[float, float]]] = {}
         for m in result.measurements:
             if "control" in [f.value for f in m.flags]:
@@ -220,17 +214,14 @@ class McpSession:
         return json.dumps({"run_id": run_id, "lab": "simulated (virtual lab)", "results": report}, indent=1)
 
     def _tool_hypothesis(self, args: dict[str, Any]) -> str:
-        if self.gate is None:
-            return json.dumps({"status": "refused", "reason": "no program gate is registered (set PROEF_MCP_GATE, "
-                               "for example ic50_um<=20), so a verdict could not be judged by a pre-registered rule"})
-        from proef.autoloop import criteria_for_assay
-        h = self.tracker.propose(
-            statement=args["statement"], candidate=args["candidate"],
-            assay_type=args["assay_type"], predicted=args["predicted"],
-            criteria=criteria_for_assay(str(args["assay_type"]), self.gate, self.modality), branch_id=self.branch,
-        )
-        return json.dumps({"hypothesis_id": h.hypothesis_id, "status": h.status,
-                           "gate": {"metric": h.criteria.metric, "threshold": h.criteria.threshold}})
+        """The toolkit's `propose_hypothesis` holds the guard (no gate registered, no hypothesis; the criterion is the program's gate)."""
+        self._sync_toolkit()
+        out = self.toolkit._raw_executors()["propose_hypothesis"](
+            statement=args["statement"], candidate=args["candidate"], assay_type=args["assay_type"], predicted=args["predicted"])
+        if "hypothesis_id" not in out:
+            return json.dumps({k: v for k, v in out.items() if k != "tool"})
+        h = self.toolkit._hyps[out["candidate"]]
+        return json.dumps({"hypothesis_id": h.hypothesis_id, "status": h.status, "gate": out["gate"]})
 
     def _tool_capabilities(self, args: dict[str, Any]) -> str:
         return json.dumps(self.gateway.capabilities(), indent=1)

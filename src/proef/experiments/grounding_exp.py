@@ -110,6 +110,28 @@ class Paced:
         return {"calls": self.calls, "retries": self.retries, "waited_s": round(self.waited, 1), "exhausted": self.exhausted, "min_interval": self.min_interval}
 
 
+class BorderlineLab:
+    """The simulated lab, with ONE engineered fact: the first distinct compound a campaign asks about gets a true potency just at the gate, so its
+    confidence interval straddles it and it abstains; every other compound keeps the simulator's seeded potency. The simulator rarely abstains on its
+    own, and without an open result there is nothing for the decision-step reading to explain, so the follow-up and decide paths would go unexercised.
+    The same rule applies in every arm. It is labelled simulated in the saved data, and a campaign on this lab does not replay with a plain simulator."""
+
+    def __new__(cls, *a: Any, gate_um: float = 20.0, **kw: Any):
+        from proef.adapters.lab.simulator import SimulatorLab
+
+        class _Lab(SimulatorLab):
+            borderline: str | None = None
+
+            def true_ic50_um(self, protocol_id: str, sample_id: str) -> float:
+                if not str(sample_id).lower().startswith("ctrl"):
+                    if self.borderline is None:
+                        self.borderline = sample_id
+                    if sample_id == self.borderline:
+                        return gate_um * 1.02
+                return super().true_ic50_um(protocol_id, sample_id)
+        return _Lab(*a, **kw)
+
+
 class Spy:
     """Wraps the model and keeps every prompt and reply, so the analysis can read what the model saw and said. With a `sink`, each call is appended to
     a JSONL file AS IT HAPPENS (errors too), so a run that dies halfway still leaves its transcript."""
@@ -187,8 +209,10 @@ def ledger_view(recs: list) -> dict:
         "model_calls": sum(1 for _, d in dec if d.get("kind") == "model_call"),
         "tool_calls": [d for _, d in dec if d.get("kind") == "tool_call"],
         "sealed_tool_results": [d for _, d in dec if d.get("kind") == "tool_result"],
-        "proposed": [{k: d.get(k) for k in ("candidate", "family", "statement", "citation", "citation_status", "mechanism", "refutation_condition",
-                                            "rationale", "followup_of")} for et, d in dec if et == "hypothesis_proposed"],
+        "proposed": [{"candidate": ((r.artifact.metadata if r.artifact else None) or {}).get("candidate"),
+                      **{k: (r.decision or {}).get(k) for k in ("family", "statement", "citation", "citation_status", "mechanism", "refutation_condition",
+                                                                "rationale", "followup_of")}}
+                     for r in recs if r.event_type.value == "hypothesis_proposed" and r.artifact is not None],     # the root problem record has no artifact
         "orchestrator_choices": [{k: d.get(k) for k in ("round", "chosen", "source", "valid", "why", "allowed", "flags")} for _, d in dec
                                  if d.get("kind") == "orchestrator_choice"],
         "followups": [{k: d.get(k) for k in ("candidate", "action", "rationale", "flags", "validation")} for _, d in dec
@@ -212,7 +236,7 @@ def _backup_db(src: Path, dst: Path) -> None:
 
 
 def run_one(arm: str, objective: dict, rep: int, model: Any, services: Callable[[str, dict], dict], out: Path, tmp: Path, max_calls: int = 60,
-            extra_cfg: dict | None = None, pace: dict | None = None) -> dict:
+            extra_cfg: dict | None = None, pace: dict | None = None, forced_abstain: bool = True) -> dict:
     """Run one campaign for one arm and objective and persist EVERYTHING raw: `<tag>.json` (or `<tag>.partial.json` when the run is not usable),
     `<tag>.steps.jsonl` (every model call as it happened, errors included), and `<tag>.db` (the campaign's hash-chained ledger). A run is COMPLETE
     only if no model call failed: the engine treats a failed call as a fallback and carries on, so a run with a rate-limit failure would otherwise
@@ -246,8 +270,9 @@ def run_one(arm: str, objective: dict, rep: int, model: Any, services: Callable[
     kw.update(extra_cfg or {})
     log: list[str] = []
     crashed, rep_ = None, None
+    lab = BorderlineLab(seed=3) if forced_abstain else SimulatorLab(seed=3)
     try:
-        rep_ = run_campaign(CampaignConfig(**kw), SimulatorLab(seed=3), store, approver=lambda t: True, notify=log.append)
+        rep_ = run_campaign(CampaignConfig(**kw), lab, store, approver=lambda t: True, notify=log.append)
     except Exception as exc:  # noqa: BLE001 - a crash is recorded with what happened up to it, not lost
         crashed = f"{type(exc).__name__}: {str(exc)[:200]}"
     recs = store.branch_records(f"problem/{prob.problem_id}") if prob.problem_id else []
@@ -259,6 +284,7 @@ def run_one(arm: str, objective: dict, rep: int, model: Any, services: Callable[
     data = {
         "arm": arm, "objective_id": objective["id"], "rep": rep, "tag": tag, "problem_id": prob.problem_id, "find": objective.get("find", []), "paper_pmid": objective.get("paper_pmid"),
         "model": getattr(model, "model", None), "arm_config": {"tools": list(spec["tools"]), "decide": spec["decide"], "hostile": spec["hostile"]},
+        "forced_abstain": forced_abstain, "borderline_compound": getattr(lab, "borderline", None),
         "complete": reason is None, "incomplete_reason": reason, "model_errors": model_errors, "paced": paced.stats(),
         "planted_pmids": list(getattr(svc.get("pubmed"), "planted", []) or []),
         "loops": parse_loops(spy.log, view["tool_calls"]),
@@ -276,7 +302,8 @@ def run_one(arm: str, objective: dict, rep: int, model: Any, services: Callable[
 
 def run_suite(objectives: list[dict], arms: str, repeats: int, model_factory: Callable[[], Any], services: Callable[[str, dict], dict], out: Path,
               total_cap: int | None = None, max_calls: int = 60, say: Callable[[str], None] = print, extra_cfg: dict | None = None,
-              pace: dict | None = None, resume: bool = True, tags: set[str] | None = None, reps: list[int] | None = None) -> list[dict]:
+              pace: dict | None = None, resume: bool = True, tags: set[str] | None = None, reps: list[int] | None = None,
+              forced_abstain: bool = True) -> list[dict]:
     """Interleaved: for each repeat and objective the arms run in a rotating order, so a drift in the model or the network does not line up with an arm.
 
     Parts can be run on their own: `resume` skips any run whose complete `<tag>.json` is already saved (a run killed halfway is re-run, since only a complete
@@ -302,7 +329,7 @@ def run_suite(objectives: list[dict], arms: str, repeats: int, model_factory: Ca
                     if total_cap is not None and spent > 0 and spent + est > total_cap:
                         say(f"stopping: {spent} model calls spent, another run (about {est}) could take it past the cap of {total_cap}")
                         return results
-                    r = run_one(arm, obj, rep, model_factory(), services, out, Path(d), max_calls, extra_cfg, pace)
+                    r = run_one(arm, obj, rep, model_factory(), services, out, Path(d), max_calls, extra_cfg, pace, forced_abstain)
                     spent += r["model_calls"]
                     results.append(r)
                     say(json.dumps(r))

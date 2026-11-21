@@ -41,6 +41,7 @@ def main() -> None:
     ap.add_argument("--reps", default="", help="repeat numbers to run, e.g. 0,1 (default: 0..repeats-1)")
     ap.add_argument("--tags", default="", help="run exactly these, e.g. B-pi3k_cdk7-1,D-dyrk1b-0")
     ap.add_argument("--force", action="store_true", help="re-run runs that are already complete")
+    ap.add_argument("--natural-lab", action="store_true", help="do NOT engineer an open result: the simulator's own potencies (it rarely abstains, so the decide step may not fire)")
     ap.add_argument("--max-model-calls", type=int, default=60, help="the model-call budget of ONE campaign")
     ap.add_argument("--out", required=True)
     a = ap.parse_args()
@@ -48,7 +49,8 @@ def main() -> None:
     objs = [o for o in suite["objectives"] if not a.only or o["id"] in a.only.split(",")]
     pace = {"min_interval": a.min_interval, "backoff": tuple(float(x) for x in a.backoff.split(",") if x)}
     res = run_suite(objs, a.arms, a.repeats, model_from_env, services, Path(a.out), a.total_cap, a.max_model_calls, pace=pace, resume=not a.force,
-                    tags=set(a.tags.split(",")) if a.tags else None, reps=[int(x) for x in a.reps.split(",")] if a.reps else None)
+                    tags=set(a.tags.split(",")) if a.tags else None, reps=[int(x) for x in a.reps.split(",")] if a.reps else None,
+                    forced_abstain=not a.natural_lab)
     print(f"\n{len(res)} runs, {sum(r['model_calls'] for r in res)} model calls, raw data in {a.out}")
 
 

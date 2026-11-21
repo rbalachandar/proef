@@ -669,6 +669,13 @@ run; arms are interleaved; the run stops when the provider's quota runs out (or 
       after each refusal, and when the provider's quota runs out the run is saved as `<tag>.partial.json` (NOT data), the suite stops, and the same command resumes (finished runs are
       skipped). A run counts as data only if no model call failed, because the engine treats a failed call as a fallback and carries on, which would bias the comparison.
       `--tags`, `--only`, `--arms`, `--reps` run exactly the parts asked for; `--force` redoes finished ones; analysis and citation verification run offline from the saved files.
+- [x] **Forced open result** (`BorderlineLab`, default on, `--natural-lab` turns it off): the first compound each campaign tests sits just at the gate and abstains; every other
+      compound stays natural. Same rule in every arm, saved as `forced_abstain` and `borderline_compound`. Added after one real campaign showed the simulator did not abstain on its
+      own (one candidate, validated, so the decide step never fired and arm C was arm B). With it, one real campaign (arm C, DYRK1B, `gpt-6-luna`, 26 calls, 147 s at
+      `--min-interval 2`) fired the decide loop in both rounds, the model orchestrator chose follow-up then next round, a follow-up was validated and run and a second was
+      refused as already followed up, zero audit violations. Limit: a campaign on this lab does not replay on a plain simulator. Observed: the model tried to search for its own
+      proposed compound by name at the decide step and the default blocks tested candidate names (a name could be a private id); it recovered by searching on mechanism. That
+      default is kept for the experiment (Q2 asks about the product's default), and the blocked text is saved, so Q2 may understate what the decide reading could do with public names.
 - [ ] Run, analyse offline, write the result and the decision next to the thresholds above.
 
 **5D: the real-data case study (opt-in, costs money, asked first)**

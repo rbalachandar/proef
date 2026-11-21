@@ -363,3 +363,38 @@ def test_exactly_the_requested_parts_run_and_an_incomplete_run_never_counts_in_t
     runs = X.load_runs(out) + [{"arm": "B", "tag": "B-x-0", "complete": False, "model_calls": 5}]
     a = X.analyze(runs)
     assert a["excluded_incomplete"] == ["B-x-0"] and a["runs"]["B"] == 0 and a["runs"]["A"] == 1
+
+
+# ---- an engineered open result, the same in every arm ----
+
+def test_the_borderline_lab_makes_only_the_first_compound_sit_at_the_gate():
+    from proef.adapters.lab.simulator import SimulatorLab
+    lab, plain = X.BorderlineLab(seed=3), SimulatorLab(seed=3)
+    first = lab.true_ic50_um("p", "alpha")
+    assert abs(first - 20.4) < 1e-9 and lab.borderline == "alpha"
+    assert lab.true_ic50_um("p", "alpha") == first, "stable for that compound"
+    assert lab.true_ic50_um("p", "beta") == plain.true_ic50_um("p", "beta"), "every other compound keeps the simulator's own potency"
+    assert lab.true_ic50_um("p", "ctrl-neg") == plain.true_ic50_um("p", "ctrl-neg") and lab.borderline == "alpha", "a control is never the borderline one"
+
+
+def test_with_the_engineered_open_result_the_decide_reading_fires_even_when_every_proposal_would_be_a_clean_hit(tmp_path):
+    class OneCandidate(World):
+        def _plan(self, prompt, cites):
+            return {"families": [{"family": "f-x", "parent_statement": "c", "kind": "mechanistic", "mechanism": "m", "refutation_condition": "No binding below 20 uM",
+                                  "confidence": 0.6, "citation": "", "variants": [{"statement": "X1 binds", "candidate": "X1", "assay_type": "binding",
+                                                                                  "predicted": "p", "predicted_value": 5.0, "rationale": "x"}]}]}
+    out = tmp_path / "o"
+    res = X.run_suite(SUITE, "C", 1, OneCandidate, services, out, say=lambda m: None, max_calls=80)
+    run = X.load_runs(out)[0]
+    assert res[0]["complete"] and run["forced_abstain"] and run["borderline_compound"] == "X1"
+    assert run["verdicts"]["X1"] == "inconclusive", run["verdicts"]
+    assert "decide" in [lp["state"] for lp in run["loops"]], "an open result means the decision-step reading has something to read about"
+    nat = tmp_path / "n"
+    X.run_suite(SUITE, "C", 1, OneCandidate, services, nat, say=lambda m: None, max_calls=80, forced_abstain=False)
+    assert X.load_runs(nat)[0]["forced_abstain"] is False
+
+
+def test_the_ledger_view_names_the_candidates_it_saw_proposed(normal):
+    _, runs = normal
+    names = {p["candidate"] for r in runs for p in r["proposed"]}
+    assert None not in names and {"C1", "fisetin"} <= names

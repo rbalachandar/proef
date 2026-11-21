@@ -279,8 +279,9 @@ def run_one(arm: str, objective: dict, rep: int, model: Any, services: Callable[
     _backup_db(db, out / f"{tag}.db")
     view = ledger_view(recs)
     model_errors = sum(1 for r in recs if (r.decision or {}).get("kind") == "model_error")
+    degraded = rep_ is not None and rep_.degraded                     # the framework's own marker (campaign_degraded on the ledger)
     reason = (f"quota or rate limit exhausted ({paced.stats()['retries']} retries)" if paced.exhausted else f"the campaign crashed: {crashed}" if crashed
-              else f"{model_errors} model call(s) failed" if model_errors else None)
+              else f"{model_errors} model call(s) failed (the campaign reports itself degraded)" if (model_errors or degraded) else None)
     data = {
         "arm": arm, "objective_id": objective["id"], "rep": rep, "tag": tag, "problem_id": prob.problem_id, "find": objective.get("find", []), "paper_pmid": objective.get("paper_pmid"),
         "model": getattr(model, "model", None), "arm_config": {"tools": list(spec["tools"]), "decide": spec["decide"], "hostile": spec["hostile"]},

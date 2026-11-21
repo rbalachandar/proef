@@ -484,24 +484,24 @@ unknown candidate, which is the behaviour to want.
 
 A labelled, versioned fixture (`evals/fixtures/hallucination.json`) of clean and injected-hallucination hypothesis payloads, scored
 offline with a fake citation fetch so it is deterministic:
-- [ ] **Fabricated citation**: a DOI or PMID that does not exist (existing check). Recall and false-positive rate.
-- [ ] **Invented candidate**: a name that is not in the offered library. A new check, surfaced as a plan warning, and for a library-backed
+- [x] **Fabricated citation** *(detector category `fabricated_citation`; `citations.verify_each` now resolves every id, ChEMBL included)*: a DOI or PMID that does not exist (existing check). Recall and false-positive rate.
+- [x] **Invented candidate** *(plan warning `not_in_library`; refusal before submission for a library-backed lab is NOT done)*: a name that is not in the offered library. A new check, surfaced as a plan warning, and for a library-backed
       lab refused before submission.
-- [ ] **Bad structure**: a SMILES that does not parse (existing check) or that disagrees with a structure the library holds for the name.
+- [x] **Bad structure** *(plan warning `bad_structure`)*: a SMILES that does not parse (existing check) or that disagrees with a structure the library holds for the name.
 - [ ] **Invented instrument or tool**: already rejected as `invented` (Phase 2). Counted here so the number is in one place.
-- [ ] **Untestable "refuted if"**: empty, circular ("if it does not work") or with no observable and no threshold. A new testability check
+- [x] **Untestable "refuted if"** *(plan warning `untestable_refutation`; lexical, limits in the fixture)*: empty, circular ("if it does not work") or with no observable and no threshold. A new testability check
       with its precision limits stated, since this one is heuristic.
-- [ ] **Quoted numbers that contradict the data shown**: in a re-plan, a follow-up rationale or an orchestrator's "why", a candidate's
+- [x] **Quoted numbers that contradict the data shown** *(plan review and follow-up and orchestrator records)*: in a re-plan, a follow-up rationale or an orchestrator's "why", a candidate's
       value quoted against what the results actually said. A mechanical check of numbers and names against the findings in the prompt.
-- [ ] **Gate or unit misstated**: "IC50 below 20 nM" for a gate of 20 µM. A comparison of the threshold and unit in the text with the gate.
-- [ ] **A ruled-out family proposed as new**: counted against the flywheel's negatives.
+- [x] **Gate or unit misstated** *(plan review, follow-up and orchestrator records)*: "IC50 below 20 nM" for a gate of 20 µM. A comparison of the threshold and unit in the text with the gate.
+- [x] **A ruled-out family proposed as new** *(plan warning `ruled_out`)*: counted against the flywheel's negatives.
 - Scored per category as detection recall on injected items and false-positive rate on clean ones, and as CONTAINMENT: run the
   hallucinated hypotheses through a campaign and measure lab runs wasted, whether any reaches a confident verdict, and whether each
   one was surfaced to the person in plan review before approval. Thresholds are set in the fixture's README before the first run.
 - [ ] **Real-model arm** (opt-in with the case study, network for PubMed): the real model's hallucination rate per category over the
       case study's prompts. A citation that EXISTS but does not support the claim needs a retrieval check against its title and
       abstract, a weak proxy that is reported as one, not as truth.
-- [ ] The detectors live in one module (`groundedness.py`) and feed plan-review warnings, so a person sees "not in the library" or "quotes
+- [x] The detectors live in one module (`groundedness.py`) *(six of the checks warn in plan review)* and feed plan-review warnings, so a person sees "not in the library" or "quotes
       a number the data does not show" beside the hypothesis, the way "already tested" is shown now.
 
 **5G: tool hallucination evals**
@@ -568,7 +568,7 @@ What the model may and may not do with what it finds:
       appears in a result this loop retrieved, and records the rest as dropped. The plan carries each family's grounding and flags a citation the
       run never retrieved; the workbench shows both. `tests/test_ground_step.py`, `web/src/test/plan.test.tsx`.
 - [x] The citation-traces-to-a-result check, in `groundedness.py` (`traces`, `verify_items`). Still open: using it in the hallucination evals (5F).
-- [ ] Knowledge tools in the `propose` and `decide` states of the engine's own flow.
+- [x] Knowledge tools in the `propose` and `decide` states of the engine's own flow. *(`grounding.gather`, `_round_background`; real-model measured Nov 21)*
 - [ ] Blinding rules for knowledge tools in eval and case-study arms.
 - [ ] Evals: grounding precision (a supporting item really supports), recall of a planted contradiction, and a leakage test that a blinded
       run cannot retrieve its held-out truth.
@@ -633,6 +633,20 @@ the model call the right tool at the right stage" had no answer. Order of work:
       misstated gate (`quoted_number`, `gate_misstated`); each follow-up proposal record carries `flags` for its reason; each orchestrator choice
       record carries `flags` for its "why", checked against the verdicts, the queue length and the runs left it was shown (`state_claims`).
       Open: the real-model arm over a larger sample.
+- [x] **Three framework problems the first real-model experiment exposed, fixed** (Nov 21):
+      **(1) Failed model calls were silent.** The engine treats a failed call as a fallback (a fixed order, no follow-up suggestions, no re-plan) and carries on, so a degraded campaign looked
+      ordinary. Now: a `campaign_degraded` ledger record (counts by role, first errors, fallback choices), `CampaignReport.degraded` and `model_failures`, a warning to the caller, and an audit
+      rule `degradation_reported` (a campaign with model errors must say so). The experiment's "complete" rule uses the framework's marker. `tests/test_degraded.py`. Not yet: a workbench badge
+      (the read-model does not show it).
+      **(2) The query-privacy default was blunt.** It blocked every tested candidate name, including names the model chose from its own knowledge (10 blocked queries in the experiment). Now
+      `CampaignConfig.grounding_names`: `"operator"` (default) protects what the operator supplied (library ids, structures and sequences, names in a configured hypothesis list, the problem id,
+      measured values) and lets a model's own public compound names through; `"all"` restores the strict behaviour. In the envelope, so a replay agrees (an older recording replays as `"all"`, which
+      is what it ran with). The Nov 21 experiment ran with the strict default; a rerun now will not, so the two are not comparable on the decide arms.
+      **(3) Real-model runs found bugs scripted tests miss.** Cause: scripted tests never touch the real services or real model output. Now: real API responses recorded as fixtures
+      (`tests/fixtures/api/`, `make record-fixtures`; the recorder refuses an error response or a payload it would cut) and adapters tested against them offline (`tests/test_api_fixtures.py`:
+      PubMed efetch XML, ChEMBL, Open Targets current schema, ChEMBL ids, a real 404); opt-in live contract tests with a drift detector (`make test-live`, `PROEF_LIVE=1`); and a real-model
+      smoke script that asserts the invariants (`make smoke-real`: complete, not degraded, zero violations, both loops fired, every choice the model's, step log matches, ledger verifies).
+      A real-data fact the fixtures showed: ChEMBL often has no preferred name for a molecule (`molecule_name` can be None), so a model can rely on the structure but not always a name.
 - [ ] Web search tool (needs a provider and an operator choice of which) and a sub-agent tool (critic exists as `critic_model`, not
       as a catalog tool).
 - [ ] **Real-model tool-selection measurement** (opt-in, costs money, asked first): per stage, which tool the model picked, whether a

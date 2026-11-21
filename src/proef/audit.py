@@ -40,6 +40,10 @@ def audit_campaign(recs: list, store: Any = None, branch: str | None = None) -> 
     runs = [(i, r) for i, r in enumerate(recs) if _et(r) == "lab_run"]
     run_ids = {(r.decision or {}).get("run_id") for _, r in runs}
 
+    # 0. a campaign with failed model calls says so (it ran on fallbacks, so it did not run as configured)
+    if env and any(_kind(r) == "model_error" for r in recs) and not any(_kind(r) == "campaign_degraded" for r in recs):
+        v.append(Violation("degradation_reported", "a model call failed and the campaign does not say it ran degraded"))
+
     # 1. observe submits nothing
     if env.get("autonomy") == "observe" and runs:
         v.append(Violation("observe_runs_nothing", f"{len(runs)} lab run(s) under observe"))

@@ -77,6 +77,8 @@ class CampaignConfig:
     grounding_decide: bool = True          # with grounding_tools: also read about a round's open results at the decision point (False: `propose` only)
     loop_compute: tuple[str, ...] = ()     # compute tools a model may call BEFORE it proposes: 'predict' (the enabled prediction tools) and/or 'synthesis'
     ground_hypotheses: bool = False        # before plan review, look for evidence for and against each family (needs grounding_tools)
+    grounding_names: str = "operator"     # which candidate names a query may not contain: 'operator' = those the operator supplied (library, configured hypotheses);
+                                           # 'all' = every tested candidate, including names the model chose itself (stricter)
     grounding_public_names: tuple[str, ...] = ()   # candidate names the operator says are public, so a query may contain them; others are blocked
     grounding_replay: dict | None = None   # a replay's sealed knowledge results {(tool, args_hash): result}: played back, no network
     modality: str | None = None            # selects the domain pack (assays, prompt wording); None = small molecule
@@ -135,6 +137,8 @@ class CampaignReport:
     rounds_run: int = 1
     history: list[dict] = field(default_factory=list)
     stopped: str | None = None            # why the campaign ended before its rounds did: halt, wall_clock or orchestrator
+    degraded: bool = False                # a model call failed and the engine carried on with a fallback: the campaign is not what it was configured to be
+    model_failures: int = 0
 
 
 from proef.core.contracts.models import coerce_assay_type
@@ -828,6 +832,27 @@ def _plan_gate(cfg, tracker, portfolio, store, actor, say, label=None, tested=No
     return kept, False
 
 
+def _record_degradation(store, problem, actor, say) -> dict:
+    """If any model call in this campaign FAILED, say so on the ledger and to the caller. The engine treats a failed call as a recoverable fallback
+    (a fixed order instead of the model's choice, no follow-up suggestions, no re-plan), which is right for keeping a campaign alive and wrong for
+    letting it look like an ordinary one: a reader and every analysis must be able to tell a campaign that ran as configured from one that did not."""
+    recs = store.branch_records(f"problem/{problem.problem_id}")
+    errs = [r.decision for r in recs if (r.decision or {}).get("kind") == "model_error"]
+    fallbacks = [r.decision for r in recs if (r.decision or {}).get("kind") == "orchestrator_choice" and r.decision.get("source") == "fixed-fallback"]
+    if not errs:
+        return {"degraded": False, "model_failures": 0}
+    by_role: dict[str, int] = {}
+    for e in errs:
+        by_role[str(e.get("role"))] = by_role.get(str(e.get("role")), 0) + 1
+    store.append(record_for(Envelope(experiment_branch_id=f"problem/{problem.problem_id}"), EventType.gate_decision, actor, decision={
+        "kind": "campaign_degraded", "model_failures": len(errs), "by_role": by_role, "fallback_choices": len(fallbacks),
+        "first_errors": [str(e.get("error"))[:160] for e in errs[:5]],
+        "meaning": "a model call failed and the engine carried on with a fallback; this campaign did not run as configured"}))
+    say(f"WARNING: this campaign ran DEGRADED: {len(errs)} model call(s) failed ({', '.join(f'{k}: {v}' for k, v in sorted(by_role.items()))}); "
+        "fallbacks were used, so it did not run as configured")
+    return {"degraded": True, "model_failures": len(errs)}
+
+
 def run_campaign(cfg: CampaignConfig, lab: Any,
                  store: ProvenanceStore,
                  approver: Callable[[str], bool] | None = None,
@@ -893,7 +918,7 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
         "hypothesis_source": cfg.hypothesis_source, "followups": cfg.followups, "replan": cfg.replan,
         "max_families": cfg.max_families, "max_variants_per_family": cfg.max_variants_per_family,
         "modality": cfg.modality, "prediction_tools": list(cfg.prediction_tools or []),
-        "grounding_tools": list(cfg.grounding_tools or []), "ground_hypotheses": cfg.ground_hypotheses, "grounding_decide": cfg.grounding_decide, "loop_compute": list(cfg.loop_compute or []),
+        "grounding_tools": list(cfg.grounding_tools or []), "ground_hypotheses": cfg.ground_hypotheses, "grounding_decide": cfg.grounding_decide, "grounding_names": cfg.grounding_names, "loop_compute": list(cfg.loop_compute or []),
         "grounding_public_names": list(cfg.grounding_public_names or []),
         "critic": cfg.critic_model is not None, "plan_review": cfg.plan_approver is not None,
         "orchestrator": cfg.orchestrator if isinstance(cfg.orchestrator, str) else "custom",
@@ -926,7 +951,8 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
         if not declined and cfg.plan_covers_submissions and isinstance(gateway, _GatedGateway):
             gateway.covered = {h.candidate for h in portfolio}
         if declined:
-            return CampaignReport(problem_id=problem.problem_id or "", selected=[], verdicts={}, rounds_run=0)
+            _d = _record_degradation(store, problem, actor, say)
+            return CampaignReport(problem_id=problem.problem_id or "", selected=[], verdicts={}, rounds_run=0, **_d)
 
     # 1. rounds: select -> design+submit -> analyze; each round feeds the next
     synth_cache: dict[str, dict] = {}
@@ -1031,7 +1057,7 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
         if cfg.autonomy == "observe":
             say("observe-only: nothing submitted")
             return CampaignReport(problem_id=problem.problem_id,
-                                  selected=[h.candidate for h in selected])
+                                  selected=[h.candidate for h in selected], **_record_degradation(store, problem, actor, say))
 
         # design + submit this round. ONE measurement per (candidate, assay): the same compound proposed under two
         # families is measured once and every hypothesis on it is judged from that plate, not run twice with the same
@@ -1179,7 +1205,8 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
 
     say(f"CAMPAIGN COMPLETE {problem.problem_id}: "
         + (", ".join(f"{c}={s}" for c, s in verdicts.items()) or "nothing tested"))
-    return CampaignReport(problem_id=problem.problem_id, stopped=stopped,
+    _deg = _record_degradation(store, problem, actor, say)
+    return CampaignReport(problem_id=problem.problem_id, stopped=stopped, degraded=_deg["degraded"], model_failures=_deg["model_failures"],
                           selected=[h.candidate for h in tested],
                           verdicts=verdicts,
                           recommendations=[m for m in messages
@@ -1271,7 +1298,12 @@ def _round_background(cfg, store, problem, tested, round_no, say, cache: dict) -
         return ""
     from proef.grounding import gather, library_secrets, value_strings
     public = {n.lower() for n in cfg.grounding_public_names}
-    protected = ({str(h.candidate) for h in tested if str(h.candidate).lower() not in public}
+    from proef.grounding import operator_names
+    named = {str(h.candidate) for h in tested if str(h.candidate).lower() not in public}
+    if cfg.grounding_names != "all":       # a name the model chose from its own knowledge is not the operator's private data
+        mine = {n.lower() for n in operator_names(cfg)}
+        named = {n for n in named if n.lower() in mine}
+    protected = (named
                  | library_secrets(cfg.candidates, cfg.grounding_public_names)
                  | {cfg.problem.problem_id or ""} | value_strings([h.observed_value for h in tested]))
     results = "\n".join(f"- {h.candidate}: {h.status}" + (f", observed {h.observed_value:g}" if h.observed_value is not None else "")

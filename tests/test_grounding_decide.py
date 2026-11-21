@@ -97,7 +97,8 @@ def _bg(model, tested, public=(), cache=None, **cfgkw):
     pm = Pubmed()
     cfg = NS(grounding_tools=("pubmed",), model=model, problem=ProblemStatement(objective="o", problem_id="prob-1"),
              knowledge_services={"pubmed": pm}, grounding_public_names=tuple(public), grounding_replay=None, candidates=cfgkw.pop("candidates", None),
-             grounding_decide=cfgkw.pop("grounding_decide", True), **cfgkw)
+             grounding_decide=cfgkw.pop("grounding_decide", True), grounding_names=cfgkw.pop("grounding_names", "operator"),
+             hypotheses=cfgkw.pop("hypotheses", None), **cfgkw)
     store = SqliteProvenanceStore(":memory:")
     return _round_background(cfg, store, cfg.problem, tested, 1, lambda m: None, {} if cache is None else cache), pm
 
@@ -108,11 +109,28 @@ def test_a_measured_value_in_a_query_never_reaches_the_network():
         assert pm.queries == [], q
 
 
-def test_a_private_candidate_name_is_blocked_and_a_declared_public_name_is_allowed():
-    _, pm = _bg(Asking("PRIV-7 binding"), _tested())
+def test_a_name_the_operator_supplied_is_blocked_and_a_declared_public_name_is_allowed():
+    cfgs = {"hypotheses": [{"candidate": "PRIV-7", "statement": "s"}]}
+    _, pm = _bg(Asking("PRIV-7 binding"), _tested(), **cfgs)
     assert pm.queries == []
-    _, pm = _bg(Asking("PRIV-7 binding"), _tested(), public=("priv-7",))
+    _, pm = _bg(Asking("PRIV-7 binding"), _tested(), public=("priv-7",), **cfgs)
     assert pm.queries == ["PRIV-7 binding"]
+
+
+def test_a_name_the_model_chose_from_its_own_knowledge_is_free_by_default_and_blocked_in_the_strict_setting():
+    """Found in the real experiment: the default blocked 10 queries that named a compound the model itself proposed (AZ191, PIK-75)."""
+    _, pm = _bg(Asking("AZ191 DYRK1B inhibitor"), _tested(cand="AZ191"))
+    assert pm.queries == ["AZ191 DYRK1B inhibitor"]
+    _, pm = _bg(Asking("AZ191 DYRK1B inhibitor"), _tested(cand="AZ191"), grounding_names="all")
+    assert pm.queries == []
+
+
+def test_a_measured_value_and_a_library_id_stay_protected_whatever_the_names_setting():
+    lib = [{"sample_id": "LIB-42"}]
+    _, pm = _bg(Asking("potency 20.9 uM kinase"), _tested(cand="AZ191"))
+    assert pm.queries == []
+    _, pm = _bg(Asking("LIB-42 solubility"), _tested(cand="AZ191"), candidates=lib)
+    assert pm.queries == []
 
 
 def test_value_strings_cover_the_ways_a_number_is_written():

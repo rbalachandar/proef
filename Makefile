@@ -11,6 +11,15 @@ install:            ## python package + web deps (in ./.venv — make targets us
 test:               ## full python suite
 	$(PY) -m pytest tests/ -q
 
+test-live:          ## adapters against the REAL services (network); also detects API drift against tests/fixtures/api
+	PROEF_LIVE=1 $(PY) -m pytest tests/live -q
+
+record-fixtures:    ## refresh the recorded real API responses (network)
+	$(PY) scripts/record_api_fixtures.py
+
+smoke-real:         ## one real-model campaign, asserting the invariants (uses model quota; needs PROEF_LLM_PRESET/MODEL)
+	$(PY) scripts/smoke_real_model.py
+
 reset-data:         ## back up then wipe local provenance + workbench state
 	./scripts/reset_data.sh
 

@@ -46,3 +46,4 @@ packages = ["src/proef"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = ["live: calls real outside services (PubMed, ChEMBL, Open Targets); runs only with PROEF_LIVE=1"]

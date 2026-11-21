@@ -40,6 +40,12 @@ def library_secrets(candidates, public=()) -> set[str]:
     return {x for x in out if len(x) >= 3}
 
 
+def operator_names(cfg) -> set[str]:
+    """Candidate names the OPERATOR supplied, as opposed to names a model chose from its own knowledge: those in a configured hypothesis list.
+    (A library's ids are covered by `library_secrets`.) A name the model proposed itself ('gefitinib') is the model's own public knowledge."""
+    return {str(h.get("candidate")) for h in (getattr(cfg, "hypotheses", None) or []) if isinstance(h, dict) and h.get("candidate")}
+
+
 def value_strings(values) -> set[str]:
     """The ways a measured number could be written in a query, so egress checking can refuse it (three characters or more)."""
     out: set[str] = set()

@@ -98,7 +98,7 @@ def _bg(model, tested, public=(), cache=None, **cfgkw):
     cfg = NS(grounding_tools=("pubmed",), model=model, problem=ProblemStatement(objective="o", problem_id="prob-1"),
              knowledge_services={"pubmed": pm}, grounding_public_names=tuple(public), grounding_replay=None, candidates=cfgkw.pop("candidates", None),
              grounding_decide=cfgkw.pop("grounding_decide", True), grounding_names=cfgkw.pop("grounding_names", "operator"),
-             hypotheses=cfgkw.pop("hypotheses", None), **cfgkw)
+             hypotheses=cfgkw.pop("hypotheses", None), blinding=cfgkw.pop("blinding", None), **cfgkw)
     store = SqliteProvenanceStore(":memory:")
     return _round_background(cfg, store, cfg.problem, tested, 1, lambda m: None, {} if cache is None else cache), pm
 

@@ -130,17 +130,15 @@ COMPUTE_NOTE = ("\n\nFor a compound with a structure listed above you may also r
                 "\"check_synthesis\"); it is kept only if that tool actually returned a result in this step.")
 
 
-def _structure_of(h, cfg) -> tuple[str, str] | None:
-    """(structure, where it came from) for a compound: the operator's library first (trusted), else what the model stated alongside a prediction request. The model's
-    own SMILES is a claim and is deliberately not written onto the hypothesis (structure-keyed logic must not trust it); it is kept only as the input of a
-    prediction, so the task says plainly that it is the model's claim."""
+def _structure_of(h, cfg, tracker=None) -> tuple[str, str] | None:
+    """(structure, where it came from) for a compound: the operator's library first (trusted), else the SMILES the model stated when it proposed the compound.
+    The model's own SMILES is a claim: it is not written onto the hypothesis (structure-keyed logic must not trust it) and is kept apart in
+    `tracker.claimed_structures`, so the task says plainly that it is the model's claim."""
     for c in getattr(cfg, "candidates", None) or []:
         if isinstance(c, dict) and str(c.get("sample_id") or c.get("id") or c.get("name") or "").lower() == str(h.candidate).lower() and c.get("smiles"):
             return str(c["smiles"]), "structure"
-    for p in (getattr(h, "metadata", None) or {}).get("predictions") or []:
-        if isinstance(p, dict) and p.get("input"):
-            return str(p["input"]), "structure as the model stated it"
-    return None
+    claimed = (getattr(tracker, "claimed_structures", None) or {}).get(h.candidate)
+    return (str(claimed), "structure as the model stated it") if claimed else None
 
 
 def ground_families(cfg, portfolio, tracker, store, actor, say, label: str | None = None) -> dict[str, dict]:
@@ -179,7 +177,7 @@ def ground_families(cfg, portfolio, tracker, store, actor, say, label: str | Non
                           scope=f"ground-{label or 'initial'}-{fid}", replay=getattr(cfg, "grounding_replay", None),
                           blinding=getattr(cfg, "blinding", None))
         f = info.get(fid, {})
-        structures = {str(h.candidate): _structure_of(h, cfg) for h in hyps}
+        structures = {str(h.candidate): _structure_of(h, cfg, tracker) for h in hyps}
         listed = ", ".join(f"{n} ({structures[n][1]}: {structures[n][0][:120]})" if structures.get(n) and compute else n for n in sorted(structures))[:600]
         task = GROUND_TASK.format(family=fid[:80], claim=str(f.get("parent_statement", ""))[:300], mechanism=str(f.get("mechanism", ""))[:300],
                                   compounds=listed, kinds="supports|contradicts|prior_measurement|already_known" + ("|prior" if compute else "")) + (COMPUTE_NOTE if compute else "")

@@ -259,6 +259,12 @@ def propose_families_with_agent(
                 "variables": v.get("variables", {}),
                 "protocol": sanitize_protocol(v.get("protocol")),
             }
+            if v.get("smiles"):
+                # the model's structure CLAIM, kept apart from the hypothesis and from any prediction: the ground step shows it (labelled as a claim) when it
+                # offers the compute tools, and nothing that selects or scores reads it
+                if not isinstance(getattr(tracker, "claimed_structures", None), dict):
+                    tracker.claimed_structures = {}
+                tracker.claimed_structures[spec["candidate"]] = str(v["smiles"])[:400]
             if tool_menu and (v.get("tools") or v.get("smiles")):
                 # the SMILES stays local to the prediction: it is the model's claim, so it is not written onto the
                 # hypothesis, where structure-keyed logic (series, applicability domain) would trust it

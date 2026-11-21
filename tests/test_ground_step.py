@@ -182,3 +182,97 @@ def test_a_model_that_hands_back_the_items_without_the_done_wrapper_is_not_throw
 def test_the_ground_task_states_the_exact_reply_shape():
     from proef.grounding import GROUND_TASK
     assert '{{"done": {{"items"' in GROUND_TASK and "EXACTLY this shape" in GROUND_TASK
+
+
+# ---- compute tools in the ground loop (a prior, never evidence) ----
+
+SMILES = "CC(=O)Oc1ccccc1C(=O)O"
+PRIOR_PLAN = {"families": [{"family": "f", "parent_statement": "claim", "kind": "mechanistic", "mechanism": "m", "refutation_condition": "No binding below 20 uM",
+                            "confidence": 0.6, "citation": "", "variants": [{"statement": "A binds", "candidate": "A", "assay_type": "binding", "predicted": "p",
+                                                                             "predicted_value": 20.0, "rationale": "x", "smiles": SMILES, "tools": ["admet-physchem"]}]}]}
+
+
+class PriorModel(Model):
+    """In the ground loop: read, run the predictor and the synthesis check on the compound's structure, then report one traced item and priors (one real tool, one invented)."""
+
+    def generate(self, inv, prompt, **kw):
+        if "TOOLS OFFERED IN THIS STEP" in prompt and "FAMILY:" in prompt:
+            self.prompts.append(prompt)
+            n = prompt.count("\nCALL {")
+            if n == 0:
+                out = {"tool": "pubmed_search", "args": {"query": "kinase activity"}}
+            elif n == 1 and "predict(" in prompt:
+                out = {"tool": "predict", "args": {"tool": "admet-physchem", "smiles": SMILES}}
+            elif n == 2 and "check_synthesis(" in prompt:
+                out = {"tool": "check_synthesis", "args": {"smiles": SMILES}}
+            else:
+                out = {"done": {"items": [{"kind": "supports", "claim": "a paper reports activity", "source": f"PMID {PMID}"},
+                                          {"kind": "prior", "claim": "Lipinski pass (a prior)", "source": "predict:admet-physchem"},
+                                          {"kind": "prior", "claim": "modelled as makeable (a prior)", "source": "check_synthesis"},
+                                          {"kind": "prior", "claim": "a model I never ran says it is potent", "source": "predict:invented-model"}]}}
+            return ToolResult(envelope=inv.envelope.model_copy(), invocation_id=inv.invocation_id, status="succeeded", output={"text": json.dumps(out)},
+                              model_version=self.model_version)
+        if "hypothesis lead" in prompt:
+            self.prompts.append(prompt)
+            return ToolResult(envelope=inv.envelope.model_copy(), invocation_id=inv.invocation_id, status="succeeded", output={"text": json.dumps(PRIOR_PLAN)},
+                              model_version=self.model_version)
+        return super().generate(inv, prompt, **kw)
+
+
+def _run_prior(tmp_path, compute=("predict", "synthesis")):
+    seen = []
+    store = SqliteProvenanceStore(str(tmp_path / "p.db"))
+    pm = Pubmed()
+    model = PriorModel()
+    cfg = CampaignConfig(problem=ProblemStatement(objective="o", constraints=[Constraint(name="potency", description="IC50 <= 20 uM", kind="hard", limit=20.0, unit="uM")]),
+                         hypothesis_source="agent", model=model, autonomy="gate", k=2, seed=1, inbox=str(tmp_path / "in"), poll_secs=0.05,
+                         flywheel=Flywheel(":memory:"), grounding_tools=("pubmed",), ground_hypotheses=True, ground_compute=compute, prediction_tools=["admet-physchem"],
+                         knowledge_services={"pubmed": pm}, plan_approver=lambda plan, pid: (seen.append(plan), PlanDecision(approved=True, by="t"))[1])
+    rep = run_campaign(cfg, SimulatorLab(seed=3), store, approver=lambda t: True, notify=lambda m: None)
+    return rep, store.branch_records(f"problem/{rep.problem_id}"), model, seen
+
+
+def test_a_prior_item_is_kept_only_if_that_compute_tool_returned_a_result_in_the_step():
+    items = [{"kind": "prior", "claim": "c", "source": "predict:admet-physchem"}, {"kind": "prior", "claim": "c", "source": "check_synthesis"},
+             {"kind": "prior", "claim": "c", "source": "predict:invented"}, {"kind": "prior", "claim": "c", "source": ""}]
+    kept, dropped = verify_items(items, [{"kind": "prediction", "tool": "admet-physchem", "status": "ok"}], tools_called=["predict"])
+    assert [k["source"] for k in kept] == ["predict:admet-physchem"] and len(dropped) == 3, "a predictor the step never ran is not a source"
+    assert all("no such compute tool" in d["reason"] for d in dropped)
+    assert verify_items([{"kind": "prior", "claim": "c", "source": "predict"}], [])[0] == [], "no tools called, no prior"
+    assert verify_items([{"kind": "supports", "claim": "c", "source": "PMID 7654321"}], [{"p": "7654321"}])[0], "literature items still trace to identifiers"
+
+
+def test_the_ground_loop_runs_the_compute_tools_on_the_compounds_structure_and_keeps_only_the_priors_a_tool_returned(tmp_path):
+    rep, recs, model, seen = _run_prior(tmp_path)
+    task = next(p for p in model.prompts if "FAMILY:" in p)
+    assert f"A (structure as the model stated it: {SMILES})" in task, "the model's own SMILES is labelled as its claim"
+    assert "PRIOR" in task and "never evidence" in task and 'already_known|prior"' in task
+    g = next(r.decision for r in recs if (r.decision or {}).get("kind") == "grounding")
+    assert [i["kind"] for i in g["items"]] == ["supports", "prior", "prior"] and g["n_dropped"] == 1 and g["tool_calls"] == 3
+    assert "invented" in json.dumps(g["dropped"])
+    sealed = [r.decision for r in recs if (r.decision or {}).get("kind") == "tool_result" and r.decision["tool"] in ("predict", "check_synthesis")]
+    assert {d["tool"] for d in sealed} == {"predict", "check_synthesis"} and all(d["scope"].startswith("ground-initial-") for d in sealed), "sealed under the ground scope"
+    calls = [r.decision for r in recs if (r.decision or {}).get("kind") == "tool_call" and r.decision["class"] == "compute"]
+    assert [c["status"] for c in calls] == ["ok", "ok"]
+    fam = seen[0]["families"][0]["grounding"]["items"]
+    assert [i["kind"] for i in fam] == ["supports", "prior", "prior"], "the plan a person reviews carries the priors, labelled as priors"
+    from proef.api.v1.schemas import Plan
+    assert Plan.model_validate(seen[0]).families[0].grounding.items[1].kind == "prior"
+    assert audit_campaign(recs) == []
+
+
+def test_without_the_switch_the_compute_tools_are_not_offered_in_the_ground_loop_and_a_prior_is_dropped(tmp_path):
+    rep, recs, model, _ = _run_prior(tmp_path, compute=())
+    task = next(p for p in model.prompts if "FAMILY:" in p)
+    assert "structure as the model stated it" not in task and 'already_known|prior"' not in task and "COMPOUNDS: A\n" in task
+    menu = task.split("TOOLS OFFERED IN THIS STEP")[1].split("Reply ONLY")[0]
+    assert "predict(" not in menu and "check_synthesis(" not in menu
+    g = next(r.decision for r in recs if (r.decision or {}).get("kind") == "grounding")
+    assert [i["kind"] for i in g["items"]] == ["supports"] and g["n_dropped"] == 3
+
+
+def test_a_campaign_that_used_compute_in_the_ground_loop_replays_from_the_ledger_with_no_model_and_no_network(tmp_path):
+    from proef.reproduce import reproduce
+    rep, recs, model, _ = _run_prior(tmp_path)
+    out = reproduce(f"problem/{rep.problem_id}", db_path=str(tmp_path / "p.db"), inbox=str(tmp_path / "rin"))
+    assert out.get("status") == "match", out

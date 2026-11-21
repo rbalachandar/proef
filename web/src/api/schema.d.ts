@@ -1662,10 +1662,10 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "supports" | "contradicts" | "prior_measurement" | "already_known";
+            kind: "supports" | "contradicts" | "prior_measurement" | "already_known" | "prior";
             /**
              * Source
-             * @description the PMID, ChEMBL id or Ensembl id of a tool result this run retrieved
+             * @description the PMID, ChEMBL id or Ensembl id of a tool result this run retrieved; for a `prior`, the compute tool that returned it (a prior is never evidence)
              * @default
              */
             source: string;

@@ -52,7 +52,7 @@ class World:
 
     def _plan(self, prompt, cites):
         grounded = "BACKGROUND READ" in prompt
-        variants = [{"statement": f"{n} binds", "candidate": n, "assay_type": "binding", "predicted": "p", "predicted_value": 20.0, "rationale": "x"}
+        variants = [{"statement": f"{n} binds", "candidate": n, "assay_type": "binding", "predicted": "p", "predicted_value": 20.0, "rationale": "x", "tools": ["admet-physchem"], "smiles": "CCO"}
                     for n in NAMES]
         variants.append({"statement": "fisetin binds", "candidate": "fisetin", "assay_type": "binding", "predicted": "p", "predicted_value": 5.0,
                          "rationale": "x"} if grounded else {"statement": "afatinib binds", "candidate": "afatinib", "assay_type": "binding",
@@ -70,8 +70,13 @@ class World:
             if "FAMILY:" in prompt:       # the ground step: look, then offer one item that traces to what was read and one that does not
                 if "\nRESULT {" not in prompt:
                     return self._out(inv, {"tool": "pubmed_search", "args": {"query": "kinase activity"}})
-                return self._out(inv, {"done": {"items": [{"kind": "supports", "claim": "a paper reports activity", "source": f"PMID {PAPER}"},
-                                                         {"kind": "contradicts", "claim": "invented", "source": "PMID 9999999"}]}})
+                if "predict(" in prompt and '"tool": "predict"' not in prompt.split("SO FAR")[-1]:
+                    return self._out(inv, {"tool": "predict", "args": {"tool": "admet-physchem", "smiles": "CCO"}})
+                items = [{"kind": "supports", "claim": "a paper reports activity", "source": f"PMID {PAPER}"},
+                         {"kind": "contradicts", "claim": "invented", "source": "PMID 9999999"}]
+                if "predict(" in prompt:
+                    items.append({"kind": "prior", "claim": "Lipinski pass (a prior)", "source": "predict:admet-physchem"})
+                return self._out(inv, {"done": {"items": items}})
             if "\nRESULT {" not in prompt:
                 return self._out(inv, {"tool": "pubmed_search", "args": {"query": "kinase assay interference" if decide else "DYRK1B inhibitor"}})
             tail = prompt.split("SO FAR")[-1]
@@ -130,8 +135,8 @@ def normal(tmp_path_factory):
 
 @pytest.fixture(scope="module")
 def compute_ground(tmp_path_factory):
-    """Arm E (compute tools at propose) and arm F (the ground step), once."""
-    return _suite(tmp_path_factory.mktemp("eg"), arms="EF")
+    """Arm E (compute tools at propose), arm F (the ground step) and arm G (the ground step with compute tools), once."""
+    return _suite(tmp_path_factory.mktemp("eg"), arms="EFG")
 
 
 @pytest.fixture(scope="module")
@@ -467,3 +472,16 @@ def test_the_analysis_and_report_handle_a_set_of_runs_with_only_the_new_arms(com
     assert res["Q1_recent_knowledge"]["met"] is None and res["Q4_safety"]["met"] is None, "no A, B, C or D runs: those questions are not answered"
     text = X.render(res)
     assert "Arm E: compute tools at propose" in text and "Arm F: the ground step" in text
+
+
+def test_arm_G_the_ground_loop_runs_the_compute_tools_and_the_prior_is_kept_labelled_as_a_prior(compute_ground):
+    _, runs = compute_ground
+    g = next(r for r in runs if r["arm"] == "G")
+    calls = [c for lp in g["loops"] if lp["state"] == "ground" for c in lp["calls"]]
+    assert any(c["tool"] == "predict" and c["status"] == "ok" for c in calls), "the model called the predictor inside the ground loop"
+    assert all("prior" in [i["kind"] for i in x["items"]] for x in g["grounding"]), "each family keeps its prior"
+    res = X.compute_and_ground(runs)
+    assert res["G_compute"]["runs_that_called_compute"] == 1 and res["G_compute"]["by_tool"]["predict"] == len(g["grounding"])
+    assert res["G_ground"]["kinds"]["prior"] == len(g["grounding"]) and res["G_ground"]["traced_share"] is not None
+    assert "prior" not in res["F_ground"]["kinds"], "arm F offers no compute tools, so no prior can be kept there"
+    assert "Arm G: compute tools in the ground loop" in X.render(X.analyze(runs))

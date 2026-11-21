@@ -13,7 +13,7 @@ from typing import Any
 
 # the identifiers a claim can rest on: PubMed ids, ChEMBL ids, Ensembl gene ids, DOIs
 _ID = re.compile(r"CHEMBL\d+|ENSG\d{6,}|10\.\d{4,9}/[^\s;,]+|(?<![\w.])\d{6,9}(?![\w.])", re.I)
-KINDS = ("supports", "contradicts", "prior_measurement", "already_known")
+KINDS = ("supports", "contradicts", "prior_measurement", "already_known", "prior")      # "prior": what a prediction or synthesis tool returned, never evidence
 
 
 def ids_in(text: Any) -> list[str]:
@@ -32,11 +32,24 @@ def traces(source: Any, bodies: list[Any]) -> bool:
     return bool(ids) and any(i.lower() in hay for i in ids)
 
 
-def verify_items(items: Any, bodies: list[Any], max_items: int = 8) -> tuple[list[dict], list[dict]]:
-    """Split a model's grounding items into (kept, dropped). Kept: a known kind, a claim, and a source that traces to a result of
-    this run. Dropped carry the reason, so a person can see what was refused and why. Text is bounded."""
+def _prior_ok(source: str, called: set[str], bodies: list[Any]) -> bool:
+    """A `prior` source names a compute tool that returned a result in this step: "check_synthesis", "predict", or "predict:<predictor>" where the predictor is
+    one a `predict` result in this step actually names."""
+    head, _, sub = source.partition(":")
+    if head.strip() not in called:
+        return False
+    if sub.strip():
+        return sub.strip() in {b.get("tool") for b in bodies if isinstance(b, dict) and b.get("kind") == "prediction"}
+    return True
+
+
+def verify_items(items: Any, bodies: list[Any], max_items: int = 8, tools_called: tuple[str, ...] | list[str] = ()) -> tuple[list[dict], list[dict]]:
+    """Split a model's grounding items into (kept, dropped). Kept: a known kind, a claim, and a source that traces to a result of this run. For a literature or
+    database item the source is an identifier in a retrieved result; for a `prior` item it is the NAME of a compute tool that actually returned a result in
+    this loop ("predict", "predict:admet-physchem", "check_synthesis"). Dropped items carry the reason, so a person can see what was refused and why."""
     kept: list[dict] = []
     dropped: list[dict] = []
+    called = {str(t) for t in tools_called}
     for it in (items if isinstance(items, list) else [])[: max_items * 2]:
         if not isinstance(it, dict):
             dropped.append({"reason": "not an object"})
@@ -46,7 +59,9 @@ def verify_items(items: Any, bodies: list[Any], max_items: int = 8) -> tuple[lis
             dropped.append({"kind": kind, "claim": claim, "reason": f"kind must be one of {', '.join(KINDS)}"})
         elif not claim:
             dropped.append({"kind": kind, "reason": "no claim"})
-        elif not traces(source, bodies):
+        elif kind == "prior" and not _prior_ok(source, called, bodies):
+            dropped.append({"kind": kind, "claim": claim, "source": source, "reason": "no such compute tool returned a result in this step"})
+        elif kind != "prior" and not traces(source, bodies):
             dropped.append({"kind": kind, "claim": claim, "source": source, "reason": "its source is not in any result this run retrieved"})
         elif len(kept) < max_items:
             kept.append({"kind": kind, "claim": claim, "source": source})

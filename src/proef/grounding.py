@@ -118,11 +118,29 @@ GROUND_TASK = ("A research plan has proposed this family of hypotheses. Before a
                "SUPPORTS it, evidence that CONTRADICTS it, PRIOR MEASUREMENTS of its compounds, and whether the idea is ALREADY KNOWN.\n\n"
                "FAMILY: {family}\nCLAIM: {claim}\nMECHANISM: {mechanism}\nCOMPOUNDS: {compounds}\n\n"
                "When you have looked, reply with EXACTLY this shape, a JSON object under the key done (not a string):\n"
-               '  {{"done": {{"items": [{{"kind": "supports|contradicts|prior_measurement|already_known", "claim": "one sentence", '
+               '  {{"done": {{"items": [{{"kind": "{kinds}", "claim": "one sentence", '
                '"source": "the PMID, ChEMBL id or Ensembl id of the tool result it comes from"}}]}}}}\n'
                "Include only what you can point to in a tool result you received in this step. An item with no such source is thrown away. "
                "If you found nothing, return an empty list: that is a useful answer. Never put a measured value or this campaign's own "
                "identifiers in a query.")
+
+
+COMPUTE_NOTE = ("\n\nFor a compound with a structure listed above you may also run a prediction tool on it or check whether it can be made. What they return is a PRIOR "
+                "with uncertainty, never evidence. To report one, use kind \"prior\" with the tool's name as the source (for example \"predict:admet-physchem\" or "
+                "\"check_synthesis\"); it is kept only if that tool actually returned a result in this step.")
+
+
+def _structure_of(h, cfg) -> tuple[str, str] | None:
+    """(structure, where it came from) for a compound: the operator's library first (trusted), else what the model stated alongside a prediction request. The model's
+    own SMILES is a claim and is deliberately not written onto the hypothesis (structure-keyed logic must not trust it); it is kept only as the input of a
+    prediction, so the task says plainly that it is the model's claim."""
+    for c in getattr(cfg, "candidates", None) or []:
+        if isinstance(c, dict) and str(c.get("sample_id") or c.get("id") or c.get("name") or "").lower() == str(h.candidate).lower() and c.get("smiles"):
+            return str(c["smiles"]), "structure"
+    for p in (getattr(h, "metadata", None) or {}).get("predictions") or []:
+        if isinstance(p, dict) and p.get("input"):
+            return str(p["input"]), "structure as the model stated it"
+    return None
 
 
 def ground_families(cfg, portfolio, tracker, store, actor, say, label: str | None = None) -> dict[str, dict]:
@@ -145,13 +163,26 @@ def ground_families(cfg, portfolio, tracker, store, actor, say, label: str | Non
         cat = ToolCatalog()
         for k in cfg.grounding_tools:
             cat.register(KNOWLEDGE_TOOLS[k]())
+        enabled = set(names)
+        compute = tuple(getattr(cfg, "ground_compute", ()) or ())
+        if "predict" in compute:
+            from proef.predictors import DEFAULT
+            from proef.tools import predict_tool
+            cat.register(predict_tool(getattr(cfg, "prediction_registry", None) or DEFAULT, cfg.prediction_tools, cfg.modality))
+            enabled.add("predict")
+        if "synthesis" in compute:
+            from proef.tools import synthesis_tool
+            cat.register(synthesis_tool())
+            enabled.add("check_synthesis")
         ctx = ToolContext(state="propose", autonomy="act", store=store, actor=system_actor("grounding"), branch=f"problem/{pid}",
-                          services=cfg.knowledge_services, enabled=names, egress_ok=set(names), protected=protected, max_tool_calls=8,
+                          services=cfg.knowledge_services, enabled=enabled, egress_ok=set(names), protected=protected, max_tool_calls=8,
                           scope=f"ground-{label or 'initial'}-{fid}", replay=getattr(cfg, "grounding_replay", None),
                           blinding=getattr(cfg, "blinding", None))
         f = info.get(fid, {})
+        structures = {str(h.candidate): _structure_of(h, cfg) for h in hyps}
+        listed = ", ".join(f"{n} ({structures[n][1]}: {structures[n][0][:120]})" if structures.get(n) and compute else n for n in sorted(structures))[:600]
         task = GROUND_TASK.format(family=fid[:80], claim=str(f.get("parent_statement", ""))[:300], mechanism=str(f.get("mechanism", ""))[:300],
-                                  compounds=", ".join(sorted({str(h.candidate) for h in hyps}))[:300])
+                                  compounds=listed, kinds="supports|contradicts|prior_measurement|already_known" + ("|prior" if compute else "")) + (COMPUTE_NOTE if compute else "")
         res = ToolLoop(cfg.model, cat, ctx, max_steps=6, done_chars=4000, done_keys=("items",)).run(task)
         parsed = {}
         if res.done:
@@ -162,7 +193,8 @@ def ground_families(cfg, portfolio, tracker, store, actor, say, label: str | Non
                 parsed = json.loads(m.group(0)) if m else {}
             except ValueError:
                 parsed = {}
-        kept, dropped = verify_items(parsed.get("items") if isinstance(parsed, dict) else None, [r["body"] for r in res.results])
+        kept, dropped = verify_items(parsed.get("items") if isinstance(parsed, dict) else None, [r["body"] for r in res.results],
+                                     tools_called=[r["tool"] for r in res.results])
         out[fid] = {"items": kept, "dropped": len(dropped), "calls": len(res.results), "stopped": res.stopped}
         store.append(record_for(Envelope(experiment_branch_id=f"problem/{pid}"), EventType.gate_decision, actor, decision={
             "kind": "grounding", "advisory": True, "family": fid, "stage": label or "initial", "items": kept, "dropped": dropped[:8],

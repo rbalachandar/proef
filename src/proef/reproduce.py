@@ -275,7 +275,7 @@ def _agent_cfg(cfg, env: dict, responses: list[dict], plan_decisions: list[dict]
         # the original's selection scores, by hypothesis id (ids are a hash of the statement, candidate and round, so a replay
         # that gets the same answers makes the same ids)
         score_fn=(lambda h: first_score.get(h.hypothesis_id, 0.5) - explanatory_bonus(h)) if first_score else None,
-        grounding_tools=tuple(env.get("grounding_tools") or ()), ground_hypotheses=bool(env.get("ground_hypotheses")), grounding_decide=bool(env.get("grounding_decide", True)), grounding_names=env.get("grounding_names") or "all",
+        grounding_tools=tuple(env.get("grounding_tools") or ()), ground_hypotheses=bool(env.get("ground_hypotheses")), ground_compute=tuple(env.get("ground_compute") or ()), grounding_decide=bool(env.get("grounding_decide", True)), grounding_names=env.get("grounding_names") or "all",
         blinding=({"exclude": [], "cutoff": env["blinding"].get("cutoff"), "off_tools": env["blinding"].get("off_tools") or []} if env.get("blinding") else None), loop_compute=tuple(env.get("loop_compute") or ()),
         grounding_public_names=tuple(env.get("grounding_public_names") or ()), grounding_replay=_sealed_tool_results(sealed_tools or []),
         flywheel=_FrozenFlywheel(gen_contexts)), rm

@@ -210,9 +210,9 @@ class PlanPrediction(BaseModel):
 
 
 class GroundingItem(BaseModel):
-    kind: Literal["supports", "contradicts", "prior_measurement", "already_known"]
+    kind: Literal["supports", "contradicts", "prior_measurement", "already_known", "prior"]
     claim: str
-    source: str = Field("", description="the PMID, ChEMBL id or Ensembl id of a tool result this run retrieved")
+    source: str = Field("", description="the PMID, ChEMBL id or Ensembl id of a tool result this run retrieved; for a `prior`, the compute tool that returned it (a prior is never evidence)")
 
 
 class PlanGrounding(BaseModel):

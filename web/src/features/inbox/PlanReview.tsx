@@ -152,7 +152,9 @@ export function PlanReview({ item, compact }: { item: Item; compact?: boolean })
                     ? <p className="text-muted">Nothing found that traces to a source.</p>
                     : <ul className="space-y-0.5">{f.grounding.items.map((g, i) => (
                         <li key={i} className="flex flex-wrap items-baseline gap-1.5">
-                          <Tag tone={g.kind === 'contradicts' ? 'bad' : g.kind === 'supports' ? 'ok' : undefined}>{g.kind.replace('_', ' ')}</Tag>
+                          {g.kind === 'prior'
+                            ? <Tag title="What a prediction or synthesis tool returned for this compound: a prior with uncertainty, never evidence. Only a measurement judges a hypothesis.">prior · not evidence</Tag>
+                            : <Tag tone={g.kind === 'contradicts' ? 'bad' : g.kind === 'supports' ? 'ok' : undefined}>{g.kind.replace('_', ' ')}</Tag>}
                           <span>{g.claim}</span> <span className="num text-xs text-faint">{g.source}</span>
                         </li>))}
                       </ul>}

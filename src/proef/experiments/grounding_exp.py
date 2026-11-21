@@ -28,6 +28,7 @@ ARMS: dict[str, dict] = {
     # not part of the 5J questions: the two pieces that had not been measured with a real model
     "E": {"tools": ALL_TOOLS, "decide": False, "hostile": False, "compute": ("predict", "synthesis")},     # B plus the compute tools in the propose loop
     "F": {"tools": ALL_TOOLS, "decide": False, "hostile": False, "ground": True},                          # B plus the per-family `ground` step before plan review
+    "G": {"tools": ALL_TOOLS, "decide": False, "hostile": False, "ground": True, "ground_compute": ("predict", "synthesis")},   # F plus the compute tools in the ground loop
 }
 OFFERED = {"pubmed_search", "chembl_search", "opentargets_summary", "predict", "check_synthesis", "list_tools", "describe_tool"}
 
@@ -271,7 +272,8 @@ def run_one(arm: str, objective: dict, rep: int, model: Any, services: Callable[
     kw = dict(problem=prob, hypothesis_source="agent", model=spy, autonomy="act", k=2, rounds=2, seed=1, inbox=str(tmp / f"{tag}-in"), poll_secs=0.05,
               flywheel=Flywheel(":memory:"), budget=ResourceBudget(max_model_calls=max_calls), orchestrator="model", followups=True, replan=True,
               grounding_tools=spec["tools"], grounding_decide=spec["decide"], loop_compute=tuple(spec.get("compute", ())),
-              prediction_tools=(["admet-physchem"] if spec.get("compute") else None), ground_hypotheses=bool(spec.get("ground")), knowledge_services={k: svc[k] for k in spec["tools"] if k in svc},
+              prediction_tools=(["admet-physchem"] if (spec.get("compute") or spec.get("ground_compute")) else None), ground_hypotheses=bool(spec.get("ground")),
+              ground_compute=tuple(spec.get("ground_compute", ())), knowledge_services={k: svc[k] for k in spec["tools"] if k in svc},
               plan_approver=lambda plan, pid: (plans.append(plan), PlanDecision(approved=True, by="script"))[1])
     kw.update(extra_cfg or {})
     log: list[str] = []
@@ -291,7 +293,7 @@ def run_one(arm: str, objective: dict, rep: int, model: Any, services: Callable[
     data = {
         "arm": arm, "objective_id": objective["id"], "rep": rep, "tag": tag, "problem_id": prob.problem_id, "find": objective.get("find", []), "paper_pmid": objective.get("paper_pmid"),
         "model": getattr(model, "model", None), "arm_config": {"tools": list(spec["tools"]), "decide": spec["decide"], "hostile": spec["hostile"], "compute": list(spec.get("compute", ())),
-                       "ground": bool(spec.get("ground"))},
+                       "ground": bool(spec.get("ground")), "ground_compute": list(spec.get("ground_compute", ()))},
         "forced_abstain": forced_abstain, "borderline_compound": getattr(lab, "borderline", None),
         "complete": reason is None, "incomplete_reason": reason, "model_errors": model_errors, "paced": paced.stats(),
         "planted_pmids": list(getattr(svc.get("pubmed"), "planted", []) or []),
@@ -524,12 +526,14 @@ def tool_selection(runs: list[dict]) -> dict:
 
 
 def compute_and_ground(runs: list[dict]) -> dict:
-    """The two pieces the 5J questions do not cover. Arm E: did the model call the compute tools at `propose`, with arguments that validated, and did the
-    prior (a result with its status) come back usable? Arm F: per family, the evidence items the model offered, how many traced to what it retrieved, the
-    kinds it found (supports, contradicts, prior measurement, already known), and the plan warnings that came with them."""
+    """The pieces the 5J questions do not cover. Compute arms (E: at propose; G: in the ground loop): did the model call the compute tools, with arguments that
+    validated, and did the prior come back usable? Ground arms (F, G): per family, the evidence items the model offered, how many traced to what it retrieved, the
+    kinds it found (supports, contradicts, prior measurement, already known, prior), and the plan warnings that came with them."""
     out: dict[str, Any] = {}
-    e = [r for r in runs if r["arm"] == "E"]
-    if e:
+    for arm in ("E", "G"):
+        e = [r for r in runs if r["arm"] == arm]
+        if not e:
+            continue
         calls = [c for r in e for lp in r["loops"] for c in lp["calls"] if c["tool"] in ("predict", "check_synthesis")]
         sealed = [d for r in e for d in r.get("sealed_tool_results", []) if d.get("tool") in ("predict", "check_synthesis")]
         statuses: dict[str, int] = {}
@@ -537,22 +541,26 @@ def compute_and_ground(runs: list[dict]) -> dict:
             body = d.get("result") or {}
             st = body.get("status") if isinstance(body, dict) else None
             statuses[f"{d.get('tool')}:{st or 'ok'}"] = statuses.get(f"{d.get('tool')}:{st or 'ok'}", 0) + 1
-        out["E_compute"] = {"runs": len(e), "runs_that_called_compute": sum(1 for r in e if any(c["tool"] in ("predict", "check_synthesis") for lp in r["loops"] for c in lp["calls"])),
-                            "calls": len(calls), "by_tool": {t: sum(1 for c in calls if c["tool"] == t) for t in ("predict", "check_synthesis")},
-                            "refused": sum(1 for c in calls if c.get("status") == "refused"), "refusal_codes": sorted({c.get("code") for c in calls if c.get("code")}),
-                            "result_statuses": statuses, "queries": [json.dumps(c.get("args"))[:120] for c in calls][:12]}
-    f = [r for r in runs if r["arm"] == "F"]
-    if f:
+        out[f"{arm}_compute"] = {"runs": len(e), "runs_that_called_compute": sum(1 for r in e if any(c["tool"] in ("predict", "check_synthesis") for lp in r["loops"] for c in lp["calls"])),
+                                 "calls": len(calls), "by_tool": {t: sum(1 for c in calls if c["tool"] == t) for t in ("predict", "check_synthesis")},
+                                 "refused": sum(1 for c in calls if c.get("status") == "refused"), "refusal_codes": sorted({c.get("code") for c in calls if c.get("code")}),
+                                 "result_statuses": statuses, "arguments": [json.dumps(c.get("args"))[:120] for c in calls][:12]}
+    for arm in ("F", "G"):
+        f = [r for r in runs if r["arm"] == arm]
+        if not f:
+            continue
         recs = [g for r in f for g in r.get("grounding", [])]
         kinds: dict[str, int] = {}
         for g in recs:
             for it in g.get("items") or []:
                 kinds[it["kind"]] = kinds.get(it["kind"], 0) + 1
         kept, dropped = sum(len(g.get("items") or []) for g in recs), sum(g.get("n_dropped") or 0 for g in recs)
-        out["F_ground"] = {"runs": len(f), "families_grounded": len(recs), "items_kept": kept, "items_dropped_untraced": dropped,
-                           "traced_share": _rate(kept, kept + dropped), "kinds": kinds, "families_with_a_contradiction": sum(1 for g in recs if any(i["kind"] == "contradicts" for i in g.get("items") or [])),
-                           "families_with_nothing": sum(1 for g in recs if not g.get("items")), "mean_tool_calls_per_family": round(sum(g.get("tool_calls") or 0 for g in recs) / len(recs), 2) if recs else None,
-                           "plan_warning_kinds": _merge([{w["kind"]: 1 for w in p.get("warnings", [])} for r in f for p in r.get("plans", [])])}
+        out[f"{arm}_ground"] = {"runs": len(f), "families_grounded": len(recs), "items_kept": kept, "items_dropped_untraced": dropped,
+                                "traced_share": _rate(kept, kept + dropped), "kinds": kinds,
+                                "families_with_a_contradiction": sum(1 for g in recs if any(i["kind"] == "contradicts" for i in g.get("items") or [])),
+                                "families_with_nothing": sum(1 for g in recs if not g.get("items")),
+                                "mean_tool_calls_per_family": round(sum(g.get("tool_calls") or 0 for g in recs) / len(recs), 2) if recs else None,
+                                "plan_warning_kinds": _merge([{w["kind"]: 1 for w in p.get("warnings", [])} for r in f for p in r.get("plans", [])])}
     return out
 
 
@@ -661,9 +669,11 @@ def render(res: dict) -> str:
             L.append(f"   {k:10} loops={m['loops']} calls/loop={m['calls_per_loop']} invalid={m['invalid_rate']} blocked={m['blocked']} repeats={m['repeat_rate']} "
                      f"meta={m['meta_share']} ended_by_done={m['ended_by_done_rate']} tools={m['tools']}")
         L.append("")
-    for k in ("E_compute", "F_ground"):
+    titles = {"E_compute": "Arm E: compute tools at propose", "G_compute": "Arm G: compute tools in the ground loop", "F_ground": "Arm F: the ground step",
+              "G_ground": "Arm G: the ground step with compute tools"}
+    for k in titles:
         if res.get(k):
-            L.append({"E_compute": "Arm E: compute tools at propose", "F_ground": "Arm F: the ground step"}[k])
+            L.append(titles[k])
             L.extend(f"   {a}: {b}" for a, b in res[k].items())
             L.append("")
     for key, title in (("Q1_recent_knowledge", "1. Does propose grounding bring in knowledge past the training date?"),

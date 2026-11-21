@@ -76,6 +76,7 @@ class CampaignConfig:
     knowledge_services: dict[str, Any] = field(default_factory=dict)   # the adapters behind them, e.g. {'pubmed': PubMedAdapter()}
     grounding_decide: bool = True          # with grounding_tools: also read about a round's open results at the decision point (False: `propose` only)
     loop_compute: tuple[str, ...] = ()     # compute tools a model may call BEFORE it proposes: 'predict' (the enabled prediction tools) and/or 'synthesis'
+    ground_compute: tuple[str, ...] = ()   # compute tools the ground step may use on a family's compounds ('predict', 'synthesis'): priors, never evidence
     ground_hypotheses: bool = False        # before plan review, look for evidence for and against each family (needs grounding_tools)
     blinding: dict | None = None           # a blinded study withholds from the knowledge tools: {'exclude': [held-out names, ids, structures], 'cutoff': 'YYYY/MM/DD', 'off_tools': [...]}
     grounding_names: str = "operator"     # which candidate names a query may not contain: 'operator' = those the operator supplied (library, configured hypotheses);
@@ -931,7 +932,7 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
         "hypothesis_source": cfg.hypothesis_source, "followups": cfg.followups, "replan": cfg.replan,
         "max_families": cfg.max_families, "max_variants_per_family": cfg.max_variants_per_family,
         "modality": cfg.modality, "prediction_tools": list(cfg.prediction_tools or []),
-        "grounding_tools": list(cfg.grounding_tools or []), "ground_hypotheses": cfg.ground_hypotheses, "grounding_decide": cfg.grounding_decide, "grounding_names": cfg.grounding_names, "blinding": _blinding_summary(cfg.blinding), "loop_compute": list(cfg.loop_compute or []),
+        "grounding_tools": list(cfg.grounding_tools or []), "ground_hypotheses": cfg.ground_hypotheses, "ground_compute": list(cfg.ground_compute or []), "grounding_decide": cfg.grounding_decide, "grounding_names": cfg.grounding_names, "blinding": _blinding_summary(cfg.blinding), "loop_compute": list(cfg.loop_compute or []),
         "grounding_public_names": list(cfg.grounding_public_names or []),
         "critic": cfg.critic_model is not None, "plan_review": cfg.plan_approver is not None,
         "orchestrator": cfg.orchestrator if isinstance(cfg.orchestrator, str) else "custom",

@@ -672,6 +672,12 @@ the model call the right tool at the right stage" had no answer. Order of work:
       the saved menu). The design reading: at that step no compound has been chosen, so there is no structure to predict on. Compounds exist after the proposal, so the better home for these
       tools is the `ground` loop, whose task can list each compound's structure; not built, not measured. The existing path (the model names tools inside its proposal and the registry runs them
       for plan review) is unchanged.
+- [x] **Compute tools in the `ground` loop** (`CampaignConfig.ground_compute`, arm G; built because the model used none at the pre-proposal step, where no compound exists yet).
+      The ground loop for a family can also run `predict` and `check_synthesis`, and its task lists each compound's structure: the operator's library structure when there is one, else
+      the SMILES the model stated beside a prediction request, labelled "as the model stated it" (the code deliberately never writes a model's SMILES onto a hypothesis, so structure-keyed logic
+      does not trust it). A new evidence kind, `prior`, reports what a compute tool returned; the engine keeps it only if that tool (and, for `predict:<predictor>`, that predictor) actually
+      returned a result in this step, and the plan labels it "prior · not evidence" (the workbench tag and the API schema carry it). Sealed under the ground scope, so a replay needs no model
+      and no tool. `tests/test_ground_step.py`, `tests/test_grounding_experiment.py` (arm G on a scripted model), `web/src/test/plan.test.tsx`. Not yet measured with a real model.
 - [ ] Web search tool (needs a provider and an operator choice of which) and a sub-agent tool (critic exists as `critic_model`, not
       as a catalog tool).
 - [x] **Real-model tool-selection measurement** *(done offline from the 16 saved campaigns, `grounding_exp.tool_selection`, no quota)* (opt-in, costs money, asked first): per stage, which tool the model picked, whether a

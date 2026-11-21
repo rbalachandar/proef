@@ -49,6 +49,19 @@ describe('plan review', () => {
     expect(g).toHaveTextContent('2 further claims not shown: no source in anything the model retrieved')
   })
 
+  it('labels a prediction or synthesis estimate as a prior and not evidence, so it is never read as support', () => {
+    const p = plan([]) as unknown as { families: { grounding?: object }[] }
+    p.families[0].grounding = { calls: 3, dropped: 0, items: [
+      { kind: 'prior', claim: 'Lipinski pass', source: 'predict:admet-physchem' },
+      { kind: 'supports', claim: 'a paper reports activity', source: 'PMID 7654321' }] }
+    wrap(<PlanReview item={{ id: 'x', title: 't', ts: 1, plan: p as never }} />)
+    const g = screen.getByTestId('grounding')
+    expect(g).toHaveTextContent('prior · not evidence')
+    expect(g).toHaveTextContent('Lipinski pass')
+    expect(g).toHaveTextContent('predict:admet-physchem')
+    expect(g).toHaveTextContent('supports')
+  })
+
   it('flags a citation the run never retrieved, without calling it fake', () => {
     wrap(<PlanReview item={{ id: 'x', title: 't', ts: 1, plan: plan([{ kind: 'untraced_citation', family: 'atp_site', citation: 'PMID 1111111', citation_status: 'verified' }]) }} />)
     const note = screen.getByRole('note')

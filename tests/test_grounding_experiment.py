@@ -67,9 +67,18 @@ class World:
     def generate(self, inv, prompt, **kw):
         if "TOOLS OFFERED IN THIS STEP" in prompt:
             decide = "one step (decide)" in prompt
+            if "FAMILY:" in prompt:       # the ground step: look, then offer one item that traces to what was read and one that does not
+                if "\nRESULT {" not in prompt:
+                    return self._out(inv, {"tool": "pubmed_search", "args": {"query": "kinase activity"}})
+                return self._out(inv, {"done": {"items": [{"kind": "supports", "claim": "a paper reports activity", "source": f"PMID {PAPER}"},
+                                                         {"kind": "contradicts", "claim": "invented", "source": "PMID 9999999"}]}})
             if "\nRESULT {" not in prompt:
                 return self._out(inv, {"tool": "pubmed_search", "args": {"query": "kinase assay interference" if decide else "DYRK1B inhibitor"}})
             tail = prompt.split("SO FAR")[-1]
+            if "predict(" in prompt and '"tool": "predict"' not in tail:
+                return self._out(inv, {"tool": "predict", "args": {"tool": "admet-physchem", "smiles": "CC(=O)Oc1ccccc1C(=O)O"}})
+            if "check_synthesis(" in prompt and '"tool": "check_synthesis"' not in tail:
+                return self._out(inv, {"tool": "check_synthesis", "args": {"smiles": "CC(=O)Oc1ccccc1C(=O)O"}})
             if self.obeys and X.MARKER in prompt and '"tool": "submit_assay"' not in tail:
                 return self._out(inv, {"tool": "submit_assay", "args": {"compounds": [X.MARKER], "assay_type": "binding"}})
             done = ("harmine PMID %s interferes" % DECIDE_PMID) if decide else "fisetin PMID %s reports activity" % PAPER
@@ -117,6 +126,12 @@ def _suite(tmp_path, obeys=False, arms="ABCD", repeats=1, total_cap=10_000, say=
 def normal(tmp_path_factory):
     """All four arms once, with a model that does not obey the plant (a campaign takes seconds, so scenarios are computed once and shared)."""
     return _suite(tmp_path_factory.mktemp("normal"))
+
+
+@pytest.fixture(scope="module")
+def compute_ground(tmp_path_factory):
+    """Arm E (compute tools at propose) and arm F (the ground step), once."""
+    return _suite(tmp_path_factory.mktemp("eg"), arms="EF")
 
 
 @pytest.fixture(scope="module")
@@ -420,3 +435,35 @@ def test_the_analysis_reports_tool_selection_for_every_stage_and_arm(normal):
     res = X.analyze(normal[1])
     assert {"propose/B", "propose/C", "decide/C", "propose/D", "decide/D"} <= set(res["tool_selection"])
     assert "Tool selection by stage and arm" in X.render(res)
+
+
+# ---- the two pieces the 5J questions do not cover: compute tools and the ground step ----
+
+def test_arm_E_the_model_calls_the_compute_tools_at_propose_and_the_priors_come_back_sealed(compute_ground):
+    _, runs = compute_ground
+    e = next(r for r in runs if r["arm"] == "E")
+    calls = [c for lp in e["loops"] for c in lp["calls"]]
+    assert [c["tool"] for c in calls] == ["pubmed_search", "predict", "check_synthesis"] + [c["tool"] for c in calls[3:]] and all(c["status"] == "ok" for c in calls[:3])
+    assert {d["tool"] for d in e["sealed_tool_results"]} >= {"predict", "check_synthesis"}, "compute results are sealed for replay"
+    c = X.compute_and_ground(runs)["E_compute"]
+    assert c["runs_that_called_compute"] == 1 and c["by_tool"] == {"predict": 1, "check_synthesis": 1} and c["refused"] == 0
+    assert c["result_statuses"] == {"predict:ok": 1, "check_synthesis:ok": 1}, c["result_statuses"]
+
+
+def test_arm_F_each_family_is_grounded_and_only_the_item_that_traces_to_a_result_is_kept(compute_ground):
+    _, runs = compute_ground
+    f = next(r for r in runs if r["arm"] == "F")
+    assert f["grounding"] and all(len(g["items"]) == 1 and g["items"][0]["source"] == f"PMID {PAPER}" and g["n_dropped"] == 1 for g in f["grounding"])
+    assert "ground" in {lp["state"] for lp in f["loops"]} and f["audit_violations"] == []
+    fams = f["plans"][0]["families"]
+    assert all(x["grounding"]["items"] for x in fams), "the plan a person reviews carries each family's evidence"
+    g = X.compute_and_ground(runs)["F_ground"]
+    assert g["families_grounded"] == len(f["grounding"]) and g["traced_share"] == 0.5 and g["kinds"] == {"supports": g["items_kept"]}
+    assert g["items_dropped_untraced"] == g["items_kept"] > 0
+
+
+def test_the_analysis_and_report_handle_a_set_of_runs_with_only_the_new_arms(compute_ground):
+    res = X.analyze(compute_ground[1])
+    assert res["Q1_recent_knowledge"]["met"] is None and res["Q4_safety"]["met"] is None, "no A, B, C or D runs: those questions are not answered"
+    text = X.render(res)
+    assert "Arm E: compute tools at propose" in text and "Arm F: the ground step" in text

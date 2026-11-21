@@ -53,8 +53,8 @@ class LoopResult:
 
 class ToolLoop:
     def __init__(self, model: Any, catalog: ToolCatalog, ctx: ToolContext, max_steps: int = 12, repeat_limit: int = 2,
-                 max_bad_outputs: int = 2, done_chars: int = 500):
-        self.done_chars = done_chars
+                 max_bad_outputs: int = 2, done_chars: int = 500, done_keys: tuple[str, ...] = ()):
+        self.done_chars, self.done_keys = done_chars, tuple(done_keys)
         self.model, self.catalog, self.ctx = model, catalog, ctx
         self.max_steps, self.repeat_limit, self.max_bad = max_steps, repeat_limit, max_bad_outputs
 
@@ -80,6 +80,16 @@ class ToolLoop:
                 out.steps.append({"error": f"{type(exc).__name__}: {str(exc)[:120]}"})
                 return out
             call = self._parse(raw)
+            if call is None and self.done_keys:
+                # a model that was asked for a structured result may hand back the result itself instead of wrapping it in {"done": ...}. Seen in a real run: the
+                # ground step's whole answer, {"items": [...]}, was thrown away as malformed. Accept exactly the keys this caller expects, and only then.
+                m = re.search(r"\{.*\}", str(raw), re.S)
+                try:
+                    d = json.loads(m.group(0)) if m else None
+                except (json.JSONDecodeError, ValueError):
+                    d = None
+                if isinstance(d, dict) and "tool" not in d and any(k in d for k in self.done_keys):
+                    call = {"done": d}
             if call is None:
                 bad += 1
                 out.steps.append({"status": "bad_output"})

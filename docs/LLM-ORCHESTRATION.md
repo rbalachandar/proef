@@ -662,6 +662,16 @@ the model call the right tool at the right stage" had no answer. Order of work:
       caught because the model made no such mistakes in this sample; one summary honestly reported that its first query "was refused". The two new fixture categories (`unsupported_value`,
       `claimed_refused`) include real-text items and are no longer untouched. `unsupported_value` first scored recall 0.71 (below the 0.80 bar) on a wrong-compound case; `misattributed_value`
       was added after seeing it, which is recorded in the fixture readme. A value written in words ("forty nM") is a documented, uncaught limit.
+- [x] **First real-model runs of the compute tools (arm E) and the ground step (arm F)** (Nov 21, `gpt-6-luna`, DYRK1B, one campaign each; 34 + 20 model calls).
+      **Ground step: a real bug found and fixed.** The model researched well (5 searches on EHT5372) and on its last step returned its whole answer as `{"items": [...]}` instead of
+      `{"done": {...}}`; the loop treated it as malformed and discarded every item. Fixed two ways: the task states the exact reply shape, and `ToolLoop(done_keys=("items",))` accepts a bare
+      object carrying exactly the keys a caller expects (the protocol is otherwise unchanged; tested). After the fix: 4 items kept, all traced to retrieved results, 0 dropped, kinds supports 1,
+      prior measurement 2, already known 1, no contradiction found; one item is the 2026 fisetin paper (PMID 43005627, IC50 1.2 uM), so the person reviewing the plan sees it even though
+      the model did not propose fisetin. The plan carries the grounding. One family, one run: this shows the step works, not how often it finds a contradiction.
+      **Compute tools in the pre-proposal loop: the model used none** (5 knowledge calls; `predict` and `check_synthesis` were on the menu and the task mentioned them). Not a wiring bug (checked
+      the saved menu). The design reading: at that step no compound has been chosen, so there is no structure to predict on. Compounds exist after the proposal, so the better home for these
+      tools is the `ground` loop, whose task can list each compound's structure; not built, not measured. The existing path (the model names tools inside its proposal and the registry runs them
+      for plan review) is unchanged.
 - [ ] Web search tool (needs a provider and an operator choice of which) and a sub-agent tool (critic exists as `critic_model`, not
       as a catalog tool).
 - [x] **Real-model tool-selection measurement** *(done offline from the 16 saved campaigns, `grounding_exp.tool_selection`, no quota)* (opt-in, costs money, asked first): per stage, which tool the model picked, whether a

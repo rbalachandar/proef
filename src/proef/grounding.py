@@ -117,9 +117,9 @@ def gather(model, problem, store, services: dict, tools: tuple[str, ...], egress
 GROUND_TASK = ("A research plan has proposed this family of hypotheses. Before a person reviews it, use the tools to look for: evidence that "
                "SUPPORTS it, evidence that CONTRADICTS it, PRIOR MEASUREMENTS of its compounds, and whether the idea is ALREADY KNOWN.\n\n"
                "FAMILY: {family}\nCLAIM: {claim}\nMECHANISM: {mechanism}\nCOMPOUNDS: {compounds}\n\n"
-               "When you have looked, reply done with ONE JSON object (not a string):\n"
-               '  {{"items": [{{"kind": "supports|contradicts|prior_measurement|already_known", "claim": "one sentence", '
-               '"source": "the PMID, ChEMBL id or Ensembl id of the tool result it comes from"}}]}}\n'
+               "When you have looked, reply with EXACTLY this shape, a JSON object under the key done (not a string):\n"
+               '  {{"done": {{"items": [{{"kind": "supports|contradicts|prior_measurement|already_known", "claim": "one sentence", '
+               '"source": "the PMID, ChEMBL id or Ensembl id of the tool result it comes from"}}]}}}}\n'
                "Include only what you can point to in a tool result you received in this step. An item with no such source is thrown away. "
                "If you found nothing, return an empty list: that is a useful answer. Never put a measured value or this campaign's own "
                "identifiers in a query.")
@@ -152,7 +152,7 @@ def ground_families(cfg, portfolio, tracker, store, actor, say, label: str | Non
         f = info.get(fid, {})
         task = GROUND_TASK.format(family=fid[:80], claim=str(f.get("parent_statement", ""))[:300], mechanism=str(f.get("mechanism", ""))[:300],
                                   compounds=", ".join(sorted({str(h.candidate) for h in hyps}))[:300])
-        res = ToolLoop(cfg.model, cat, ctx, max_steps=6, done_chars=4000).run(task)
+        res = ToolLoop(cfg.model, cat, ctx, max_steps=6, done_chars=4000, done_keys=("items",)).run(task)
         parsed = {}
         if res.done:
             import json

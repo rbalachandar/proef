@@ -154,3 +154,31 @@ def test_the_plan_api_schema_accepts_grounding_and_the_untraced_citation_warning
     assert p.families[0].citation_traced is False
     w = next(w for w in p.warnings if w.kind == "untraced_citation")
     assert w.family == "f" and w.candidate == ""
+
+
+def test_a_model_that_hands_back_the_items_without_the_done_wrapper_is_not_thrown_away():
+    """Seen in the first real run of the ground step: the model's whole answer, {"items": [...]}, was discarded as malformed on its last step."""
+    from proef.adapters.store.sqlite import SqliteProvenanceStore
+    from proef.core.interfaces import system_actor
+    from proef.toolloop import ToolLoop
+    from proef.tools import ToolCatalog, ToolContext, pubmed_tool
+    cat = ToolCatalog()
+    cat.register(pubmed_tool())
+
+    class Bare(Model):
+        def generate(self, inv, prompt, **kw):
+            text = ({"tool": "pubmed_search", "args": {"query": "kinase"}} if "\nRESULT {" not in prompt else ITEMS)     # the object itself, no "done"
+            return ToolResult(envelope=inv.envelope.model_copy(), invocation_id=inv.invocation_id, status="succeeded", output={"text": json.dumps(text)})
+
+    def ctx():
+        return ToolContext(state="propose", autonomy="act", store=SqliteProvenanceStore(":memory:"), actor=system_actor("t"), branch="t",
+                           services={"pubmed": Pubmed()}, egress_ok={"pubmed_search"})
+    res = ToolLoop(Bare(), cat, ctx(), done_keys=("items",)).run("t")
+    assert res.done and json.loads(res.done)["items"][0]["source"] == f"PMID {PMID}" and res.stopped is None
+    strict = ToolLoop(Bare(), cat, ctx(), max_bad_outputs=0).run("t")
+    assert strict.done is None and strict.stopped == "bad_output", "without the keys a caller expects, a bare object is still malformed (the protocol is unchanged)"
+
+
+def test_the_ground_task_states_the_exact_reply_shape():
+    from proef.grounding import GROUND_TASK
+    assert '{{"done": {{"items"' in GROUND_TASK and "EXACTLY this shape" in GROUND_TASK

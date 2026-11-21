@@ -38,13 +38,13 @@ class Searcher(F.Model):
         return super().generate(inv, prompt, **kw)
 
 
-def _grounded(tmp_path, tools=("pubmed",), rounds=2, **kw):
+def _grounded(tmp_path, tools=("pubmed",), rounds=2, grounding_decide=True, **kw):
     store = SqliteProvenanceStore(str(tmp_path / "prov.db"))
     model, pm = Searcher(F._answer, **kw), Pubmed()
     cfg = CampaignConfig(problem=ProblemStatement(objective="o", constraints=[Constraint(name="potency", description="IC50 <= 20 uM", kind="hard", limit=20.0, unit="uM")]),
                          hypothesis_source="agent", model=model, autonomy="act", k=8, max_families=8, rounds=rounds, seed=1, followups=True,
                          inbox=str(tmp_path / "inbox"), poll_secs=0.05, flywheel=Flywheel(":memory:"),
-                         budget=ResourceBudget(max_total_runs=50, max_hypotheses_total=30), grounding_tools=tools,
+                         budget=ResourceBudget(max_total_runs=50, max_hypotheses_total=30), grounding_tools=tools, grounding_decide=grounding_decide,
                          knowledge_services={"pubmed": pm})
     report = run_campaign(cfg, SimulatorLab(seed=3), store, approver=lambda t: True, notify=lambda m: None)
     return report, store, store.branch_records(f"problem/{report.problem_id}"), model, pm
@@ -96,7 +96,8 @@ def _tested(value=20.883, cand="PRIV-7"):
 def _bg(model, tested, public=(), cache=None, **cfgkw):
     pm = Pubmed()
     cfg = NS(grounding_tools=("pubmed",), model=model, problem=ProblemStatement(objective="o", problem_id="prob-1"),
-             knowledge_services={"pubmed": pm}, grounding_public_names=tuple(public), grounding_replay=None, candidates=cfgkw.pop("candidates", None), **cfgkw)
+             knowledge_services={"pubmed": pm}, grounding_public_names=tuple(public), grounding_replay=None, candidates=cfgkw.pop("candidates", None),
+             grounding_decide=cfgkw.pop("grounding_decide", True), **cfgkw)
     store = SqliteProvenanceStore(":memory:")
     return _round_background(cfg, store, cfg.problem, tested, 1, lambda m: None, {} if cache is None else cache), pm
 
@@ -182,3 +183,21 @@ def test_a_private_librarys_ids_are_protected_at_decide_too():
     assert pm.queries == []
     _, pm = _bg(Asking("CC(=O)Oc1ccccc1C(=O)O solubility"), _tested(cand="other"), candidates=lib)
     assert pm.queries == []
+
+
+def test_the_decide_switch_turns_only_the_decide_reading_off_and_a_replay_agrees(tmp_path):
+    from proef.reproduce import reproduce
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    report, store, recs, model, pm = _grounded(tmp_path / "a", grounding_decide=False)
+    assert pm.queries == ["EGFR"], "read at propose, not at decide"
+    assert not [r for r in recs if (r.decision or {}).get("scope", "").startswith("decide")]
+    fu = next(p for p in model.prompts if "ABSTAINED HYPOTHESES" in p)
+    assert "BACKGROUND READ AFTER ROUND" not in fu and not any("one step (decide)" in p for p in model.loop_prompts)
+    env = next(r.decision["environment"] for r in recs if (r.decision or {}).get("environment"))
+    assert env["grounding_decide"] is False
+    out = reproduce(f"problem/{report.problem_id}", db_path=str(tmp_path / "a" / "prov.db"), inbox=str(tmp_path / "rin"))
+    assert out.get("status") == "match", out
+    assert pm.queries == ["EGFR"], "and the replay called no adapter"
+    on = _grounded(tmp_path / "b")
+    assert on[4].queries == ["EGFR", DECIDE_Q], "the default still reads at decide"

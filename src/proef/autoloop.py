@@ -74,6 +74,7 @@ class CampaignConfig:
     prediction_tools: list[str] | None = None   # prediction tools the operator enables (priors, never evidence)
     grounding_tools: tuple[str, ...] = ()  # knowledge tools (pubmed, chembl, opentargets) a model may use BEFORE it proposes; () = off
     knowledge_services: dict[str, Any] = field(default_factory=dict)   # the adapters behind them, e.g. {'pubmed': PubMedAdapter()}
+    grounding_decide: bool = True          # with grounding_tools: also read about a round's open results at the decision point (False: `propose` only)
     loop_compute: tuple[str, ...] = ()     # compute tools a model may call BEFORE it proposes: 'predict' (the enabled prediction tools) and/or 'synthesis'
     ground_hypotheses: bool = False        # before plan review, look for evidence for and against each family (needs grounding_tools)
     grounding_public_names: tuple[str, ...] = ()   # candidate names the operator says are public, so a query may contain them; others are blocked
@@ -892,7 +893,7 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
         "hypothesis_source": cfg.hypothesis_source, "followups": cfg.followups, "replan": cfg.replan,
         "max_families": cfg.max_families, "max_variants_per_family": cfg.max_variants_per_family,
         "modality": cfg.modality, "prediction_tools": list(cfg.prediction_tools or []),
-        "grounding_tools": list(cfg.grounding_tools or []), "ground_hypotheses": cfg.ground_hypotheses, "loop_compute": list(cfg.loop_compute or []),
+        "grounding_tools": list(cfg.grounding_tools or []), "ground_hypotheses": cfg.ground_hypotheses, "grounding_decide": cfg.grounding_decide, "loop_compute": list(cfg.loop_compute or []),
         "grounding_public_names": list(cfg.grounding_public_names or []),
         "critic": cfg.critic_model is not None, "plan_review": cfg.plan_approver is not None,
         "orchestrator": cfg.orchestrator if isinstance(cfg.orchestrator, str) else "custom",
@@ -1255,7 +1256,7 @@ def _round_background(cfg, store, problem, tested, round_no, say, cache: dict) -
     """Outside information for this round's decision (`decide` grounding): read ONCE per round, whoever asks first (a model
     orchestrator, the follow-up or the re-plan), and cached. Empty when grounding is off, when there is nothing open, or when the
     model-call budget has only the reserve left. The round's measured values and its private candidate names never go in a query."""
-    if not cfg.grounding_tools or cfg.model is None:
+    if not cfg.grounding_tools or cfg.model is None or not cfg.grounding_decide:
         return ""
     if round_no in cache:
         return cache[round_no]

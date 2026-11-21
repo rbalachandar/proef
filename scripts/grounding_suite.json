@@ -1,0 +1,9 @@
+{
+ "rule": "Second paper chosen before any data by a fixed rule: from the PubMed query '(novel[Title]) AND (inhibitor[Title]) AND (IC50[Abstract]) AND (kinase[Title/Abstract] OR enzyme[Title/Abstract]) NOT review[pt]' restricted to 2026/10/15-2026/11/19, the most recent peer-reviewed small-molecule inhibitor paper with an IC50 in its abstract, after the first paper. Preprints (Res Sq) excluded.",
+ "objectives": [
+  {"id": "dyrk1b", "objective": "Find a confirmed sub-20uM DYRK1B kinase inhibitor with potential in ovarian cancer",
+   "context": "No candidate list: the model proposes mechanistic families and variants", "paper_pmid": "43005627", "find": ["fisetin"]},
+  {"id": "pi3k_cdk7", "objective": "Find a confirmed sub-20uM dual PI3Kalpha/CDK7 inhibitor for cancer treatment",
+   "context": "No candidate list: the model proposes mechanistic families and variants", "paper_pmid": "42468711", "find": ["hy5", "hy3"]}
+ ]
+}

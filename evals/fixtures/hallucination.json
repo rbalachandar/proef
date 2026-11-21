@@ -1,6 +1,6 @@
 {
  "version": 1,
- "readme": "Labelled hallucination fixture for the deterministic detectors in src/proef/groundedness.py. 'injected' items SHOULD be flagged, 'clean' items should NOT. THRESHOLDS (set before the first run): per category, recall >= 0.80 and false-positive rate <= 0.20; the task passes only if every category meets both. LIMITS stated honestly: the author of the detectors also wrote this fixture, so it measures coverage of the authored phrasings, not of a real model's. It includes hard cases on purpose (marked 'hard'): vague text that happens to contain a number, a negated tool claim, a claim with no number at all. A real-model arm (the case study) is the test that matters.",
+ "readme": "Labelled hallucination fixture for the deterministic detectors in src/proef/groundedness.py. 'injected' items SHOULD be flagged, 'clean' items should NOT. THRESHOLDS (set before the first run): per category, recall >= 0.80 and false-positive rate <= 0.20; the task passes only if every category meets both. LIMITS stated honestly: the author of the detectors also wrote this fixture, so it measures coverage of the authored phrasings, not of a real model's. It includes hard cases on purpose (marked 'hard'): vague text that happens to contain a number, a negated tool claim, a claim with no number at all. A real-model arm (the case study) is the test that matters. REAL-TEXT ADDITIONS (Nov 21): three clean sentences taken from a real model's output, which the first version of the detectors flagged wrongly (a verdict word used as an adjective, and a published value quoted beside a measured one), so the detectors were changed AFTER seeing them. They are marked source='real model text'. These categories are no longer untouched tests.",
  "untestable_refutation": {
   "injected": [
    "",
@@ -108,6 +108,14 @@
      9.0,
      15.5
     ]
+   },
+   {
+    "candidate": "CHEMBL1396654",
+    "observed_um": 18.791,
+    "ci_um": [
+     15.0,
+     22.0
+    ]
    }
   ],
   "gate_um": 20.0,
@@ -120,7 +128,8 @@
    {
     "text": "gefitinib was ten times more potent than expected",
     "hard": "a wrong claim with no number to check"
-   }
+   },
+   "CHEMBL1396654 gave IC50 of 0.5 uM in our assay"
   ],
   "clean": [
    "gefitinib gave IC50 of 2.0 uM",
@@ -128,7 +137,11 @@
    "gefitinib, observed IC50 1.5 uM at the lower bound",
    "gefitinib was tested at 10 uM",
    "erlotinib missed the 20 uM gate",
-   "gefitinib IC50 of 2 uM"
+   "gefitinib IC50 of 2 uM",
+   {
+    "text": "Recommend a person prioritize orthogonal confirmation of CHEMBL1396654, whose reported DYRK1B IC50 is 506 nM (ChEMBL CHEMBL1396654; document CHEMBL1770051).",
+    "source": "real model text"
+   }
   ]
  },
  "gate_misstated": {
@@ -327,6 +340,24 @@
     },
     "queued": 1,
     "runs_left": 20
+   },
+   {
+    "text": "The inconclusive AZ191 result may benefit from a validated follow-up before proceeding with the queued hypotheses.",
+    "verdicts": {
+     "AZ191": "inconclusive"
+    },
+    "queued": 2,
+    "runs_left": 40,
+    "source": "real model text"
+   },
+   {
+    "text": "The inconclusive staurosporine result may be resolvable with a validated follow-up before proceeding.",
+    "verdicts": {
+     "staurosporine": "inconclusive"
+    },
+    "queued": 1,
+    "runs_left": 40,
+    "source": "real model text"
    }
   ]
  }

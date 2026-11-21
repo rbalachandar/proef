@@ -197,3 +197,63 @@ def test_an_orchestrators_reason_is_checked_against_the_state_it_was_shown(tmp_p
     ch = [r.decision for r in store.branch_records(f"problem/{rep.problem_id}") if (r.decision or {}).get("kind") == "orchestrator_choice"]
     assert ch and ch[0]["chosen"] == "next_round" and ch[0]["source"] == "model"
     assert [f["kind"] for f in ch[0]["flags"]] == ["state_runs_left"] and ch[0]["flags"][0]["claimed"] == 999
+
+
+# ---- found by running the detectors on a real model's orchestrator text (Nov 21 experiment) ----
+
+def test_a_verdict_word_used_as_an_adjective_is_not_a_claim_about_the_candidate():
+    v = {"AZ191": "inconclusive"}
+    assert g.state_claims("The inconclusive AZ191 result may benefit from a validated follow-up before proceeding.", v) == []
+    assert g.state_claims("AZ191 needs a confirmed assay.", v) == []
+    assert [x["claimed"] for x in g.state_claims("AZ191 was validated, so proceed.", v)] == ["validated"], "a real wrong claim is still caught"
+    assert g.state_claims("AZ191 remains inconclusive.", v) == []
+
+
+def test_a_published_value_quoted_beside_a_measured_one_is_not_a_misquote_but_a_wrong_measurement_still_is():
+    f = [{"candidate": "CHEMBL1396654", "observed_um": 18.791, "ci_um": None}]
+    assert g.quoted_number_problems("Prioritize CHEMBL1396654, whose reported DYRK1B IC50 is 506 nM (ChEMBL CHEMBL1396654).", f) == []
+    assert g.quoted_number_problems("CHEMBL1396654 gave IC50 of 0.5 uM", f)[0]["quoted_um"] == 0.5
+
+
+def test_a_chembl_id_citation_is_resolved_at_chembl_and_a_missing_one_is_invalid_not_unreachable(tmp_path):
+    import json as _json
+    import urllib.error
+    from pathlib import Path
+    from unittest import mock
+
+    from proef import citations
+    with mock.patch.object(citations, "CACHE", Path(tmp_path) / "c.json"):
+        ok = citations.verify("CHEMBL428690; PMID 1", lambda url: _json.dumps({"chembl_id": "CHEMBL428690", "entity_type": "COMPOUND"}).encode()
+                              if "chembl_id_lookup/CHEMBL428690" in url else b"{}")
+        assert citations.parse("CHEMBL3038473; CHEMBL3055") == ("chembl", "CHEMBL3038473")
+        assert ok["status"] == "verified" and ok["kind"] == "chembl"
+
+        def missing(url):
+            raise urllib.error.HTTPError(url, 404, "Not Found", None, None)
+        assert citations.verify("CHEMBL999999999", missing)["status"] == "invalid"
+
+        def down(url):
+            raise urllib.error.HTTPError(url, 503, "Unavailable", None, None)
+        assert citations.verify("CHEMBL1", down)["status"] == "check-failed", "an outage is not evidence of a fake citation"
+
+
+def test_digits_inside_a_chembl_id_are_not_read_as_a_pmid_and_a_multi_id_citation_needs_every_id_to_resolve(tmp_path):
+    import json as _json
+    from pathlib import Path
+    from unittest import mock
+
+    from proef import citations
+    assert citations.parse("CHEMBL428690; PMID 1") == ("chembl", "CHEMBL428690"), "428690 is part of the ChEMBL id, not a PMID"
+    assert citations.parse("CHEMBL296468; CHEMBL428690; PMID:23528858") == ("pmid", "23528858")
+    assert citations.parse("23528858") == ("pmid", "23528858") and citations.parse("PMID 43005627") == ("pmid", "43005627")
+    assert citations.ids_of("PMID 43005627; PMID: 23528858; CHEMBL428690, 10.1056/NEJMoa1411817.") == [
+        ("pmid", "43005627"), ("pmid", "23528858"), ("chembl", "CHEMBL428690"), ("doi", "10.1056/NEJMoa1411817")]
+
+    def fetch(url):
+        if "esummary" in url:
+            pid = url.split("id=")[1].split("&")[0]
+            return _json.dumps({"result": {pid: {"title": "t", "pubdate": "2020", "source": "J"}}} if pid == "23528858" else {"result": {}}).encode()
+        return _json.dumps({"chembl_id": "CHEMBL428690", "entity_type": "COMPOUND"}).encode()
+    with mock.patch.object(citations, "CACHE", Path(tmp_path) / "c.json"):
+        assert citations.verify_each("PMID 23528858; CHEMBL428690", fetch)["status"] == "verified"
+        assert citations.verify_each("PMID 23528858; PMID 99999999", fetch)["status"] == "invalid", "one fabricated id makes the citation invalid"

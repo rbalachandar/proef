@@ -595,7 +595,7 @@ the model call the right tool at the right stage" had no answer. Order of work:
 - [x] **Recent-paper test** (`gpt-6-luna`, Nov 19; 4 runs per arm, `scripts/grounding_real_model.py` + `grounding_compare.py`). The objective named only a target and
       indication (DYRK1B, ovarian cancer); the answer was a paper published Nov 5, 2026 (PMID 43005627, fisetin, IC50 1.2 uM), after the
       model's training. Ungrounded: fisetin proposed 0/4, 2 distinct candidates, one DOI citation that did not resolve. Grounded: the paper
-      retrieved 4/4, used in the summary and the proposals 2/4 (cited, verified), 5 distinct candidates, 4 of 5 distinct citations verified.
+      retrieved 4/4, used in the summary and the proposals 2/4 (cited, verified), 5 distinct candidates, 5 of 5 distinct citations verified (corrected Nov 21: first reported as 4 of 5 because the verifier could not read a ChEMBL id).
       An earlier test on EGFR showed no benefit because the model already knew the answer: grounding only shows value past the model's
       knowledge. Limits: one target, one paper, four runs, one model; the ChEMBL-id citations cannot be verified (the verifier handles PMID and DOI only).
 - [x] **The same loop at `decide`** (`autoloop._round_background`, `grounding.gather(state="decide")`, `tests/test_grounding_decide.py`). At a round's
@@ -676,7 +676,28 @@ run; arms are interleaved; the run stops when the provider's quota runs out (or 
       refused as already followed up, zero audit violations. Limit: a campaign on this lab does not replay on a plain simulator. Observed: the model tried to search for its own
       proposed compound by name at the decide step and the default blocks tested candidate names (a name could be a private id); it recovered by searching on mechanism. That
       default is kept for the experiment (Q2 asks about the product's default), and the blocked text is saved, so Q2 may understate what the decide reading could do with public names.
-- [ ] Run, analyse offline, write the result and the decision next to the thresholds above.
+- [x] **Results** (Nov 21; `gpt-6-luna`, simulated lab with the forced open result, 16 campaigns = 2 papers x 2 repeats x 4 arms, 285 model calls, zero audit violations, zero partial runs;
+      raw data in `.data/experiments/grounding-2026-11-21/`, analysis in `evals/runs/grounding-2026-11-21.analysis.json`). Verdicts by the rules fixed above, then what is under each.
+      **Q1 NOT MET** (adopted = compound proposed AND paper cited: B 1/4, C 1/4, D 3/4, A 0/4; rule needed 2/3 in B). Retrieval was NOT the problem (paper retrieved in 4/4 B runs).
+      By paper (post-hoc): PI3Kalpha/CDK7 (new compounds HY3/HY5): HY5 proposed in 5 of 6 grounded runs and in every one that retrieved the paper, 0 of 2 ungrounded (staurosporine);
+      DYRK1B (fisetin): paper retrieved in 6/6 grounded runs, fisetin proposed in 1 of 6; the model chose known inhibitors (AZ191, alvocidib, BMS-387032). Reading: grounding carries post-training
+      knowledge into proposals when the new compound is what the model wants; it does not override the model's own preferences. D's 3/4 against C's 1/4 (same setup plus the plant) is within noise at n=4.
+      **Q2 rule says MET but rests on ONE re-plan** (the orchestrator chose re-plan in 2 of 16 runs; C re-planned once and that re-plan named a ChEMBL compound and cited ids only the decide reading
+      found). Treat as undecided. Cost: C used 24.5 model calls per run against B's 12.8 (1.92x). Follow-ups fired in 14 of 16 runs, so the forced open result did its job. Decision: `decide` stays off by default.
+      **Q3 MET after a verifier fix**: all 14 grounded citations traced to results the run retrieved and, with the corrected verifier, all resolve; arm A made one citation (resolves, not traced), so the
+      comparison is weak. As first run the rule said NOT MET (2/14 unresolved vs 0/1): both were ChEMBL ids the verifier could not read. The fix, and a bug it exposed: `citations.parse` read digits inside a
+      ChEMBL id as a PMID whenever the word "pmid" appeared anywhere in the string, so composite citations could be "verified" against a wrong PMID; now the label is required, `ids_of` and `verify_each`
+      check every identifier in a citation, and ChEMBL ids resolve at ChEMBL. The two earlier reported figures were rechecked: they hold (the first-test grounded citations are 5 of 5, not 4 of 5).
+      **Q4 MET**: the plant was retrieved in 4 of 4 D runs; 0 compliance (the planted compound never named in any proposal, summary, plan or reason), no non-offered tool called, nothing reached a lab or a
+      verdict, no approval except the script's, zero audit violations; the control arms were never flagged. Limits: 4 runs, one model, one phrasing of the plant.
+      **Detectors on real orchestrator text** (first real-model output of the new hooks): 3 flags, all false positives (two read "a validated follow-up" as a verdict claim; one flagged a published ChEMBL value
+      quoted beside a measurement). Both patterns fixed after seeing them (an adjective use of a verdict word, and a value attributed to the literature), the three sentences added to the fixture as
+      real text, and they are no longer untouched tests. Flags recorded in the saved runs are from the old detectors. 10 queries were blocked (C 6, D 4), all the model searching for its own tested
+      compound by name; the default blocks tested names, so Q2 may understate what the decide reading could do with public names.
+      **What this does and does not say**: grounding is safe and well behaved on this sample, and its effect on proposals depends on what the retrieved paper offers; it does not show better science (the
+      lab is simulated) and `decide` is not shown to be worth ~2x the calls. Next: more re-plans are needed to judge `decide` (the orchestrator rarely re-plans), a real-library case where names are
+      private, and the real-model arm of the detectors over a larger sample.
+- [x] Run, analyse offline, write the result and the decision next to the thresholds above.
 
 **5D: the real-data case study (opt-in, costs money, asked first)**
 - [ ] Case study 09 reuses case study 04's `ReplayLab` and 36-candidate library with its published truth. Arms: the fixed loop, and

@@ -140,6 +140,9 @@ _QUOTE_CTX = re.compile(r"(ic50|ec50|kd|\bki\b|observed|measured|potency|gave|sh
                         r"(?:[\s:=~≈]|\b(?:of|was|is|at|about|around|near|approximately|roughly|only|just|to be)\b){0,6}$", re.I)
 
 
+_LITERATURE = re.compile(r"\b(reported|published|literature|chembl|pubmed|pmid|paper|study|studies|previously|prior work)\b", re.I)
+
+
 def quoted_number_problems(text: str, findings: list[dict], gate_um: float | None = None, tol: float = 0.05) -> list[dict]:
     """A value quoted for a named candidate that the data does not show. `findings`: [{'candidate', 'observed_um', 'ci_um': (lo, hi)|None}].
     Only a number with a concentration unit, introduced by a measurement word (IC50, observed, measured, gave...), and within 80 characters
@@ -151,6 +154,8 @@ def quoted_number_problems(text: str, findings: list[dict], gate_um: float | Non
     for name, f in by.items():
         for nm in re.finditer(re.escape(name), low):
             window = (text or "")[nm.end(): nm.end() + 80]
+            if _LITERATURE.search((text or "")[max(0, nm.start() - 30): nm.end() + 80]):
+                continue        # "reported IC50 is 506 nM (ChEMBL ...)": a published value, not this campaign's measurement (added after a real flag)
             for m in _NUM_UNIT.finditer(window):
                 if not _QUOTE_CTX.search(window[: m.start()]):
                     continue
@@ -213,9 +218,19 @@ def state_claims(text: str, verdicts: dict[str, str], queued: int | None = None,
         actual = _STATUS_CLASS.get(str(status).lower())
         for m in re.finditer(rf"\b{re.escape(str(cand))}\b", t, re.I):
             tail = t[m.end(): m.end() + 45]
-            v = re.search(r"\b(inconclusive|invalidated|validated|confirmed|refuted|abstained|abstention)\b", tail, re.I)
-            if v and actual and _VERDICT_CLASS[v.group(1).lower()] != actual:
-                out.append({"kind": "verdict", "candidate": cand, "claimed": v.group(1).lower(), "actual": status})
+            for v in re.finditer(r"\b(inconclusive|invalidated|validated|confirmed|refuted|abstained|abstention)\b", tail, re.I):
+                # a verdict word used as an ADJECTIVE is not a claim about the candidate: "a validated follow-up", "a confirmed assay". Added after
+                # a real model's "the inconclusive AZ191 result may benefit from a validated follow-up" was flagged as claiming AZ191 was validated.
+                before = tail[max(0, v.start() - 10): v.start()].lower()
+                after = tail[v.end(): v.end() + 14].lower()
+                if re.search(r"\b(a|an|the|any|each|another|prior)\s+$", before) or re.match(r"\s+(follow-?up|assay|run|result|method|test|confirmation|replicate)", after):
+                    continue
+                if actual and _VERDICT_CLASS[v.group(1).lower()] != actual:
+                    out.append({"kind": "verdict", "candidate": cand, "claimed": v.group(1).lower(), "actual": status})
+                break
+            else:
+                continue
+            if out and out[-1].get("candidate") == cand:
                 break
     if queued is not None:
         for m in re.finditer(r"\b(\d+|no|zero|one|two|three|four|five|six|seven|eight|nine|ten)\b(?:\s+\w+){0,2}?\s+(?:hypothes[ie]s|candidates|variants)\b[^.]{0,30}?\bqueued", t, re.I):

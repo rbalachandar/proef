@@ -45,12 +45,14 @@ class PubMedAdapter:
             return resp.read()
 
     def search(self, query: str, max_results: int = 10,
-               sort: str = "relevance") -> list[str]:
-        """Search PubMed and return a list of PMID strings."""
+               sort: str = "relevance", maxdate: str | None = None) -> list[str]:
+        """Search PubMed and return a list of PMID strings. `maxdate` (YYYY/MM/DD) keeps only records published on or before it."""
         params = {
             "term": query, "retmax": str(max_results),
             "retmode": "json", "sort": sort,
         }
+        if maxdate:
+            params.update({"datetype": "pdat", "mindate": "1900/01/01", "maxdate": maxdate})
         raw = self._get("esearch.fcgi", params)
         data = json.loads(raw)
         return data.get("esearchresult", {}).get("idlist", [])
@@ -62,9 +64,9 @@ class PubMedAdapter:
         raw = self._get("efetch.fcgi", {"id": ",".join(pmids), "rettype": "abstract", "retmode": "xml"})
         return parse_efetch(raw)
 
-    def search_and_fetch(self, query: str, max_results: int = 10) -> list[dict[str, str]]:
+    def search_and_fetch(self, query: str, max_results: int = 10, maxdate: str | None = None) -> list[dict[str, str]]:
         """Search + fetch in one call."""
-        pmids = self.search(query, max_results)
+        pmids = self.search(query, max_results, maxdate=maxdate)
         if not pmids:
             return []
         return self.fetch_abstracts(pmids)

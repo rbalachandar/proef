@@ -354,3 +354,72 @@ def _t_tool_selection():
                       {"policies": res, "checks": checks, "note": "scripted policies, not a real model; the real model's selection is measured from saved campaigns (grounding_exp.tool_selection)"},
                       "; ".join(f"{p}: {r['calls']} calls, invalid {r['invalid_rate']}, wasted {r['wasted_rate']}, {r['verdicts']} verdict(s)" for p, r in res.items())
                       + ("" if ok else " | FAILED: " + ", ".join(k for k, v in checks.items() if not v)))
+
+
+# ---- blinding: can a model look up the answer it is being scored against? ----------------------------------------------------------------
+
+@register("grounding-leakage",
+          "a blinded study's knowledge tools withhold the held-out compounds (by name, id or structure) and anything after a cutoff, before a model sees a result: "
+          "leak-blocking recall and over-blocking rate on a labelled set, and a control showing the same lookups DO leak with blinding off", suite="tools")
+def _t_grounding_leakage():
+    from proef.core.interfaces import system_actor
+    from proef.adapters.store.sqlite import SqliteProvenanceStore
+    from proef.tools import ToolCatalog, ToolContext, chembl_tool, pubmed_tool
+    held = ["EGFR-HELD-1", "gefitinib", "CC(=O)Oc1ccccc1C(=O)O"]
+    leak_ch = [{"molecule_chembl_id": "CHEMBL939", "molecule_name": "GEFITINIB", "smiles": "x"}, {"molecule_chembl_id": "CHEMBL1", "molecule_name": None, "smiles": "CC(=O)Oc1ccccc1C(=O)O"},
+               {"molecule_chembl_id": "CHEMBL2", "molecule_name": "Gefitinib hydrochloride", "smiles": "y"}, {"molecule_chembl_id": "CHEMBL3", "molecule_name": "EGFR-HELD-1", "smiles": "z"},
+               {"molecule_chembl_id": "CHEMBL4", "molecule_name": "gefitinib", "smiles": "w"}, {"molecule_chembl_id": "CHEMBL5", "molecule_name": None, "smiles": "cc(=o)oc1ccccc1c(=o)o"}]
+    clean_ch = [{"molecule_chembl_id": f"CHEMBL{100 + i}", "molecule_name": n, "smiles": s} for i, (n, s) in enumerate([
+        ("ERLOTINIB", "COCCOc1cc2ncnc(Nc3cccc(C#C)c3)c2cc1OCCOC"), ("AFATINIB", "CN(C)C/C=C/C(=O)Nc1cc2c(Nc3ccc(F)c(Cl)c3)ncnc2cc1OC1CCOC1"),
+        (None, "CCO"), ("OSIMERTINIB", "C=CC(=O)Nc1cc(Nc2nccc(-c3cn(C)c4ccccc34)n2)c(OC)cc1N(C)CCN(C)C"), ("LAPATINIB", "CS(=O)(=O)CCNCc1ccc(o1)-c1ccc2ncnc(Nc3ccc(OCc4cccc(F)c4)c(Cl)c3)c2c1"),
+        ("ICOTINIB", "COCCOc1cc2c(cc1OCCOC)ncnc2Nc1cccc(c1)C#C")])]
+    leak_pm = [{"pmid": "1", "title": "Gefitinib in NSCLC", "abstract": "x"}, {"pmid": "2", "title": "t", "abstract": "IC50 of EGFR-HELD-1 was 5 nM"},
+               {"pmid": "3", "title": "GEFITINIB resistance", "abstract": "y"}, {"pmid": "4", "title": "t", "abstract": "the structure CC(=O)Oc1ccccc1C(=O)O binds"},
+               {"pmid": "5", "title": "t", "abstract": "gefitinib and erlotinib compared"}, {"pmid": "6", "title": "egfr-held-1 series", "abstract": "z"}]
+    clean_pm = [{"pmid": str(10 + i), "title": t, "abstract": a} for i, (t, a) in enumerate([
+        ("ATP-site binding of kinase inhibitors", "a clean abstract"), ("T790M resistance", "osimertinib is active"), ("Covalent warheads", "afatinib engages Cys797"),
+        ("Dose-response fitting", "four parameter logistic"), ("Kinase selectivity profiling", "panel of 300 kinases"), ("PROTAC degraders", "EGFR degraders")])]
+
+    class Pm:
+        def __init__(self):
+            self.maxdates = []
+
+        def search_and_fetch(self, q, n=5, **kw):
+            self.maxdates.append(kw.get("maxdate"))
+            return leak_pm + clean_pm
+
+    class Ch:
+        def activities(self, t, limit=10):
+            return leak_ch + clean_ch
+
+        def target_search(self, q, limit=5):
+            return []
+
+    def run(blinding):
+        cat = ToolCatalog()
+        cat.register(pubmed_tool())
+        cat.register(chembl_tool())
+        pm = Pm()
+        ctx = ToolContext(state="propose", autonomy="act", store=SqliteProvenanceStore(":memory:"), actor=system_actor("e"), branch="t",
+                          services={"pubmed": pm, "chembl": Ch()}, egress_ok={"pubmed_search", "chembl_search"}, blinding=blinding)
+        a = cat.call(ctx, "pubmed_search", {"query": "EGFR"})["result"]["data"]
+        b = cat.call(ctx, "chembl_search", {"target_chembl_id": "CHEMBL203"})["result"]["data"]
+        return a, b, pm
+
+    leak_ids = {"1", "2", "3", "4", "5", "6"}
+    leak_cids = {r["molecule_chembl_id"] for r in leak_ch}
+    pm_on, ch_on, pm_obj = run({"exclude": held, "cutoff": "2019/12/31"})
+    pm_off, ch_off, _ = run(None)
+    leaked_on = len({r["pmid"] for r in pm_on} & leak_ids) + len({r["molecule_chembl_id"] for r in ch_on} & leak_cids)
+    leaked_off = len({r["pmid"] for r in pm_off} & leak_ids) + len({r["molecule_chembl_id"] for r in ch_off} & leak_cids)
+    total_leak = len(leak_pm) + len(leak_ch)
+    over_blocked = (len(clean_pm) - len([r for r in pm_on if r["pmid"] not in leak_ids])) + (len(clean_ch) - len([r for r in ch_on if r["molecule_chembl_id"] not in leak_cids]))
+    total_clean = len(clean_pm) + len(clean_ch)
+    recall, over = round(1 - leaked_on / total_leak, 3), round(over_blocked / total_clean, 3)
+    checks = {"every held-out result is withheld": leaked_on == 0, "no ordinary result is withheld": over_blocked == 0,
+              "the same lookups leak with blinding off (the test can see a leak)": leaked_off == total_leak, "the cutoff date reaches the search": pm_obj.maxdates == ["2019/12/31"]}
+    ok = all(checks.values())
+    return TaskResult("grounding-leakage", "a blinded study cannot look up its own answer", 1.0 if ok else round(max(0.0, recall - over), 3), ok,
+                      {"leak_cases": total_leak, "leaked_with_blinding": leaked_on, "leaked_without": leaked_off, "clean_cases": total_clean, "over_blocked": over_blocked,
+                       "leak_block_recall": recall, "over_block_rate": over, "checks": checks, "scope": "names, ids and structures on a list, and a date cutoff; a held-out fact stated without any of them is not caught"},
+                      f"{total_leak - leaked_on}/{total_leak} held-out results withheld, {over_blocked}/{total_clean} ordinary results wrongly withheld, {leaked_off}/{total_leak} leak with blinding off")

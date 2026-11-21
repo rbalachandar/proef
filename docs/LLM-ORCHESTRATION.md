@@ -569,9 +569,14 @@ What the model may and may not do with what it finds:
       run never retrieved; the workbench shows both. `tests/test_ground_step.py`, `web/src/test/plan.test.tsx`.
 - [x] The citation-traces-to-a-result check, in `groundedness.py` (`traces`, `verify_items`). Still open: using it in the hallucination evals (5F).
 - [x] Knowledge tools in the `propose` and `decide` states of the engine's own flow. *(`grounding.gather`, `_round_background`; real-model measured Nov 21)*
-- [ ] Blinding rules for knowledge tools in eval and case-study arms.
-- [ ] Evals: grounding precision (a supporting item really supports), recall of a planted contradiction, and a leakage test that a blinded
-      run cannot retrieve its held-out truth.
+- [x] Blinding rules for knowledge tools in eval and case-study arms (`CampaignConfig.blinding`, `tools.blind`, `tests/test_blinding.py`). A blinded study sets `{"exclude": [held-out names, ids,
+      structures], "cutoff": "YYYY/MM/DD", "off_tools": [...]}`. A knowledge result that mentions anything excluded is dropped BEFORE the model sees it; the cutoff reaches the PubMed search; a tool
+      turned off is not even on the menu. The count of withheld results goes on the ledger (`blinded_dropped` on the tool call) and the model is NOT told anything was withheld (that would itself
+      leak). The ledger keeps only the exclusion list's size and hash, never the list (it names the held-out items). Replays agree (sealed results; the menu is rebuilt from `off_tools`).
+      Limit: it matches names, ids and structures on a list and a date; a held-out FACT stated without any of them is not caught.
+- [~] Evals. DONE: the leakage test (`grounding-leakage`: 12 of 12 held-out results withheld, 0 of 12 ordinary results wrongly withheld, 12 of 12 leak with blinding off, so the test can see a
+      leak). NOT DONE: grounding precision (does a "supports" item really support) and recall of a planted contradiction. Both need a judge of meaning, not a lexical check; they need hand-labelled
+      cases or a model judge, and a model judge's own error would have to be measured too.
 
 **5I: the engine uses the tool loop, and a real model is measured on which tool it calls (added Nov 19; built first)**
 Finding: 5C built the catalog and loop and the evals drive them with scripted models, but nothing in a campaign called them, so "does

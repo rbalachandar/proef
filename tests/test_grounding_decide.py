@@ -38,13 +38,13 @@ class Searcher(F.Model):
         return super().generate(inv, prompt, **kw)
 
 
-def _grounded(tmp_path, tools=("pubmed",), rounds=2, grounding_decide=True, **kw):
+def _grounded(tmp_path, tools=("pubmed",), rounds=2, grounding_decide=True, blinding=None, **kw):
     store = SqliteProvenanceStore(str(tmp_path / "prov.db"))
     model, pm = Searcher(F._answer, **kw), Pubmed()
     cfg = CampaignConfig(problem=ProblemStatement(objective="o", constraints=[Constraint(name="potency", description="IC50 <= 20 uM", kind="hard", limit=20.0, unit="uM")]),
                          hypothesis_source="agent", model=model, autonomy="act", k=8, max_families=8, rounds=rounds, seed=1, followups=True,
                          inbox=str(tmp_path / "inbox"), poll_secs=0.05, flywheel=Flywheel(":memory:"),
-                         budget=ResourceBudget(max_total_runs=50, max_hypotheses_total=30), grounding_tools=tools, grounding_decide=grounding_decide,
+                         budget=ResourceBudget(max_total_runs=50, max_hypotheses_total=30), grounding_tools=tools, grounding_decide=grounding_decide, blinding=blinding,
                          knowledge_services={"pubmed": pm})
     report = run_campaign(cfg, SimulatorLab(seed=3), store, approver=lambda t: True, notify=lambda m: None)
     return report, store, store.branch_records(f"problem/{report.problem_id}"), model, pm

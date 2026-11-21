@@ -77,6 +77,7 @@ class CampaignConfig:
     grounding_decide: bool = True          # with grounding_tools: also read about a round's open results at the decision point (False: `propose` only)
     loop_compute: tuple[str, ...] = ()     # compute tools a model may call BEFORE it proposes: 'predict' (the enabled prediction tools) and/or 'synthesis'
     ground_hypotheses: bool = False        # before plan review, look for evidence for and against each family (needs grounding_tools)
+    blinding: dict | None = None           # a blinded study withholds from the knowledge tools: {'exclude': [held-out names, ids, structures], 'cutoff': 'YYYY/MM/DD', 'off_tools': [...]}
     grounding_names: str = "operator"     # which candidate names a query may not contain: 'operator' = those the operator supplied (library, configured hypotheses);
                                            # 'all' = every tested candidate, including names the model chose itself (stricter)
     grounding_public_names: tuple[str, ...] = ()   # candidate names the operator says are public, so a query may contain them; others are blocked
@@ -329,7 +330,8 @@ def _propose_and_score(cfg, tracker, problem, store, flywheel, say, lab_ctx=None
             g = gather(cfg.model, cfg.problem, store, cfg.knowledge_services, cfg.grounding_tools,
                        protected=library_secrets(cfg.candidates, cfg.grounding_public_names) | {cfg.problem.problem_id or ""},
                        replay=cfg.grounding_replay,
-                       compute=cfg.loop_compute, registry=cfg.prediction_registry, predictors=cfg.prediction_tools, modality=cfg.modality)
+                       compute=cfg.loop_compute, registry=cfg.prediction_registry, predictors=cfg.prediction_tools, modality=cfg.modality,
+                       blinding=cfg.blinding)
             grounding_text = g.text or None
             say(f"grounding: {len(g.calls)} knowledge call(s), {len(g.used)} answered" + (f" (stopped: {g.stopped})" if g.stopped else ""))
         portfolio, family_scores = propose_families_with_agent(
@@ -832,6 +834,17 @@ def _plan_gate(cfg, tracker, portfolio, store, actor, say, label=None, tested=No
     return kept, False
 
 
+def _blinding_summary(b: dict | None) -> dict | None:
+    """What the ledger keeps of a blinded study's rules: their size and a hash, the cutoff and the tools turned off, but NOT the exclusion list, which names the
+    held-out items and so would hand them to anyone who reads the record."""
+    if not b:
+        return None
+    import hashlib
+    ex = sorted(str(x).lower() for x in (b.get("exclude") or ()))
+    return {"exclude_n": len(ex), "exclude_sha256": hashlib.sha256("\n".join(ex).encode()).hexdigest()[:16], "cutoff": b.get("cutoff"),
+            "off_tools": sorted(b.get("off_tools") or ())}
+
+
 def _record_degradation(store, problem, actor, say) -> dict:
     """If any model call in this campaign FAILED, say so on the ledger and to the caller. The engine treats a failed call as a recoverable fallback
     (a fixed order instead of the model's choice, no follow-up suggestions, no re-plan), which is right for keeping a campaign alive and wrong for
@@ -918,7 +931,7 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
         "hypothesis_source": cfg.hypothesis_source, "followups": cfg.followups, "replan": cfg.replan,
         "max_families": cfg.max_families, "max_variants_per_family": cfg.max_variants_per_family,
         "modality": cfg.modality, "prediction_tools": list(cfg.prediction_tools or []),
-        "grounding_tools": list(cfg.grounding_tools or []), "ground_hypotheses": cfg.ground_hypotheses, "grounding_decide": cfg.grounding_decide, "grounding_names": cfg.grounding_names, "loop_compute": list(cfg.loop_compute or []),
+        "grounding_tools": list(cfg.grounding_tools or []), "ground_hypotheses": cfg.ground_hypotheses, "grounding_decide": cfg.grounding_decide, "grounding_names": cfg.grounding_names, "blinding": _blinding_summary(cfg.blinding), "loop_compute": list(cfg.loop_compute or []),
         "grounding_public_names": list(cfg.grounding_public_names or []),
         "critic": cfg.critic_model is not None, "plan_review": cfg.plan_approver is not None,
         "orchestrator": cfg.orchestrator if isinstance(cfg.orchestrator, str) else "custom",
@@ -1309,7 +1322,7 @@ def _round_background(cfg, store, problem, tested, round_no, say, cache: dict) -
     results = "\n".join(f"- {h.candidate}: {h.status}" + (f", observed {h.observed_value:g}" if h.observed_value is not None else "")
                         + f", {h.statement}" for h in tested)
     g = gather(cfg.model, problem, store, cfg.knowledge_services, cfg.grounding_tools, protected=protected,
-               replay=cfg.grounding_replay, state="decide", round_no=round_no, results=results)
+               replay=cfg.grounding_replay, state="decide", round_no=round_no, results=results, blinding=cfg.blinding)
     say(f"round {round_no} grounding: {len(g.calls)} knowledge call(s), {len(g.used)} answered" + (f" (stopped: {g.stopped})" if g.stopped else ""))
     cache[round_no] = g.text
     return g.text

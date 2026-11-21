@@ -182,6 +182,7 @@
      ],
      "environment": {
       "autonomy": "act",
+      "blinding": null,
       "budget": null,
       "concentrations": [
        "0.5uM",
@@ -1813,6 +1814,7 @@
      ],
      "environment": {
       "autonomy": "observe",
+      "blinding": null,
       "budget": null,
       "concentrations": [
        "0.5uM",

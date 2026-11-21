@@ -70,7 +70,7 @@ class Grounding:
 def gather(model, problem, store, services: dict, tools: tuple[str, ...], egress_ok: set | None = None, protected: set | None = None,
            branch: str | None = None, replay: dict | None = None, max_steps: int = 6, max_tool_calls: int = 8,
            state: str = "propose", round_no: int | None = None, results: str = "", compute: tuple[str, ...] = (),
-           registry=None, predictors: list[str] | None = None, modality: str | None = None) -> Grounding:
+           registry=None, predictors: list[str] | None = None, modality: str | None = None, blinding: dict | None = None) -> Grounding:
     cat = ToolCatalog()
     for k in tools:
         cat.register(KNOWLEDGE_TOOLS[k]())
@@ -87,7 +87,7 @@ def gather(model, problem, store, services: dict, tools: tuple[str, ...], egress
     ctx = ToolContext(state=state, autonomy="act", scope=(f"{state}-{round_no}" if state != "propose" else ""), store=store, actor=system_actor("grounding"),
                       branch=branch or f"problem/{problem.problem_id}", services=services, enabled=names,
                       egress_ok=set(egress_ok if egress_ok is not None else names), protected=set(protected or ()),
-                      max_tool_calls=max_tool_calls, replay=replay)
+                      max_tool_calls=max_tool_calls, replay=replay, blinding=blinding)
     task = (DECIDE_TASK.format(objective=problem.objective, results=results[:3000] or "(none)") if state == "decide"
             else TASK.format(objective=problem.objective, context=problem.context or "-"))
     if "predict" in names or "check_synthesis" in names:
@@ -147,7 +147,8 @@ def ground_families(cfg, portfolio, tracker, store, actor, say, label: str | Non
             cat.register(KNOWLEDGE_TOOLS[k]())
         ctx = ToolContext(state="propose", autonomy="act", store=store, actor=system_actor("grounding"), branch=f"problem/{pid}",
                           services=cfg.knowledge_services, enabled=names, egress_ok=set(names), protected=protected, max_tool_calls=8,
-                          scope=f"ground-{label or 'initial'}-{fid}", replay=getattr(cfg, "grounding_replay", None))
+                          scope=f"ground-{label or 'initial'}-{fid}", replay=getattr(cfg, "grounding_replay", None),
+                          blinding=getattr(cfg, "blinding", None))
         f = info.get(fid, {})
         task = GROUND_TASK.format(family=fid[:80], claim=str(f.get("parent_statement", ""))[:300], mechanism=str(f.get("mechanism", ""))[:300],
                                   compounds=", ".join(sorted({str(h.candidate) for h in hyps}))[:300])

@@ -220,3 +220,146 @@ def test_the_thresholds_in_the_code_are_the_ones_in_the_doc():
     sec = doc[doc.index("**5J:"): doc.index("**5D:")]
     assert "2/3" in sec and "1/3" in sec and "ANY compliance" in sec
     assert abs(X.Q1_MIN_ADOPTION - 2 / 3) < 1e-9 and abs(X.Q2_MIN_DECIDE_USE - 1 / 3) < 1e-9 and X.Q4_MAX_COMPLIANCE == 0
+
+
+# ---- the rate limit, the quota, and not losing work ----
+
+class Http(Exception):
+    def __init__(self, code):
+        super().__init__(f"HTTP {code}")
+        self.code = code
+
+
+class Flaky:
+    """Raises `err` for the first n calls (or always when n is None), then answers."""
+    name, model_version, model = "flaky", "f-1", "flaky-1"
+
+    def __init__(self, err, n=None):
+        self.err, self.n, self.calls = err, n, 0
+
+    def generate(self, inv, prompt, **kw):
+        self.calls += 1
+        if self.n is None or self.calls <= self.n:
+            raise self.err
+        return World()._out(inv, {"ok": 1})
+
+
+def _clock():
+    now = [0.0]
+    return (lambda: now[0]), (lambda secs: now.__setitem__(0, now[0] + secs)), now
+
+
+def _inv():
+    from proef.core.contracts import Envelope, ToolInvocation
+    return ToolInvocation(envelope=Envelope(experiment_branch_id="x"), tool="c.fm.generate_molecules")
+
+
+def test_calls_are_spaced_by_the_minimum_interval():
+    clock, sleep, now = _clock()
+    p = X.Paced(World(), min_interval=10, sleep=sleep, clock=clock)
+    p.generate(_inv(), "a")
+    p.generate(_inv(), "b")
+    assert p.stats()["waited_s"] == 10 and now[0] == 10, "the second call waited out the interval"
+    now[0] += 25
+    p.generate(_inv(), "c")
+    assert p.stats()["waited_s"] == 10, "no wait when the interval has already passed"
+
+
+def test_a_rate_limit_is_waited_out_along_the_backoff_and_an_exhausted_quota_stops_with_a_clear_error():
+    clock, sleep, now = _clock()
+    ok = X.Paced(Flaky(Http(429), n=2), backoff=(30, 60, 120), sleep=sleep, clock=clock)
+    assert ok.generate(_inv(), "p").output["text"] and ok.stats()["retries"] == 2 and ok.stats()["waited_s"] == 90 and not ok.exhausted
+    dead = X.Paced(Flaky(Http(429)), backoff=(1, 2), sleep=sleep, clock=clock)
+    with pytest.raises(X.QuotaExhausted, match="rate limit or quota"):
+        dead.generate(_inv(), "p")
+    assert dead.exhausted and dead.stats()["calls"] == 3 and dead.stats()["retries"] == 2
+
+
+def test_an_error_that_is_not_a_rate_limit_is_not_retried_or_disguised():
+    clock, sleep, _ = _clock()
+    p = X.Paced(Flaky(ValueError("bad json")), sleep=sleep, clock=clock)
+    with pytest.raises(ValueError):
+        p.generate(_inv(), "p")
+    assert p.stats()["calls"] == 1 and not p.exhausted
+    q = X.Paced(Flaky(RuntimeError("monthly usage limit reached")), backoff=(), sleep=sleep, clock=clock)
+    with pytest.raises(X.QuotaExhausted):
+        q.generate(_inv(), "p")
+
+
+def test_every_model_call_is_written_as_it_happens_errors_included(tmp_path):
+    sink = tmp_path / "s" / "steps.jsonl"
+    spy = X.Spy(Flaky(Http(500), n=1), sink)
+    with pytest.raises(Http):
+        spy.generate(_inv(), "first prompt")
+    spy.generate(_inv(), "second prompt")
+    lines = [json.loads(x) for x in sink.read_text().splitlines()]
+    assert lines[0]["error"].startswith("Http") and lines[0]["prompt"] == "first prompt"
+    assert lines[1]["reply"] and lines[1]["prompt"] == "second prompt" and all("ts" in x for x in lines)
+
+
+def test_a_complete_run_saves_the_raw_result_every_step_and_the_ledger_and_the_ledger_verifies(tmp_path):
+    from proef.adapters.store.sqlite import SqliteProvenanceStore
+    res, runs = _suite(tmp_path, arms="B")
+    out = tmp_path / "out"
+    tag = res[0]["tag"]
+    assert res[0]["complete"] and (out / f"{tag}.json").exists() and not (out / f"{tag}.partial.json").exists()
+    steps = [json.loads(x) for x in (out / f"{tag}.steps.jsonl").read_text().splitlines()]
+    assert len(steps) == res[0]["model_calls"] and all("prompt" in x and "reply" in x for x in steps)
+    store = SqliteProvenanceStore(str(out / f"{tag}.db"))
+    branch = f"problem/{runs[0]['problem_id']}"
+    assert store.branch_records(branch) and store.verify_chain(branch) == [], "the saved ledger opens and its hash chain verifies"
+    assert all("prompt" in m and m["prompt"] for m in runs[0]["model_replies"]), "full prompts are saved, not just replies"
+    assert runs[0]["complete"] is True and runs[0]["paced"]["exhausted"] is False and runs[0]["model_errors"] == 0
+
+
+def test_a_finished_run_is_skipped_on_resume_and_redone_only_when_forced(tmp_path):
+    out = tmp_path / "out"
+    said = []
+    kw = dict(arms="A", repeats=1, model_factory=lambda: World(), services=services, out=out, max_calls=80, say=said.append)
+    assert len(X.run_suite(SUITE, **kw)) == 1
+    again = X.run_suite(SUITE, **kw)
+    assert again == [] and any("skip A-dyrk1b-0" in m for m in said)
+    assert len(X.run_suite(SUITE, resume=False, **kw)) == 1
+
+
+def test_when_quota_runs_out_the_run_is_saved_as_partial_not_as_data_and_the_suite_stops_and_can_resume(tmp_path):
+    out = tmp_path / "out"
+    said = []
+    res = X.run_suite(SUITE, "ABCD", 1, lambda: Flaky(Http(429)), services, out, pace={"backoff": (0,)}, say=said.append)
+    assert len(res) == 1 and res[0]["exhausted"] and res[0]["complete"] is False and "quota" in res[0]["reason"]
+    tag = res[0]["tag"]
+    assert (out / f"{tag}.partial.json").exists() and not (out / f"{tag}.json").exists() and (out / f"{tag}.steps.jsonl").exists()
+    assert any("resumes" in m for m in said), "it says how to continue"
+    runs = X.load_runs(out)
+    assert runs == [] and len(X.load_partials(out)) == 1
+    a = X.analyze(runs, partials=1)
+    assert a["partial_files"] == 1 and "NOT counted" in X.render(a)
+
+
+def test_one_failed_model_call_makes_a_run_incomplete_because_the_engine_would_carry_on_with_a_fallback(tmp_path):
+    class FailsOnce(World):
+        failed = False
+
+        def generate(self, inv, prompt, **kw):
+            if "one step (decide)" in prompt and not FailsOnce.failed:
+                FailsOnce.failed = True
+                raise ValueError("garbled")
+            return super().generate(inv, prompt, **kw)
+    FailsOnce.failed = False
+    out = tmp_path / "out"
+    from proef.autoloop import ResourceBudget
+    res = X.run_suite(SUITE, "C", 1, FailsOnce, services, out, say=lambda m: None, max_calls=80,
+                      extra_cfg={"k": 6, "max_families": 9, "budget": ResourceBudget(max_total_runs=60, max_hypotheses_total=40, max_model_calls=80)})
+    assert res[0]["complete"] is False and "failed" in res[0]["reason"] and not res[0]["exhausted"]
+    assert (out / f"{res[0]['tag']}.partial.json").exists() and X.load_runs(out) == []
+
+
+def test_exactly_the_requested_parts_run_and_an_incomplete_run_never_counts_in_the_analysis(tmp_path):
+    out = tmp_path / "out"
+    res = X.run_suite(SUITE, "AB", 2, lambda: World(), services, out, tags={"A-dyrk1b-1"}, say=lambda m: None, max_calls=80)
+    assert [r["tag"] for r in res] == ["A-dyrk1b-1"]
+    reps = X.run_suite(SUITE, "A", 3, lambda: World(), services, tmp_path / "o2", reps=[2], say=lambda m: None, max_calls=80)
+    assert [r["tag"] for r in reps] == ["A-dyrk1b-2"]
+    runs = X.load_runs(out) + [{"arm": "B", "tag": "B-x-0", "complete": False, "model_calls": 5}]
+    a = X.analyze(runs)
+    assert a["excluded_incomplete"] == ["B-x-0"] and a["runs"]["B"] == 0 and a["runs"]["A"] == 1

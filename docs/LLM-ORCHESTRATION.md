@@ -655,8 +655,7 @@ published after the model's training (DYRK1B / PMID 43005627, fisetin); a second
 Also from the same data: cost per arm, and the follow-up path (needs an engineered scenario that forces abstentions, since the simulator rarely abstains).
 Will NOT be claimed: that grounded proposals are better; anything about other targets or models; why the model chose what it did.
 Before spending anything: the analysis script is dry-run on a scripted model; raw data (full proposals, sealed results, loop transcripts, query text) is saved per
-run; arms are interleaved; the run stops at a model-call cap. **Still to confirm with the owner:** scope (two papers x 2 repeats, about 300 calls, or one
-paper x 3 repeats, about 250), the call cap, and whether the thresholds above are the right bars.
+run; arms are interleaved; the run stops when the provider's quota runs out (or at an optional call cap). **Decided by the owner (Nov 21):** scope = two papers x 2 repeats x 4 arms (16 campaigns, roughly 300 model calls); the thresholds above are accepted (note: decide-use is 1/3 and adoption is 2/3; the owner was asked whether decide-use should also be 2/3, and until told otherwise it stays 1/3); the provider's quota is the limit, so there is no call cap by default and what is varied is the rate limit (`--min-interval`, `--backoff`).
 - [x] Hooks built and dry-run on a scripted model (`src/proef/experiments/grounding_exp.py`, `scripts/grounding_experiment.py`, `scripts/grounding_analyze.py`,
       `scripts/grounding_suite.json`, `tests/test_grounding_experiment.py`): the `grounding_decide` switch (arm B; recorded in the envelope, replays agree), full
       loop transcripts with query text and per-call outcome, ledger views of what was proposed, tested and judged, plans, orchestrator and follow-up flags; the
@@ -665,6 +664,11 @@ paper x 3 repeats, about 250), the call cap, and whether the thresholds above ar
       recommendation; the control arms, which never see it, are never flagged). Second paper, chosen by the rule in the suite file before any data: PMID
       42468711 (two new PI3Kalpha/CDK7 hybrids, HY3 and HY5, Bioorg Med Chem Lett, Nov 1). NOT built: an engineered scenario that forces abstentions, so the
       follow-up path is exercised only if the simulator abstains on its own (the analysis reports how many runs re-planned).
+- [x] **Resumable, rate-limit aware, nothing lost** (`Paced`, `Spy` sink, `run_suite` resume and part selection): every model call is written as it happens (`<tag>.steps.jsonl`,
+      errors included), every run saves its ledger (`<tag>.db`, hash chain verifies) and the raw result with full prompts; the rate limit is `--min-interval` plus a `--backoff` wait
+      after each refusal, and when the provider's quota runs out the run is saved as `<tag>.partial.json` (NOT data), the suite stops, and the same command resumes (finished runs are
+      skipped). A run counts as data only if no model call failed, because the engine treats a failed call as a fallback and carries on, which would bias the comparison.
+      `--tags`, `--only`, `--arms`, `--reps` run exactly the parts asked for; `--force` redoes finished ones; analysis and citation verification run offline from the saved files.
 - [ ] Run, analyse offline, write the result and the decision next to the thresholds above.
 
 **5D: the real-data case study (opt-in, costs money, asked first)**

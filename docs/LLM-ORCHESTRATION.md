@@ -468,7 +468,7 @@ numbers say what happened to it.
       malformed arguments). Each is refused, recorded, and the audit stays clean.
 - [x] `tool-recovery`: after a refusal the scripted model corrects itself. Reports the recovery rate, and shows a model that retries
       the same refused call forever is stopped by the step cap and the call budget.
-- [ ] `tool-selection`: given the state (what is approved, what has a run, what is judged), the loop's offered tools and a policy
+- [x] `tool-selection`: *(eval `tool-selection` in `evals/toolcalls.py`: five scripted policies through propose, run, judge and decide. The policy that follows the flow has invalid rate 0 and wastes nothing; choosing among everything offered or not has invalid rate 0.625; repeating one tool wastes 81%; none breaks the audit. Scripted, not a real model.)* given the state (what is approved, what has a run, what is judged), the loop's offered tools and a policy
       that picks the next tool. Reports invalid-call rate, wasted calls and calls per verdict.
 
 **5F: hallucination evals for LLM hypotheses**
@@ -519,9 +519,9 @@ Kinds, each a scripted scenario run through the loop with the audit and the ledg
 - [x] **Fabricated identifiers** *(`tool-adversarial`)*: a run id, hypothesis id or candidate that does not exist, belongs to another candidate, or is already
       judged. Refused with the reason (mostly built in Phase 0, measured here).
 - [x] **Phantom calls** *(the detector `phantom_tool_claims` and its fixture category; not yet run over a real model's narrative)*: the model says it ran a tool and no call is on the ledger. A claim-versus-ledger check of the model's narrative.
-- [ ] **Fabricated results**: the model reports a value, a verdict or an approval that no record supports, or one that contradicts the
+- [x] **Fabricated results** *(values: `unsupported_value` and `misattributed_value` check a summary against the results it saw; verdicts and counts: `state_claims`. Approvals are NOT checked. Wired into every tool-loop summary; flags are recorded on the ledger as `loop_flags`.)*: the model reports a value, a verdict or an approval that no record supports, or one that contradicts the
       record. The same claim-versus-ledger check, shared with the numbers check in 5F so there is one implementation.
-- [ ] **Misread refusals**: the model continues as if a refused call succeeded (a "submitted" it was never told). Measured as
+- [x] **Misread refusals** *(`claimed_refused_call` and `ignored_refusal`; follow-on calls that depend on a refused one, such as a run id from a refused submit, are NOT measured)*: the model continues as if a refused call succeeded (a "submitted" it was never told). Measured as
       follow-on calls that depend on a refused one.
 - [ ] **Hallucinated capability**: claiming an instrument or tool can do something it does not declare. The Phase 2 lab check and the
       prediction contract already decide this on facts, so this counts them.
@@ -647,9 +647,19 @@ the model call the right tool at the right stage" had no answer. Order of work:
       PubMed efetch XML, ChEMBL, Open Targets current schema, ChEMBL ids, a real 404); opt-in live contract tests with a drift detector (`make test-live`, `PROEF_LIVE=1`); and a real-model
       smoke script that asserts the invariants (`make smoke-real`: complete, not degraded, zero violations, both loops fired, every choice the model's, step log matches, ledger verifies).
       A real-data fact the fixtures showed: ChEMBL often has no preferred name for a molecule (`molecule_name` can be None), so a model can rely on the structure but not always a name.
+- [x] **Real-model tool selection, from the 16 saved campaigns** (`gpt-6-luna`; 28 loops, 139 tool calls). At `propose` the model used PubMed, ChEMBL and Open Targets (Open Targets 6 times across 12 loops); at `decide` it used PubMed and ChEMBL only (0 of 16 loops used Open Targets, plausible since the question there is about a compound and an assay). About 5 calls per loop, and every loop
+      ended on its own with a summary; but that is the step budget the prompt states (finish by step 5), so the model follows the budget rather than deciding for itself when it has enough. Meta tools
+      (`describe_tool`, `list_tools`) 0 calls (the menu's argument signatures removed the need). Repeated identical calls 0. Invalid calls 1 of 139: it asked for `limit: 50`, the schema allows
+      20, the refusal said so, and the model corrected itself on the next call (a recovery after a structured refusal, observed on a real model). Blocked by the egress check: 10, all the model searching
+      for its own tested compound by name, under the strict default since replaced (`grounding_names`). Not measured: the compute tools and the `ground` step, because the experiment did not turn them on.
+- [x] **Loop-summary checks on real text** (28 summaries, the same runs): after three fixes made on seeing real text (the task's own gate "sub-20uM" is not a finding; a thousands separator
+      split "1,100 nM"; values from the paper retrieved earlier in the run) 0 of 28 were flagged against the most generous source (every result of the run plus the task). Nothing real was
+      caught because the model made no such mistakes in this sample; one summary honestly reported that its first query "was refused". The two new fixture categories (`unsupported_value`,
+      `claimed_refused`) include real-text items and are no longer untouched. `unsupported_value` first scored recall 0.71 (below the 0.80 bar) on a wrong-compound case; `misattributed_value`
+      was added after seeing it, which is recorded in the fixture readme. A value written in words ("forty nM") is a documented, uncaught limit.
 - [ ] Web search tool (needs a provider and an operator choice of which) and a sub-agent tool (critic exists as `critic_model`, not
       as a catalog tool).
-- [ ] **Real-model tool-selection measurement** (opt-in, costs money, asked first): per stage, which tool the model picked, whether a
+- [x] **Real-model tool-selection measurement** *(done offline from the 16 saved campaigns, `grounding_exp.tool_selection`, no quota)* (opt-in, costs money, asked first): per stage, which tool the model picked, whether a
       knowledge tool was used at all, invalid-call rate, wasted calls, and whether the proposals differ with and without grounding. The
       scripted evals only prove the guards, not this.
 - [ ] `grounding` as a CLI/API option and a workbench toggle (Phase 6 settings).

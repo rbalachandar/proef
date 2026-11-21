@@ -41,6 +41,9 @@ def _detectors(fx: dict) -> dict:
         "quoted_number": lambda x: bool(g.quoted_number_problems(_text(x), [{**q, "ci_um": tuple(q["ci_um"])} for q in f["quoted_number"]["findings"]],
                                                                  f["quoted_number"]["gate_um"])),
         "gate_misstated": lambda x: bool(g.gate_misstated(_text(x), f["gate_misstated"]["gate_um"])),
+        "unsupported_value": lambda x: bool(g.unsupported_values(x["text"], x["bodies"], x.get("extra", "")) or g.misattributed_values(x["text"], x["bodies"])),
+        "claimed_refused": lambda x: any(f["kind"] == "claimed_refused_call" for f in g.loop_narrative_flags(
+            x["text"], x["calls"], {"pubmed_search", "chembl_search", "opentargets_summary"}, [])),
         "state_claims": lambda x: bool(g.state_claims(x["text"], x["verdicts"], x.get("queued"), x.get("runs_left"))),
         "ruled_out": lambda x: g.ruled_out(x["candidate"], x["family"], f["ruled_out"]["negatives"]) is not None,
         "phantom_tool": lambda x: bool(g.phantom_tool_claims(_text(x), set(f["phantom_tool"]["called"]), set(f["phantom_tool"]["offered"]))),

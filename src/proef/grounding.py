@@ -59,6 +59,7 @@ def value_strings(values) -> set[str]:
 class Grounding:
     text: str = ""                                  # what goes into the proposal prompt ("" when nothing was learned)
     calls: list[dict] = field(default_factory=list)  # every tool step: tool, status, code
+    flags: list[dict] = field(default_factory=list)  # advisory flags on the loop's own summary (phantom call, claim from a refused call, unsupported value)
     stopped: str | None = None
 
     @property
@@ -94,6 +95,13 @@ def gather(model, problem, store, services: dict, tools: tuple[str, ...], egress
                  "with uncertainty, never evidence: a measurement is what judges a hypothesis.")
     res = ToolLoop(model, cat, ctx, max_steps=max_steps).run(task)
     g = Grounding(calls=[s for s in res.steps if s.get("tool")], stopped=res.stopped)
+    from proef.groundedness import loop_narrative_flags
+    g.flags = loop_narrative_flags(res.done or "", g.calls, names, [r["body"] for r in res.results], extra=task)
+    if g.flags and store is not None:
+        from proef.core.contracts import Envelope, EventType
+        from proef.core.interfaces import record_for
+        store.append(record_for(Envelope(experiment_branch_id=ctx.branch), EventType.gate_decision, system_actor("grounding"), decision={
+            "kind": "loop_flags", "advisory": True, "state": state, "scope": ctx.scope, "flags": g.flags, "summary": (res.done or "")[:300]}))
     if res.done or g.used:
         src = ", ".join(sorted(set(g.used))) or "no tool"
         when = "BEFORE PROPOSING" if state == "propose" else f"AFTER ROUND {round_no}"

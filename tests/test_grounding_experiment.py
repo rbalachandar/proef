@@ -398,3 +398,25 @@ def test_the_ledger_view_names_the_candidates_it_saw_proposed(normal):
     _, runs = normal
     names = {p["candidate"] for r in runs for p in r["proposed"]}
     assert None not in names and {"C1", "fisetin"} <= names
+
+
+# ---- tool selection, measured from what a model actually did ----
+
+def test_tool_selection_counts_the_mix_the_invalid_calls_the_repeats_and_how_loops_end():
+    runs = [{"arm": "C", "loops": [
+        {"state": "propose", "done": "ok", "calls": [{"tool": "pubmed_search", "args": {"query": "a"}, "status": "ok"},
+                                                       {"tool": "pubmed_search", "args": {"query": "a"}, "status": "ok"},
+                                                       {"tool": "describe_tool", "args": {"name": "x"}, "status": "ok"},
+                                                       {"tool": "submit_assay", "args": {}, "status": "refused", "code": "not_offered"}]},
+        {"state": "decide", "done": None, "calls": [{"tool": "pubmed_search", "args": {"query": "b"}, "status": "refused", "code": "egress_blocked"}]}]}]
+    ts = X.tool_selection(runs)
+    p, d = ts["propose/C"], ts["decide/C"]
+    assert (p["calls"], p["invalid"], p["repeats"], p["meta"], p["refused"], p["ended_by_done"]) == (4, 1, 1, 1, 1, 1)
+    assert p["invalid_rate"] == 0.25 and p["calls_per_loop"] == 4.0 and p["tools"] == {"pubmed_search": 2, "describe_tool": 1, "submit_assay": 1}
+    assert d["blocked"] == 1 and d["invalid"] == 0 and d["ended_by_done_rate"] == 0.0, "a blocked query is not an invalid call"
+
+
+def test_the_analysis_reports_tool_selection_for_every_stage_and_arm(normal):
+    res = X.analyze(normal[1])
+    assert {"propose/B", "propose/C", "decide/C", "propose/D", "decide/D"} <= set(res["tool_selection"])
+    assert "Tool selection by stage and arm" in X.render(res)

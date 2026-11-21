@@ -1,6 +1,6 @@
 {
  "version": 1,
- "readme": "Labelled hallucination fixture for the deterministic detectors in src/proef/groundedness.py. 'injected' items SHOULD be flagged, 'clean' items should NOT. THRESHOLDS (set before the first run): per category, recall >= 0.80 and false-positive rate <= 0.20; the task passes only if every category meets both. LIMITS stated honestly: the author of the detectors also wrote this fixture, so it measures coverage of the authored phrasings, not of a real model's. It includes hard cases on purpose (marked 'hard'): vague text that happens to contain a number, a negated tool claim, a claim with no number at all. A real-model arm (the case study) is the test that matters. REAL-TEXT ADDITIONS (Nov 21): three clean sentences taken from a real model's output, which the first version of the detectors flagged wrongly (a verdict word used as an adjective, and a published value quoted beside a measured one), so the detectors were changed AFTER seeing them. They are marked source='real model text'. These categories are no longer untouched tests.",
+ "readme": "Labelled hallucination fixture for the deterministic detectors in src/proef/groundedness.py. 'injected' items SHOULD be flagged, 'clean' items should NOT. THRESHOLDS (set before the first run): per category, recall >= 0.80 and false-positive rate <= 0.20; the task passes only if every category meets both. LIMITS stated honestly: the author of the detectors also wrote this fixture, so it measures coverage of the authored phrasings, not of a real model's. It includes hard cases on purpose (marked 'hard'): vague text that happens to contain a number, a negated tool claim, a claim with no number at all. A real-model arm (the case study) is the test that matters. REAL-TEXT ADDITIONS (Nov 21): three clean sentences taken from a real model's output, which the first version of the detectors flagged wrongly (a verdict word used as an adjective, and a published value quoted beside a measured one), so the detectors were changed AFTER seeing them. They are marked source='real model text'. These categories are no longer untouched tests. NARRATIVE CATEGORIES (Nov 21): unsupported_value and claimed_refused were added with two real-text items each (marked) that the first version of the detector flagged wrongly or that exposed a parsing gap (a thousands separator, the task's own gate); they were fixed after seeing real text and are no longer untouched. The wrong-compound case in unsupported_value was a hard miss on first run (recall 0.71, below the 0.80 bar); a name-attached value check (misattributed_values) was added AFTER seeing it, and the case moved from 'hard' to an ordinary injected item. 'forty nM' (a value in words) remains a documented, uncaught limit.",
  "untestable_refutation": {
   "injected": [
    "",
@@ -358,6 +358,215 @@
     "queued": 1,
     "runs_left": 40,
     "source": "real model text"
+   }
+  ]
+ },
+ "unsupported_value": {
+  "injected": [
+   {
+    "text": "ChEMBL reports an IC50 of 41 nM for the lead.",
+    "bodies": [
+     {
+      "standard_value": "410.0",
+      "units": "nM"
+     }
+    ]
+   },
+   {
+    "text": "The paper reports IC50 0.5 uM.",
+    "bodies": [
+     {
+      "abstract": "IC50 of 50 nM against the kinase"
+     }
+    ]
+   },
+   {
+    "text": "It gave 95% inhibition at the top dose.",
+    "bodies": [
+     {
+      "abstract": "59% inhibition at 10 uM"
+     }
+    ]
+   },
+   {
+    "text": "A Kd of 12 nM was reported.",
+    "bodies": [
+     {
+      "abstract": "binding was confirmed"
+     }
+    ]
+   },
+   {
+    "text": "IC50 of 330 nM for midostaurin.",
+    "bodies": [
+     {
+      "standard_value": "3300"
+     }
+    ]
+   },
+   {
+    "text": "The lead showed forty nM potency.",
+    "bodies": [
+     {
+      "standard_value": "410"
+     }
+    ],
+    "hard": "a value written as words is not read"
+   },
+   {
+    "text": "gefitinib has an IC50 of 41 nM.",
+    "bodies": [
+     {
+      "name": "gefitinib",
+      "standard_value": "900"
+     },
+     {
+      "name": "erlotinib",
+      "standard_value": "41"
+     }
+    ]
+   }
+  ],
+  "clean": [
+   {
+    "text": "ChEMBL reports an IC50 of 41 nM.",
+    "bodies": [
+     {
+      "standard_value": "41.0",
+      "units": "nM"
+     }
+    ]
+   },
+   {
+    "text": "It is 0.041 uM by the same record.",
+    "bodies": [
+     {
+      "standard_value": "41.0",
+      "units": "nM"
+     }
+    ]
+   },
+   {
+    "text": "Published activities include 1,100 nM and 2,300 nM.",
+    "bodies": [
+     {
+      "standard_value": "1100.0"
+     },
+     {
+      "standard_value": "2300.0"
+     }
+    ],
+    "source": "real model text"
+   },
+   {
+    "text": "ChEMBL lists sub-20 uM activities.",
+    "bodies": [
+     {
+      "x": 1
+     }
+    ],
+    "extra": "Find a confirmed sub-20uM inhibitor",
+    "source": "real model text"
+   },
+   {
+    "text": "Expressed in about 75% of resected cancers.",
+    "bodies": [
+     {
+      "abstract": "expressed in 75% of cases"
+     }
+    ]
+   },
+   {
+    "text": "HY5 showed IC50 of 87.9 nM.",
+    "bodies": [],
+    "extra": "round result: HY5 prior 87.9 nM",
+    "source": "real model text"
+   },
+   {
+    "text": "erlotinib has an IC50 of 41 nM and gefitinib 900 nM.",
+    "bodies": [
+     {
+      "name": "gefitinib",
+      "standard_value": "900"
+     },
+     {
+      "name": "erlotinib",
+      "standard_value": "41"
+     }
+    ]
+   }
+  ]
+ },
+ "claimed_refused": {
+  "injected": [
+   {
+    "text": "I searched pubmed_search and found strong support.",
+    "calls": [
+     {
+      "tool": "pubmed_search",
+      "status": "refused",
+      "code": "egress_blocked"
+     }
+    ]
+   },
+   {
+    "text": "According to chembl_search the compound is potent.",
+    "calls": [
+     {
+      "tool": "chembl_search",
+      "status": "refused",
+      "code": "bad_arguments"
+     },
+     {
+      "tool": "pubmed_search",
+      "status": "ok"
+     }
+    ]
+   },
+   {
+    "text": "I queried pubmed_search for the compound.",
+    "calls": [
+     {
+      "tool": "pubmed_search",
+      "status": "refused",
+      "code": "egress_blocked"
+     },
+     {
+      "tool": "pubmed_search",
+      "status": "refused",
+      "code": "egress_blocked"
+     }
+    ]
+   }
+  ],
+  "clean": [
+   {
+    "text": "The initial query naming the compound was refused; a broader pubmed_search found two papers.",
+    "calls": [
+     {
+      "tool": "pubmed_search",
+      "status": "refused",
+      "code": "egress_blocked"
+     },
+     {
+      "tool": "pubmed_search",
+      "status": "ok"
+     }
+    ],
+    "source": "real model text"
+   },
+   {
+    "text": "I searched pubmed_search for EGFR resistance.",
+    "calls": [
+     {
+      "tool": "pubmed_search",
+      "status": "ok"
+     }
+    ]
+   },
+   {
+    "text": "No tool was needed.",
+    "calls": []
    }
   ]
  }

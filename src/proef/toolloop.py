@@ -95,7 +95,7 @@ class ToolLoop:
                 return out
             name, args = call.get("tool"), call.get("args", {})
             res = self.catalog.call(self.ctx, name, args)
-            out.steps.append({"tool": str(name)[:80], "status": res.get("status"), "code": res.get("code")})
+            out.steps.append({"tool": str(name)[:80], "status": res.get("status"), "code": res.get("code"), "sig": _hash([str(name)[:80], args])})
             if res.get("status") == "ok" and name not in ("list_tools", "describe_tool"):
                 out.results.append({"tool": str(name)[:80], "args": args, "body": res.get("result")})
             transcript.append(f"CALL {json.dumps({'tool': str(name)[:80], 'args': args}, default=str)[:500]}")

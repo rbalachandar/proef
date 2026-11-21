@@ -242,3 +242,105 @@ def state_claims(text: str, verdicts: dict[str, str], queued: int | None = None,
             if int(m.group(1)) != runs_left:
                 out.append({"kind": "runs_left", "claimed": int(m.group(1)), "actual": runs_left})
     return out
+
+
+# ---- what a tool loop's summary says about its own calls and what they returned ----------------------------------------------------------------
+
+_NUM_ANY = re.compile(r"(?<![\w.])(\d+(?:\.\d+)?)(?![\w.]*\d)")
+
+
+def _decomma(t: str) -> str:
+    return re.sub(r"(?<=\d),(?=\d{3}(?!\d))", "", t)          # 1,100 nM is 1100 nM, not "100 nM"
+
+
+def _numbers_in(bodies: list[Any]) -> list[float]:
+    out: list[float] = []
+    for m in _NUM_ANY.finditer(_decomma(json.dumps(bodies, default=str))):
+        try:
+            out.append(float(m.group(1)))
+        except ValueError:
+            continue
+    return out
+
+
+def unsupported_values(text: str, bodies: list[Any], extra: str = "", tol: float = 0.02) -> list[dict]:
+    """Values a summary states with a concentration unit or a percent sign that appear NOWHERE in what the tools returned or in the task the model was
+    given (`extra`: the objective and the round's results; "sub-20uM" is the task's own gate, not a finding) ("fabricated results"). A value counts as
+    supported if its number, or the number converted between nM, uM and mM, is in those within `tol`. Lexical: it cannot tell a value attached to the wrong
+    compound from a right one, only that it is not in the data at all, and it does not check values written as words."""
+    nums = _numbers_in(bodies) + [float(m.group(1)) for m in _NUM_ANY.finditer(_decomma(extra or ""))]
+    out = []
+    for m in re.finditer(r"(\d+(?:\.\d+)?)\s*(pM|nM|[uµμ]M|mM|%)", _decomma(text or ""), re.I):
+        v = float(m.group(1))
+        forms = {v} if m.group(2) == "%" else {v, v * 1e3, v / 1e3, v * 1e6, v / 1e6}
+        if not any(abs(n - f) <= tol * max(abs(f), 1e-12) for n in nums for f in forms):
+            out.append({"stated": f"{m.group(1)} {m.group(2)}"})
+    return out
+
+
+_NAME_KEYS = ("name", "molecule_name", "pref_name", "title", "symbol", "candidate", "molecule_chembl_id")
+
+
+def _records(x: Any, out: list[dict] | None = None) -> list[dict]:
+    out = [] if out is None else out
+    if isinstance(x, dict):
+        out.append(x)
+        for v in x.values():
+            _records(v, out)
+    elif isinstance(x, list):
+        for v in x:
+            _records(v, out)
+    return out
+
+
+def misattributed_values(text: str, bodies: list[Any], tol: float = 0.02) -> list[dict]:
+    """A value stated right after a compound's name that is in the results, but not in the results' record for THAT compound ("gefitinib 41 nM" when 41 is
+    erlotinib's). Only when the results hold a record carrying that name: otherwise there is nothing to compare against. A name is a record's own name field,
+    not any string inside it."""
+    recs = _records(bodies)
+    by_name: dict[str, list[dict]] = {}
+    for r in recs:
+        for k in _NAME_KEYS:
+            if isinstance(r.get(k), str) and len(r[k]) >= 3:
+                by_name.setdefault(r[k].strip().lower(), []).append(r)
+    out = []
+    t = _decomma(text or "")
+    for name, rs in by_name.items():
+        for nm in re.finditer(rf"(?<![\w-]){re.escape(name)}(?![\w-])", t, re.I):
+            window = t[nm.end(): nm.end() + 60]
+            nxt = [m2.start() for other in by_name if other != name for m2 in re.finditer(rf"(?<![\w-]){re.escape(other)}(?![\w-])", window, re.I)]
+            if nxt:
+                window = window[: min(nxt)]            # a value after ANOTHER compound's name belongs to that compound
+            vals = [n for r in rs for n in _numbers_in([{k: v for k, v in r.items() if not isinstance(v, (dict, list))}])]
+            for m in re.finditer(r"(\d+(?:\.\d+)?)\s*(pM|nM|[uµμ]M|mM|%)", window, re.I):
+                v = float(m.group(1))
+                forms = {v} if m.group(2) == "%" else {v, v * 1e3, v / 1e3, v * 1e6, v / 1e6}
+                if vals and not any(abs(n - f) <= tol * max(abs(f), 1e-12) for n in vals for f in forms):
+                    item = {"compound": name, "stated": f"{m.group(1)} {m.group(2)}"}
+                    if item not in out:
+                        out.append(item)
+    return out
+
+
+def loop_narrative_flags(text: str, calls: list[dict], offered: set[str], bodies: list[Any], extra: str = "") -> list[dict]:
+    """Advisory flags on a tool loop's own summary, checked against its own calls and results: a tool it says it used that it never called (`phantom_call`),
+    a tool it says it used whose every call was refused so nothing came back (`claimed_refused_call`), a refused call repeated unchanged (`ignored_refusal`),
+    and a value it states that is in no result (`unsupported_value`)."""
+    out: list[dict] = []
+    called = {c["tool"] for c in calls}
+    ok_tools = {c["tool"] for c in calls if c.get("status") == "ok"}
+    for t in phantom_tool_claims(text, called, offered):
+        out.append({"kind": "phantom_call", "tool": t})
+    for t in sorted(called - ok_tools - {"list_tools", "describe_tool"}):
+        if re.search(rf"\b(ran|run|called|used|queried|searched|invoked|checked|found|returned|according to)\b.{{0,40}}\b{re.escape(t)}\b", text or "", re.I):
+            out.append({"kind": "claimed_refused_call", "tool": t})
+    seen: set[str] = set()
+    for c in calls:
+        sig = c.get("sig") or c["tool"] + json.dumps(c.get("args"), sort_keys=True, default=str)
+        if c.get("status") == "refused" and sig in seen:
+            out.append({"kind": "ignored_refusal", "tool": c["tool"], "code": c.get("code")})
+        if c.get("status") == "refused":
+            seen.add(sig)
+    out += [{"kind": "unsupported_value", **x} for x in unsupported_values(text, bodies, extra)]
+    out += [{"kind": "misattributed_value", **x} for x in misattributed_values(text, bodies)]
+    return out

@@ -9,7 +9,7 @@ from proef.grounding import library_secrets
 def test_every_category_meets_the_thresholds_set_before_the_first_run():
     res = score()
     assert set(res) == {"untestable_refutation", "invented_candidate", "bad_structure", "quoted_number", "gate_misstated", "state_claims", "ruled_out",
-                        "phantom_tool", "fabricated_citation"}
+                        "phantom_tool", "fabricated_citation", "unsupported_value", "claimed_refused"}
     for cat, v in res.items():
         assert v["recall"] >= RECALL_MIN and v["false_positive_rate"] <= FPR_MAX, (cat, v)
 
@@ -257,3 +257,59 @@ def test_digits_inside_a_chembl_id_are_not_read_as_a_pmid_and_a_multi_id_citatio
     with mock.patch.object(citations, "CACHE", Path(tmp_path) / "c.json"):
         assert citations.verify_each("PMID 23528858; CHEMBL428690", fetch)["status"] == "verified"
         assert citations.verify_each("PMID 23528858; PMID 99999999", fetch)["status"] == "invalid", "one fabricated id makes the citation invalid"
+
+
+# ---- what a tool loop says about its own calls and what they returned ----
+
+def test_a_value_in_a_summary_must_be_in_the_results_or_the_task_in_any_unit():
+    b = [{"standard_value": "41.0", "units": "nM"}, {"standard_value": "1100.0"}]
+    assert g.unsupported_values("IC50 of 41 nM", b) == [] and g.unsupported_values("that is 0.041 uM", b) == []
+    assert g.unsupported_values("IC50 of 410 nM", b) == [{"stated": "410 nM"}]
+    assert g.unsupported_values("activities of 1,100 nM", b) == [], "a thousands separator is not a second number"
+    assert g.unsupported_values("sub-20 uM activities", [], extra="Find a confirmed sub-20uM inhibitor") == [], "the task's own gate is not a finding"
+    assert g.unsupported_values("sub-20 uM activities", []) == [{"stated": "20 uM"}]
+
+
+def test_a_real_value_attached_to_the_wrong_compound_is_caught_and_a_value_after_the_next_name_is_not_blamed_on_the_first():
+    b = [{"name": "gefitinib", "standard_value": "900"}, {"name": "erlotinib", "standard_value": "41"}]
+    assert g.misattributed_values("gefitinib has an IC50 of 41 nM.", b) == [{"compound": "gefitinib", "stated": "41 nM"}]
+    assert g.misattributed_values("erlotinib has an IC50 of 41 nM and gefitinib 900 nM.", b) == []
+    assert g.misattributed_values("lapatinib has an IC50 of 41 nM.", b) == [], "no record for that name: nothing to compare against"
+
+
+def test_a_summary_is_checked_against_the_loops_own_calls_for_phantoms_refused_claims_and_ignored_refusals():
+    offered = {"pubmed_search", "chembl_search"}
+    calls = [{"tool": "pubmed_search", "status": "refused", "code": "egress_blocked", "sig": "a"},
+             {"tool": "pubmed_search", "status": "refused", "code": "egress_blocked", "sig": "a"}]
+    kinds = lambda text, calls=calls: [f["kind"] for f in g.loop_narrative_flags(text, calls, offered, [])]  # noqa: E731
+    assert kinds("I searched pubmed_search and found strong support.") == ["claimed_refused_call", "ignored_refusal"]
+    assert "phantom_call" in kinds("I queried chembl_search for it.")
+    assert kinds("The query was refused, so nothing was found.") == ["ignored_refusal"]
+    assert g.loop_narrative_flags("I searched pubmed_search.", [{"tool": "pubmed_search", "status": "ok", "sig": "b"}], offered, [{"x": 1}]) == []
+
+
+def test_every_loop_summary_is_checked_and_a_flag_is_recorded_on_the_ledger_not_hidden(tmp_path):
+    import json as _json
+
+    from proef.adapters.store.sqlite import SqliteProvenanceStore
+    from proef.core.contracts import ToolResult
+    from proef.core.hypothesis import ProblemStatement
+    from proef.grounding import gather
+    from tests.test_grounding import Pubmed
+
+    class Liar:
+        name, model_version, model = "s", "s-1", "s-1"
+
+        def __init__(self):
+            self.n = 0
+
+        def generate(self, inv, prompt, **kw):
+            self.n += 1
+            out = ({"tool": "pubmed_search", "args": {"query": "EGFR kinase"}} if self.n == 1 else
+                   {"done": "I also ran chembl_search and it reported an IC50 of 7 nM."})
+            return ToolResult(envelope=inv.envelope.model_copy(), invocation_id=inv.invocation_id, status="succeeded", output={"text": _json.dumps(out)})
+    store = SqliteProvenanceStore(":memory:")
+    g1 = gather(Liar(), ProblemStatement(objective="o", problem_id="p-1"), store, {"pubmed": Pubmed()}, ("pubmed", "chembl"))
+    assert {f["kind"] for f in g1.flags} == {"phantom_call", "unsupported_value"}
+    rec = next(r.decision for r in store.branch_records("problem/p-1") if (r.decision or {}).get("kind") == "loop_flags")
+    assert rec["advisory"] and rec["state"] == "propose" and {f["kind"] for f in rec["flags"]} == {"phantom_call", "unsupported_value"}

@@ -276,3 +276,81 @@ def _t_tool_menu_injection():
     return TaskResult("tool-menu-injection", "an instrument's names cannot inject into the prompt", 1.0 if ok else 0.0, ok,
                       {"hostile_names": len(hostile), "dropped": len(menu[0]["dropped_names"]), "safe_kept": sorted(kept & set(safe)), "one_line": one_line},
                       f"{len(menu[0]['dropped_names'])}/{len(hostile)} hostile names dropped, {len(kept & set(safe))}/{len(safe)} safe names kept, menu {'one line' if one_line else 'NOT one line'}")
+
+
+# ---- tool selection: which tool a policy picks in each state, and what that costs --------------------------------------------------------
+
+_VALID_ARGS = {
+    "propose_hypothesis": {"statement": "A binds", "candidate": "A", "assay_type": "binding", "predicted": "<= 20"},
+    "submit_assay": {"compounds": ["A"], "assay_type": "binding", "concentrations": ["0.5uM", "2uM", "10uM", "40uM", "100uM"]},
+    "check_results": {"run_id": "sim-1-001"}, "request_analysis": {"candidate": "A", "run_id": "sim-1-001"}, "query_tpp": {"phase": "hit"},
+    "pubmed_search": {"query": "EGFR kinase inhibitor"}, "predict_admet": {"smiles": "CCO"}, "check_synthesis": {"smiles": "CCO"},
+    "rank_variants": {"variants": [{"chromosome": "1", "position": 100, "ref": "A", "alt": "G"}]},
+}
+_STAGES = ("propose", "run", "judge", "decide")
+
+
+def _select_run(policy: str, seed: int = 7, per_stage: int = 4) -> dict:
+    """One pass through propose, run, judge and decide under a selection policy. Counts every call and what it cost; the ledger and the audit judge it."""
+    import random
+
+    from proef.audit import audit_campaign
+    cat, ctx, tk, store = _env(state="propose", egress_ok=("pubmed_search",), pubmed=Pubmed())
+    rng = random.Random(seed)
+    every = sorted(_VALID_ARGS) + ["format_disk", "record_verdict"]
+    calls, refused, invalid, wasted, seen = 0, 0, 0, 0, set()
+    for stage in _STAGES:
+        ctx.state = stage
+        offered = sorted(t.name for t in cat.offered(ctx))
+        if policy == "state-following":
+            name = {"propose": "propose_hypothesis", "run": "submit_assay", "judge": "request_analysis", "decide": "pubmed_search"}[stage]
+            picks = [name]
+        elif policy == "knowledge-first" and stage == "propose":
+            picks = ["pubmed_search", "propose_hypothesis"]
+        elif policy == "random-offered":
+            picks = [rng.choice(offered) for _ in range(per_stage)]
+        elif policy == "random-any":
+            picks = [rng.choice(every) for _ in range(per_stage)]
+        elif policy == "repeat-one":
+            picks = [offered[0]] * per_stage
+        else:
+            picks = [{"run": "submit_assay", "judge": "request_analysis", "decide": "pubmed_search"}.get(stage, "propose_hypothesis")]
+        for name in picks:
+            args = dict(_VALID_ARGS.get(name, {}))
+            if name == "request_analysis":
+                runs = _kinds(store, "lab_run")
+                args["run_id"] = runs[0].decision["run_id"] if runs else "sim-1-001"
+            res = cat.call(ctx, name, args)
+            calls += 1
+            bad = res.get("status") == "refused"
+            refused += bad
+            invalid += res.get("code") in ("not_offered", "bad_arguments")
+            sig = name + json.dumps(args, sort_keys=True)
+            wasted += bad or sig in seen
+            seen.add(sig)
+    verdicts = len(_kinds(store, "hypothesis_validated", "hypothesis_invalidated", "hypothesis_inconclusive"))
+    return {"policy": policy, "calls": calls, "refused": refused, "invalid": invalid, "wasted": wasted, "verdicts": verdicts,
+            "calls_per_verdict": round(calls / verdicts, 2) if verdicts else None, "invalid_rate": round(invalid / calls, 3),
+            "wasted_rate": round(wasted / calls, 3), "audit_clean": audit_campaign(store.branch_records("t")) == [], "side_effects": _side_effects(store)}
+
+
+@register("tool-selection",
+          "which tool a policy picks in each state of the flow, and what the choice costs: invalid-call rate, wasted calls and calls per verdict, for a policy "
+          "that follows the flow, one that reads first, random choice among what is offered, random choice among everything (offered or not), and one that "
+          "repeats itself. Shows the apparatus tells a good policy from a bad one and that none of them breaks the audit", suite="tools")
+def _t_tool_selection():
+    res = {p: _select_run(p) for p in ("state-following", "knowledge-first", "random-offered", "random-any", "repeat-one")}
+    good, rd, ra, rep = res["state-following"], res["random-offered"], res["random-any"], res["repeat-one"]
+    checks = {
+        "the policy that follows the flow makes no invalid or wasted call and reaches the one verdict": good["invalid"] == 0 and good["wasted"] == 0 and good["verdicts"] == 1,
+        "reading first costs no invalid call": res["knowledge-first"]["invalid"] == 0,
+        "choosing among everything makes invalid calls that choosing among what is offered does not": ra["invalid"] > 0 and rd["invalid"] == 0,
+        "repeating one tool is counted as waste": rep["wasted"] >= 3,
+        "no policy breaks the audit, and no policy creates a side effect a person did not approve": all(r["audit_clean"] for r in res.values()),
+        "no verdict from a call the flow did not allow": all(r["verdicts"] <= 1 for r in res.values()),
+    }
+    ok = all(checks.values())
+    return TaskResult("tool-selection", "tool choice per state, with its cost", 1.0 if ok else round(sum(checks.values()) / len(checks), 3), ok,
+                      {"policies": res, "checks": checks, "note": "scripted policies, not a real model; the real model's selection is measured from saved campaigns (grounding_exp.tool_selection)"},
+                      "; ".join(f"{p}: {r['calls']} calls, invalid {r['invalid_rate']}, wasted {r['wasted_rate']}, {r['verdicts']} verdict(s)" for p, r in res.items())
+                      + ("" if ok else " | FAILED: " + ", ".join(k for k, v in checks.items() if not v)))

@@ -215,6 +215,7 @@ def ledger_view(recs: list) -> dict:
                      for r in recs if r.event_type.value == "hypothesis_proposed" and r.artifact is not None],     # the root problem record has no artifact
         "orchestrator_choices": [{k: d.get(k) for k in ("round", "chosen", "source", "valid", "why", "allowed", "flags")} for _, d in dec
                                  if d.get("kind") == "orchestrator_choice"],
+        "loop_flags": [{k: d.get(k) for k in ("state", "scope", "flags", "summary")} for _, d in dec if d.get("kind") == "loop_flags"],
         "followups": [{k: d.get(k) for k in ("candidate", "action", "rationale", "flags", "validation")} for _, d in dec
                       if d.get("kind") == "followup_proposal"],
         "plan_decisions": [{k: d.get(k) for k in ("approved", "decided_by", "stage", "n_proposed", "n_kept", "removed")} for _, d in dec
@@ -464,6 +465,9 @@ def detector_flags(run: dict) -> dict:
     for f in run.get("followups", []):
         for x in f.get("flags") or []:
             add("followup:" + x["kind"])
+    for lf in run.get("loop_flags", []):
+        for f in lf.get("flags") or []:
+            add("loop:" + f["kind"])
     for p in run.get("plans", []):
         for w in p.get("warnings", []):
             add("plan:" + w["kind"])
@@ -476,6 +480,43 @@ def detector_flags(run: dict) -> dict:
     return kinds
 
 
+INVALID_CODES = {"not_offered", "bad_arguments", "unknown_tool", "not_configured"}
+META = {"list_tools", "describe_tool"}
+
+
+def tool_selection(runs: list[dict]) -> dict:
+    """Which tools a model picks at each stage, and how well: per (stage, arm) the mix of tools, calls per loop, the invalid-call rate (a tool that was not
+    offered or arguments that did not validate), the rate of queries the egress check blocked, the share of calls spent on the meta tools, repeated calls
+    (the same tool with the same arguments twice in one loop), and whether a loop ended on its own (it said done) rather than at the step cap."""
+    out: dict[str, dict] = {}
+    for r in runs:
+        for lp in r.get("loops", []):
+            key = f"{lp['state']}/{r['arm']}"
+            m = out.setdefault(key, {"loops": 0, "calls": 0, "tools": {}, "invalid": 0, "blocked": 0, "meta": 0, "repeats": 0, "refused": 0, "ended_by_done": 0})
+            m["loops"] += 1
+            m["ended_by_done"] += 1 if lp.get("done") else 0
+            seen: set[str] = set()
+            for c in lp["calls"]:
+                m["calls"] += 1
+                m["tools"][c["tool"]] = m["tools"].get(c["tool"], 0) + 1
+                m["invalid"] += 1 if c.get("code") in INVALID_CODES else 0
+                m["blocked"] += 1 if c.get("code") == "egress_blocked" else 0
+                m["refused"] += 1 if c.get("status") == "refused" else 0
+                m["meta"] += 1 if c["tool"] in META else 0
+                sig = c["tool"] + json.dumps(c.get("args"), sort_keys=True, default=str)
+                m["repeats"] += 1 if sig in seen else 0
+                seen.add(sig)
+    for m in out.values():
+        n = m["calls"]
+        m["calls_per_loop"] = round(n / m["loops"], 2)
+        m["invalid_rate"] = _rate(m["invalid"], n)
+        m["refused_rate"] = _rate(m["refused"], n)
+        m["meta_share"] = _rate(m["meta"], n)
+        m["repeat_rate"] = _rate(m["repeats"], n)
+        m["ended_by_done_rate"] = _rate(m["ended_by_done"], m["loops"])
+    return dict(sorted(out.items()))
+
+
 def _rate(n: int, d: int) -> float | None:
     return round(n / d, 3) if d else None
 
@@ -486,6 +527,8 @@ def analyze(runs: list[dict], verify: Callable[[str], dict] | None = None, parti
     runs = [r for r in runs if r.get("complete", True)]
     by: dict[str, list[dict]] = {a: [r for r in runs if r["arm"] == a] for a in ARMS}
     out: dict[str, Any] = {"runs": {a: len(v) for a, v in by.items()}, "excluded_incomplete": excluded, "partial_files": partials}
+
+    out["tool_selection"] = tool_selection(runs)
 
     # cost
     cost = {a: [r["model_calls"] for r in v] for a, v in by.items() if v}
@@ -571,6 +614,13 @@ def render(res: dict) -> str:
     if res.get("excluded_incomplete") or res.get("partial_files"):
         L.append(f"NOT counted: {len(res.get('excluded_incomplete') or [])} incomplete run(s) and {res.get('partial_files', 0)} partial file(s) (a model call failed, or quota ran out)")
     L.append("")
+    ts = res.get("tool_selection") or {}
+    if ts:
+        L.append("Tool selection by stage and arm (calls per loop; invalid, blocked, repeated and meta-tool shares; loops that ended on their own)")
+        for k, m in ts.items():
+            L.append(f"   {k:10} loops={m['loops']} calls/loop={m['calls_per_loop']} invalid={m['invalid_rate']} blocked={m['blocked']} repeats={m['repeat_rate']} "
+                     f"meta={m['meta_share']} ended_by_done={m['ended_by_done_rate']} tools={m['tools']}")
+        L.append("")
     for key, title in (("Q1_recent_knowledge", "1. Does propose grounding bring in knowledge past the training date?"),
                        ("Q2_decide_value", "2. Does decide add anything over propose?"), ("Q3_honesty", "3. Is it honest?"),
                        ("Q4_safety", "4. Is it safe?")):

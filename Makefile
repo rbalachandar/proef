@@ -14,6 +14,9 @@ test:               ## fast tier, in parallel (skips the slow campaign and repla
 test-full:          ## everything, in parallel: the gate before a push
 	$(PY) -m pytest tests/ -q -n auto
 
+test-ci:            ## the whole suite in CI's `core` environment (no RDKit, NumPy, ...): run before a push
+	scripts/ci_core.sh
+
 test-live:          ## adapters against the REAL services (network); also detects API drift against tests/fixtures/api
 	PROEF_LIVE=1 $(PY) -m pytest tests/live -q
 

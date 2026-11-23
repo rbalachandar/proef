@@ -1,4 +1,6 @@
 """The deterministic detectors for what a model fabricates, and the eval that scores them (5F/5G narrative kinds)."""
+import pytest
+
 from proef import groundedness as g
 from proef.evals.hallucination import FPR_MAX, RECALL_MIN, _t_hallucination_detectors, score
 from proef.grounding import library_secrets
@@ -47,7 +49,10 @@ def test_a_name_outside_the_library_is_flagged_only_when_a_library_was_offered()
 
 def test_a_structure_must_parse_and_agree_with_the_one_the_library_holds():
     lib = {"aspirin": "CC(=O)Oc1ccccc1C(=O)O"}
-    assert g.structure_problem("C1CC(", "x") and "different structure" in g.structure_problem("CCN(CC)CC", "aspirin", lib)
+    assert g.structure_problem("C1CC(", "x"), "an unparseable string is caught with or without RDKit"
+    assert g.structure_problem("OC(=O)c1ccccc1OC(C)=O", "aspirin") is None
+    pytest.importorskip("rdkit", reason="comparing against the library's structure needs RDKit's canonical form")
+    assert "different structure" in g.structure_problem("CCN(CC)CC", "aspirin", lib)
     assert g.structure_problem("OC(=O)c1ccccc1OC(C)=O", "aspirin", lib) is None, "a different spelling of the same molecule passes"
 
 
@@ -313,3 +318,12 @@ def test_every_loop_summary_is_checked_and_a_flag_is_recorded_on_the_ledger_not_
     assert {f["kind"] for f in g1.flags} == {"phantom_call", "unsupported_value"}
     rec = next(r.decision for r in store.branch_records("problem/p-1") if (r.decision or {}).get("kind") == "loop_flags")
     assert rec["advisory"] and rec["state"] == "propose" and {f["kind"] for f in rec["flags"]} == {"phantom_call", "unsupported_value"}
+
+
+def test_without_rdkit_a_truncated_or_garbled_structure_is_still_caught_and_a_valid_one_is_not():
+    """CI's minimal job has no RDKit; the fallback check must not wave `C1CC(` through."""
+    from proef.predictors import _unbalanced
+    for bad in ("C1CC(", "c1ccccc1(", "CC(=O", "C1CCCC", "[NH3+", "C)C", "C%12CC"):
+        assert _unbalanced(bad), bad
+    for good in ("CCO", "OC(=O)c1ccccc1OC(C)=O", "CC(=O)Oc1ccccc1C(=O)O", "[NH3+]CC([O-])=O", "C%12CCCCC%12", "c1ccc2ccccc2c1", "[13CH4]"):
+        assert _unbalanced(good) is None, good

@@ -161,7 +161,44 @@ def _check_smiles(smiles: str) -> str | None:
         return None if Chem.MolFromSmiles(s) is not None else "RDKit cannot parse this SMILES"
     except ImportError:
         import re
-        return None if re.fullmatch(r"[A-Za-z0-9@+\-\[\]\(\)=#$%/\\.:*]+", s) else "unexpected characters for a SMILES string"
+        if not re.fullmatch(r"[A-Za-z0-9@+\-\[\]\(\)=#$%/\\.:*]+", s):
+            return "unexpected characters for a SMILES string"
+        return _unbalanced(s)
+
+
+def _unbalanced(s: str) -> str | None:
+    """Without RDKit, the structural errors that can be seen from the string alone: unbalanced parentheses or brackets, and a ring-closure digit that opens
+    and never closes. Not a parser (it cannot tell a valence error); it catches what a truncated or garbled string looks like."""
+    depth = brackets = 0
+    open_rings: set[str] = set()
+    i = 0
+    while i < len(s):
+        c = s[i]
+        if c == "[":
+            brackets += 1
+        elif c == "]":
+            brackets -= 1
+            if brackets < 0:
+                return "unbalanced brackets in the SMILES"
+        elif brackets == 0:
+            if c == "(":
+                depth += 1
+            elif c == ")":
+                depth -= 1
+                if depth < 0:
+                    return "unbalanced parentheses in the SMILES"
+            elif c == "%" and i + 2 < len(s) + 1 and s[i + 1: i + 3].isdigit():
+                label = s[i: i + 3]
+                open_rings ^= {label}
+                i += 2
+            elif c.isdigit():
+                open_rings ^= {c}
+        i += 1
+    if depth or brackets:
+        return "unbalanced parentheses or brackets in the SMILES"
+    if open_rings:
+        return "a ring-closure digit opens and never closes in the SMILES"
+    return None
 
 
 def _physchem(smiles: str) -> dict:

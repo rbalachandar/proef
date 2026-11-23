@@ -21,6 +21,7 @@ with a FastAPI + React workbench as the scientist surface.
                                           # audits wave 1-2; see docs/ROADMAP S-T3/S-T4)
 make test                              # fast tier, in parallel (skips tests marked `slow`: campaigns and replays)
 make test-full                         # everything, in parallel: the gate before a push (about 5 min)
+make test-ci                           # the whole suite in CI's minimal `core` environment (no RDKit/NumPy): run before a push
 make test-live                         # adapters against the REAL services (needs the network; PROEF_LIVE=1)
 make run                               # backend + built SPA on :8000
 make api-dev                           # backend only, auto-reload
@@ -60,4 +61,4 @@ python -m proef.cli campaign auto --template dose-response-screen \
 - Simulated data must be labeled simulated; verdicts must be honest about
   uncertainty — a CI straddling the gate abstains, and READING a verdict is
   as sacred as computing it (payload-driven, recency-wins; see the review)
-- Conventional commits; keep `make test-full` green before pushing. Tests are isolated per process (a unique scratch dir), so runs can overlap and parallelize
+- Conventional commits; keep `make test-full` AND `make test-ci` green before pushing (the local environment has more installed than CI's core job, so a test can pass here and fail there). Tests are isolated per process (a unique scratch dir), so runs can overlap and parallelize

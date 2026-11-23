@@ -107,6 +107,8 @@ class Model:
     """Proposes C1 to C8 (C1, C2, C5 and C8 abstain under seed 3 in this order), then answers the follow-up question from the ids in its prompt."""
     name, model_version, model = "scripted", "s-1", "scripted-1"
 
+    n = 8        # how many compounds it proposes (C1..Cn); the default scenario's abstentions (C1, C2, C5, C8) depend on 8
+
     def __init__(self, answer):
         self.answer, self.prompts = answer, []
 
@@ -116,7 +118,7 @@ class Model:
             ids = {c: i for i, c in re.findall(r"- (hyp-\w+) \((\w+)\)", prompt)}
             text = json.dumps({"proposals": self.answer(ids)})
         elif "hypothesis lead" in prompt:
-            text = json.dumps(PLAN([f"C{i}" for i in range(1, 9)]))
+            text = json.dumps(PLAN([f"C{i}" for i in range(1, self.n + 1)]))
         else:
             text = json.dumps({"notes": []})
         return ToolResult(envelope=inv.envelope.model_copy(), invocation_id=inv.invocation_id, status="succeeded",
@@ -133,11 +135,14 @@ def _answer(ids):
             {"hypothesis_id": "hyp-invented", "action": "drop"}]
 
 
-def _run(tmp_path, answer=_answer, autonomy="act", rounds=2, budget=None, plan_approver=None, lab=None, followups=True):
+def _run(tmp_path, answer=_answer, autonomy="act", rounds=2, budget=None, plan_approver=None, lab=None, followups=True, size=8):
+    """`size`: how many compounds the model proposes. 8 is the default scenario (some abstain, so follow-ups happen); a test that does not depend on which compounds abstain
+    can pass a smaller size and run in a fraction of the time."""
     store = SqliteProvenanceStore(str(tmp_path / "prov.db"))
     model = Model(answer)
+    model.n = size
     cfg = CampaignConfig(problem=ProblemStatement(objective="o", constraints=[Constraint(name="potency", description="IC50 <= 20 uM", kind="hard", limit=20.0, unit="uM")]),
-                         hypothesis_source="agent", model=model, autonomy=autonomy, k=8, max_families=8, rounds=rounds, seed=1, followups=followups,
+                         hypothesis_source="agent", model=model, autonomy=autonomy, k=size, max_families=size, rounds=rounds, seed=1, followups=followups,
                          inbox=str(tmp_path / "inbox"), poll_secs=0.05, flywheel=Flywheel(":memory:"), budget=ResourceBudget(max_total_runs=50, max_hypotheses_total=30, max_model_calls=budget) if isinstance(budget, int) else (budget or ResourceBudget(max_hypotheses_total=30)), plan_approver=plan_approver)
     lab = lab or SimulatorLab(seed=3)
     report = run_campaign(cfg, lab, store, approver=lambda t: True, notify=lambda m: None)
@@ -148,14 +153,26 @@ def _kind(recs, kind):
     return [r for r in recs if (r.decision or {}).get("kind") == kind]
 
 
-def test_every_suggestion_is_validated_and_recorded_whatever_the_model_said(tmp_path):
-    _, _, recs, _, _ = _run(tmp_path)
+class _Shared:
+    def __init__(self, dir, result):
+        self.dir, self.result = dir, result
+
+
+@pytest.fixture(scope="module")
+def shared_run_0(tmp_path_factory):
+    """One run of this scenario, shared by the tests that only read its result (5 tests)."""
+    d = tmp_path_factory.mktemp("shared_run_0")
+    return _Shared(d, _run(d))
+
+
+def test_every_suggestion_is_validated_and_recorded_whatever_the_model_said(shared_run_0):
+    (_, _, recs, _, _) = shared_run_0.result
     by = {r.decision["candidate"] or r.decision["hypothesis_id"]: r.decision["validation"]["status"] for r in _kind(recs, "followup_proposal")}
     assert by == {"C1": "ok", "C2": "ok", "C5": "replicates_out_of_bounds", "hyp-invented": "unknown_hypothesis"}
 
 
-def test_only_a_valid_follow_up_runs_and_it_runs_inside_the_next_round_with_its_own_design(tmp_path):
-    report, _, recs, _, lab = _run(tmp_path)
+def test_only_a_valid_follow_up_runs_and_it_runs_inside_the_next_round_with_its_own_design(shared_run_0):
+    (report, _, recs, _, lab) = shared_run_0.result
     fups = [r for r in recs if r.event_type == EventType.hypothesis_proposed and (r.decision or {}).get("followup_of")]
     assert len(fups) == 1 and fups[0].decision["replicates"] == 6, "only C1's valid follow-up became a hypothesis"
     assert fups[0].decision["criteria"]["threshold"] == 20.0, "judged by the program's gate, as every hypothesis"
@@ -167,14 +184,14 @@ def test_only_a_valid_follow_up_runs_and_it_runs_inside_the_next_round_with_its_
     assert not [p for p in lab._runs.values() if p.title in ("test-C2", "test-C5") and p.constraints.get("replicates")]
 
 
-def test_the_engine_never_records_a_decision_a_person_owns(tmp_path):
-    _, _, recs, _, _ = _run(tmp_path)
+def test_the_engine_never_records_a_decision_a_person_owns(shared_run_0):
+    (_, _, recs, _, _) = shared_run_0.result
     assert not _kind(recs, "human_review"), "accept and drop were suggested, never executed"
 
 
-def test_the_suggestion_is_in_the_record_a_person_reads_and_says_it_ran(tmp_path):
+def test_the_suggestion_is_in_the_record_a_person_reads_and_says_it_ran(shared_run_0):
     from proef.api.v1.campaigns import _suggestions
-    _, _, recs, _, _ = _run(tmp_path)
+    (_, _, recs, _, _) = shared_run_0.result
     sug = _suggestions(recs)
     by = {s.action + ":" + s.status: s for s in sug.values()}
     assert by["follow_up:ok"].ran is True and by["follow_up:ok"].replicates == 6
@@ -225,12 +242,12 @@ def test_observe_records_suggestions_and_runs_nothing(tmp_path):
     assert new == [] and [r for r in store.branch_records("problem/p") if r.decision.get("kind") == "followup_proposal"]
 
 
-def test_a_replay_of_a_campaign_that_ran_follow_ups_reproduces_it_from_the_sealed_answers(tmp_path):
+def test_a_replay_of_a_campaign_that_ran_follow_ups_reproduces_it_from_the_sealed_answers(shared_run_0):
     """Phase 4A: this used to say "not reproducible", because the model's follow-up answers were not in the ledger."""
     from proef.reproduce import reproduce
-    report, _, recs, _, _ = _run(tmp_path)
+    (report, _, recs, _, _) = shared_run_0.result
     assert [r for r in recs if (r.decision or {}).get("followup_of")]
-    res = reproduce(f"problem/{report.problem_id}", db_path=str(tmp_path / "prov.db"))
+    res = reproduce(f"problem/{report.problem_id}", db_path=str(shared_run_0.dir / "prov.db"))
     assert res["status"] == "match" and res["model_pinned"] is True, res
 
 

@@ -9,10 +9,10 @@ install:            ## python package + web deps (in ./.venv — make targets us
 	cd web && npm install
 
 test:               ## fast tier, in parallel (skips the slow campaign and replay tests)
-	$(PY) -m pytest tests/ -q -n auto -m "not slow"
+	$(PY) -m pytest tests/ -q -n auto --dist loadscope -m "not slow"
 
 test-full:          ## everything, in parallel: the gate before a push
-	$(PY) -m pytest tests/ -q -n auto
+	$(PY) -m pytest tests/ -q -n auto --dist loadscope
 
 test-ci:            ## the whole suite in CI's `core` environment (no RDKit, NumPy, ...): run before a push
 	scripts/ci_core.sh

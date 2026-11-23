@@ -50,8 +50,33 @@ def test_a_response_too_large_to_seal_is_reported_not_guessed():
 
 # ---- sealed in the ledger ----
 
-def test_every_model_answer_is_sealed_with_its_call_and_prompt(tmp_path):
-    report, store, recs, model, _ = F._run(tmp_path)
+def _own_copy(shared, tmp_path):
+    """A private copy of the shared campaign's ledger. A replay writes its own campaign into the database it reads from AND its instrument files into an inbox keyed by
+    the campaign's id, so tests that replay a shared run must each give it their own database copy and their own inbox (`inbox=`): the shared ORIGINAL run is safe to
+    read, the places a replay writes are not. (Found when the reviewer test failed only after another replay had run.)"""
+    import sqlite3
+    dst = tmp_path / "prov.db"
+    src, out = sqlite3.connect(str(shared.dir / "prov.db")), sqlite3.connect(str(dst))
+    src.backup(out)
+    src.close()
+    out.close()
+    return dst
+
+
+class _Shared:
+    def __init__(self, dir, result):
+        self.dir, self.result = dir, result
+
+
+@pytest.fixture(scope="module")
+def shared_F__run_0(tmp_path_factory):
+    """One run of this scenario, shared by the tests that only read its result (5 tests)."""
+    d = tmp_path_factory.mktemp("shared_F__run_0")
+    return _Shared(d, F._run(d))
+
+
+def test_every_model_answer_is_sealed_with_its_call_and_prompt(shared_F__run_0):
+    (report, store, recs, model, _) = shared_F__run_0.result
     calls = [r.decision for r in recs if (r.decision or {}).get("kind") == "model_call"]
     resp = [r.decision for r in recs if (r.decision or {}).get("kind") == "model_response"]
     assert len(calls) == len(resp) == len(model.prompts) and calls
@@ -61,8 +86,8 @@ def test_every_model_answer_is_sealed_with_its_call_and_prompt(tmp_path):
     assert all(r["role"] == "reviewer" for r in resp if not r["sealed"]), "only the advisory reviewer's text is left out"
 
 
-def test_the_campaign_settings_a_replay_needs_are_in_the_recorded_environment(tmp_path):
-    report, store, recs, _, _ = F._run(tmp_path)
+def test_the_campaign_settings_a_replay_needs_are_in_the_recorded_environment(shared_F__run_0):
+    (report, store, recs, _, _) = shared_F__run_0.result
     env = next(r.decision for r in recs if r.event_type.value == "problem_defined")["environment"]
     assert env["hypothesis_source"] == "agent" and env["followups"] is True and env["max_families"] == 8
     assert {"replan", "modality", "prediction_tools", "critic", "plan_review", "budget"} <= set(env)
@@ -70,10 +95,10 @@ def test_the_campaign_settings_a_replay_needs_are_in_the_recorded_environment(tm
 
 # ---- replay ----
 
-def test_a_campaign_with_follow_ups_replays_from_the_ledger_and_matches(tmp_path):
-    report, store, recs, model, _ = F._run(tmp_path)
+def test_a_campaign_with_follow_ups_replays_from_the_ledger_and_matches(shared_F__run_0, tmp_path):
+    (report, store, recs, model, _) = shared_F__run_0.result
     assert [r for r in recs if (r.decision or {}).get("followup_of")], "the original ran a follow-up"
-    res = reproduce(f"problem/{report.problem_id}", db_path=str(tmp_path / "prov.db"))
+    res = reproduce(f"problem/{report.problem_id}", db_path=str(_own_copy(shared_F__run_0, tmp_path)), inbox=str(tmp_path / "rin"))
     assert res["status"] == "match", res
     assert res["model_pinned"] is True and res["model_calls_replayed"] == len(model.prompts)
 
@@ -86,10 +111,10 @@ def test_a_campaign_with_a_critic_and_a_replan_replays_too(tmp_path):
     assert res["status"] == "match" and res["model_calls_replayed"] >= 3, res
 
 
-def test_a_replay_that_makes_different_model_calls_is_a_difference(tmp_path, monkeypatch):
+def test_a_replay_that_makes_different_model_calls_is_a_difference(shared_F__run_0, tmp_path, monkeypatch):
     """The replay is rebuilt with follow-ups switched off: it asks the model one question fewer than the original."""
     import proef.reproduce as rp
-    report, store, recs, _, _ = F._run(tmp_path)
+    (report, store, recs, _, _) = shared_F__run_0.result
     real = rp._agent_cfg
 
     def without_followups(cfg, *a, **kw):
@@ -97,7 +122,7 @@ def test_a_replay_that_makes_different_model_calls_is_a_difference(tmp_path, mon
         c, rm = real(cfg, *a, **kw)
         return replace(c, followups=False), rm
     monkeypatch.setattr(rp, "_agent_cfg", without_followups)
-    res = reproduce(f"problem/{report.problem_id}", db_path=str(tmp_path / "prov.db"))
+    res = reproduce(f"problem/{report.problem_id}", db_path=str(_own_copy(shared_F__run_0, tmp_path)), inbox=str(tmp_path / "rin"))
     # the next question it asks (the reviewer's) is not the follow-up question the original asked at that point
     assert res["status"] == "differs" and any(d.get("call") and "prompt differs" in str(d["replayed"]) for d in res["diffs"]), res
 
@@ -126,8 +151,9 @@ def test_a_replay_reproduces_the_prompt_the_flywheel_shaped(tmp_path):
     fw.submit("RULEDOUT", "old-family", "binding", "invalidated", 80.0, (60.0, 100.0), problem_id="earlier", threshold=20.0, evidence_run="r0")
     store = SqliteProvenanceStore(str(tmp_path / "prov.db"))
     model = F.Model(F._answer)
+    model.n = 3          # a replay must match whatever the portfolio size; three compounds are enough
     cfg = CampaignConfig(problem=F.ProblemStatement(objective="o", constraints=[F.Constraint(name="potency", description="IC50 <= 20 uM", kind="hard", limit=20.0, unit="uM")]),
-                         hypothesis_source="agent", model=model, autonomy="act", k=8, max_families=8, rounds=1, seed=1,
+                         hypothesis_source="agent", model=model, autonomy="act", k=3, max_families=3, rounds=1, seed=1,
                          inbox=str(tmp_path / "inbox"), poll_secs=0.05, flywheel=fw)
     report = run_campaign(cfg, SimulatorLab(seed=3), store, approver=lambda t: True, notify=lambda m: None)
     assert "RULEDOUT" in model.prompts[0], "the scenario: the flywheel shaped the prompt"
@@ -154,7 +180,7 @@ def test_a_call_that_failed_in_the_original_fails_the_same_way_in_the_replay(tmp
 
 def test_a_replay_measures_with_the_same_lab_not_only_the_same_seed(tmp_path):
     lab = SimulatorLab(seed=3, replicates=5, interference_rate=0.0)
-    report, store, recs, _, _ = F._run(tmp_path, lab=lab)
+    report, store, recs, _, _ = F._run(tmp_path, size=3, lab=lab)
     env = next(r.decision for r in recs if r.event_type.value == "problem_defined")["environment"]
     assert env["lab_config"]["replicates"] == 5 and env["lab_config"]["interference_rate"] == 0.0
     assert reproduce(f"problem/{report.problem_id}", db_path=str(tmp_path / "prov.db"))["status"] == "match"
@@ -167,6 +193,8 @@ def test_a_generation_that_failed_still_leaves_its_flywheel_context_so_the_repla
     fw.submit("RULEDOUT", "old-family", "binding", "invalidated", 80.0, (60.0, 100.0), problem_id="earlier", threshold=20.0, evidence_run="r0")
 
     class FailsTheReplan(F.Model):
+        n = 3
+
         def generate(self, inv, prompt, **kw):
             if "RESULTS SO FAR" in prompt:
                 self.prompts.append(prompt)
@@ -174,7 +202,7 @@ def test_a_generation_that_failed_still_leaves_its_flywheel_context_so_the_repla
             return super().generate(inv, prompt, **kw)
     store = SqliteProvenanceStore(str(tmp_path / "prov.db"))
     cfg = CampaignConfig(problem=F.ProblemStatement(objective="o", constraints=[F.Constraint(name="potency", description="IC50 <= 20 uM", kind="hard", limit=20.0, unit="uM")]),
-                         hypothesis_source="agent", model=FailsTheReplan(F._answer), autonomy="act", k=8, max_families=8, rounds=2, seed=1,
+                         hypothesis_source="agent", model=FailsTheReplan(F._answer), autonomy="act", k=3, max_families=3, rounds=2, seed=1,
                          replan=True, inbox=str(tmp_path / "inbox"), poll_secs=0.05, flywheel=fw)
     report = run_campaign(cfg, SimulatorLab(seed=3), store, approver=lambda t: True, notify=lambda m: None)
     recs = store.branch_records(f"problem/{report.problem_id}")
@@ -183,11 +211,11 @@ def test_a_generation_that_failed_still_leaves_its_flywheel_context_so_the_repla
     assert reproduce(f"problem/{report.problem_id}", db_path=str(tmp_path / "prov.db"))["status"] == "match"
 
 
-def test_the_advisory_reviewers_answer_is_not_sealed_and_the_replay_still_matches(tmp_path):
-    report, store, recs, _, _ = F._run(tmp_path)
+def test_the_advisory_reviewers_answer_is_not_sealed_and_the_replay_still_matches(shared_F__run_0, tmp_path):
+    (report, store, recs, _, _) = shared_F__run_0.result
     rev = [r.decision for r in recs if (r.decision or {}).get("kind") == "model_response" and r.decision["role"] == "reviewer"]
     assert rev and all(r["sealed"] is False and r["response"] == "" and r["response_chars"] > 0 for r in rev)
-    assert reproduce(f"problem/{report.problem_id}", db_path=str(tmp_path / "prov.db"))["status"] == "match"
+    assert reproduce(f"problem/{report.problem_id}", db_path=str(_own_copy(shared_F__run_0, tmp_path)), inbox=str(tmp_path / "rin"))["status"] == "match"
 
 
 def test_the_workbench_serves_the_size_of_a_sealed_answer_not_its_text():

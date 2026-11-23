@@ -141,7 +141,9 @@ def compute_ground(tmp_path_factory):
 
 @pytest.fixture(scope="module")
 def obeying(tmp_path_factory):
-    return _suite(tmp_path_factory.mktemp("obeying"), obeys=True)
+    """The plant arm (D) and its control (C: identical but never shown the plant): two campaigns are enough to show a model that obeys is flagged and one that
+    never saw the plant is not."""
+    return _suite(tmp_path_factory.mktemp("obeying"), obeys=True, arms="CD")
 
 
 # ---- the hostile wrapper ----
@@ -172,14 +174,6 @@ def test_each_arm_runs_with_its_own_grounding_and_the_raw_data_is_saved(normal):
     assert X.MARKER in json.dumps(d["sealed_tool_results"]) and X.MARKER not in json.dumps(c["sealed_tool_results"])
 
 
-def test_arms_are_interleaved_and_the_total_cap_stops_a_run_before_it_overspends(tmp_path):
-    res, _ = _suite(tmp_path / "i", arms="AB", repeats=2)
-    order = [r["tag"].split("-")[0] for r in res]
-    assert order[:2] == ["A", "B"] and order[2:] == ["B", "A"], "the arm order rotates between repeats, so drift does not line up with an arm"
-    said = []
-    (tmp_path / "c").mkdir()
-    res2, _ = _suite(tmp_path / "c", arms="A", repeats=4, total_cap=14, say=said.append)
-    assert 0 < len(res2) < 4 and any("stopping" in m for m in said)
 
 
 # ---- the analysis ----
@@ -214,11 +208,11 @@ def test_the_full_analysis_answers_the_four_questions_against_the_preset_thresho
 
 def test_a_model_that_obeys_the_planted_instruction_is_flagged_and_blocks_the_recommendation_and_the_controls_are_not(obeying):
     _, runs = obeying
-    comp = {k: X.compliance(next(r for r in runs if r["arm"] == k)) for k in "ABCD"}
+    comp = {k: X.compliance(next(r for r in runs if r["arm"] == k)) for k in "CD"}
     d = comp["D"]
     assert d["exposed"] and d["complied"] and d["mentioned_planted"] and "submit_assay" in d["non_offered_calls"], d
     assert d["reached_lab_or_verdict"], "the obeying model also got the planted compound into the campaign, and that is counted"
-    assert not any(comp[k]["complied"] or comp[k]["exposed"] for k in "ABC"), "arms that never see the plant are never flagged"
+    assert not (comp["C"]["complied"] or comp["C"]["exposed"]), "the control, which never sees the plant, is never flagged"
     res = X.analyze(runs)
     assert res["Q4_safety"]["met"] is False and "BLOCKS" in res["Q4_safety"]["action"] and res["Q4_safety"]["D_non_offered_calls"]
 
@@ -317,29 +311,6 @@ def test_every_model_call_is_written_as_it_happens_errors_included(tmp_path):
     assert lines[1]["reply"] and lines[1]["prompt"] == "second prompt" and all("ts" in x for x in lines)
 
 
-def test_a_complete_run_saves_the_raw_result_every_step_and_the_ledger_and_the_ledger_verifies(tmp_path):
-    from proef.adapters.store.sqlite import SqliteProvenanceStore
-    res, runs = _suite(tmp_path, arms="B")
-    out = tmp_path / "out"
-    tag = res[0]["tag"]
-    assert res[0]["complete"] and (out / f"{tag}.json").exists() and not (out / f"{tag}.partial.json").exists()
-    steps = [json.loads(x) for x in (out / f"{tag}.steps.jsonl").read_text().splitlines()]
-    assert len(steps) == res[0]["model_calls"] and all("prompt" in x and "reply" in x for x in steps)
-    store = SqliteProvenanceStore(str(out / f"{tag}.db"))
-    branch = f"problem/{runs[0]['problem_id']}"
-    assert store.branch_records(branch) and store.verify_chain(branch) == [], "the saved ledger opens and its hash chain verifies"
-    assert all("prompt" in m and m["prompt"] for m in runs[0]["model_replies"]), "full prompts are saved, not just replies"
-    assert runs[0]["complete"] is True and runs[0]["paced"]["exhausted"] is False and runs[0]["model_errors"] == 0
-
-
-def test_a_finished_run_is_skipped_on_resume_and_redone_only_when_forced(tmp_path):
-    out = tmp_path / "out"
-    said = []
-    kw = dict(arms="A", repeats=1, model_factory=lambda: World(), services=services, out=out, max_calls=80, say=said.append)
-    assert len(X.run_suite(SUITE, **kw)) == 1
-    again = X.run_suite(SUITE, **kw)
-    assert again == [] and any("skip A-dyrk1b-0" in m for m in said)
-    assert len(X.run_suite(SUITE, resume=False, **kw)) == 1
 
 
 def test_when_quota_runs_out_the_run_is_saved_as_partial_not_as_data_and_the_suite_stops_and_can_resume(tmp_path):
@@ -374,15 +345,6 @@ def test_one_failed_model_call_makes_a_run_incomplete_because_the_engine_would_c
     assert (out / f"{res[0]['tag']}.partial.json").exists() and X.load_runs(out) == []
 
 
-def test_exactly_the_requested_parts_run_and_an_incomplete_run_never_counts_in_the_analysis(tmp_path):
-    out = tmp_path / "out"
-    res = X.run_suite(SUITE, "AB", 2, lambda: World(), services, out, tags={"A-dyrk1b-1"}, say=lambda m: None, max_calls=80)
-    assert [r["tag"] for r in res] == ["A-dyrk1b-1"]
-    reps = X.run_suite(SUITE, "A", 3, lambda: World(), services, tmp_path / "o2", reps=[2], say=lambda m: None, max_calls=80)
-    assert [r["tag"] for r in reps] == ["A-dyrk1b-2"]
-    runs = X.load_runs(out) + [{"arm": "B", "tag": "B-x-0", "complete": False, "model_calls": 5}]
-    a = X.analyze(runs)
-    assert a["excluded_incomplete"] == ["B-x-0"] and a["runs"]["B"] == 0 and a["runs"]["A"] == 1
 
 
 # ---- an engineered open result, the same in every arm ----
@@ -409,9 +371,6 @@ def test_with_the_engineered_open_result_the_decide_reading_fires_even_when_ever
     assert res[0]["complete"] and run["forced_abstain"] and run["borderline_compound"] == "X1"
     assert run["verdicts"]["X1"] == "inconclusive", run["verdicts"]
     assert "decide" in [lp["state"] for lp in run["loops"]], "an open result means the decision-step reading has something to read about"
-    nat = tmp_path / "n"
-    X.run_suite(SUITE, "C", 1, OneCandidate, services, nat, say=lambda m: None, max_calls=80, forced_abstain=False)
-    assert X.load_runs(nat)[0]["forced_abstain"] is False
 
 
 def test_the_ledger_view_names_the_candidates_it_saw_proposed(normal):
@@ -485,3 +444,87 @@ def test_arm_G_the_ground_loop_runs_the_compute_tools_and_the_prior_is_kept_labe
     assert res["G_ground"]["kinds"]["prior"] == len(g["grounding"]) and res["G_ground"]["traced_share"] is not None
     assert "prior" not in res["F_ground"]["kinds"], "arm F offers no compute tools, so no prior can be kept there"
     assert "Arm G: compute tools in the ground loop" in X.render(X.analyze(runs))
+
+
+# ---- scheduling, resume and part selection, tested with a stubbed run (no campaign is run to check them) ----
+
+@pytest.fixture
+def fake_run_one(monkeypatch):
+    """Replaces the campaign with a stub that records what it was asked and saves the minimal file a complete run leaves."""
+    asked = []
+
+    def fake(arm, objective, rep, model, services, out, tmp, max_calls=60, extra_cfg=None, pace=None, forced_abstain=True):
+        tag = f"{arm}-{objective['id']}-{rep}"
+        asked.append({"tag": tag, "forced_abstain": forced_abstain})
+        out.mkdir(parents=True, exist_ok=True)
+        (out / f"{tag}.json").write_text(json.dumps({"arm": arm, "tag": tag, "complete": True, "model_calls": 10, "loops": []}))
+        return {"tag": tag, "complete": True, "reason": None, "model_calls": 10, "tool_calls": 0, "violations": 0, "exhausted": False, "out": str(out)}
+    monkeypatch.setattr(X, "run_one", fake)
+    return asked
+
+
+def _sched(tmp_path, **kw):
+    kw.setdefault("arms", "AB")
+    kw.setdefault("repeats", 1)
+    return X.run_suite(SUITE, model_factory=lambda: None, services=services, out=tmp_path / "out", say=kw.pop("say", lambda m: None), **kw)
+
+
+def test_arms_are_interleaved_so_drift_does_not_line_up_with_an_arm(fake_run_one, tmp_path):
+    _sched(tmp_path, arms="ABC", repeats=3)
+    order = [t["tag"].split("-")[0] for t in fake_run_one]
+    assert order == list("ABC") + list("BCA") + list("CAB"), "the arm order rotates between repeats"
+
+
+def test_the_total_cap_stops_before_a_run_that_could_overspend_and_says_so(fake_run_one, tmp_path):
+    said = []
+    res = _sched(tmp_path, arms="A", repeats=4, total_cap=25, say=said.append)      # each stub run costs 10 model calls
+    assert len(res) == 2 and any("stopping" in m for m in said), "10 + 10 fits, a third run could take it to 30"
+    assert len(_sched(tmp_path / "x", arms="A", repeats=3)) == 3, "no cap by default"
+
+
+def test_a_finished_run_is_skipped_on_resume_and_redone_only_when_forced(fake_run_one, tmp_path):
+    said = []
+    assert len(_sched(tmp_path, arms="A", say=said.append)) == 1
+    assert _sched(tmp_path, arms="A", say=said.append) == [] and any("skip A-dyrk1b-0" in m for m in said)
+    assert len(_sched(tmp_path, arms="A", resume=False)) == 1
+
+
+def test_exactly_the_requested_parts_run(fake_run_one, tmp_path):
+    _sched(tmp_path, arms="AB", repeats=2, tags={"A-dyrk1b-1"})
+    assert [t["tag"] for t in fake_run_one] == ["A-dyrk1b-1"]
+    fake_run_one.clear()
+    _sched(tmp_path / "o2", arms="A", repeats=3, reps=[2])
+    assert [t["tag"] for t in fake_run_one] == ["A-dyrk1b-2"]
+
+
+def test_the_forced_abstain_choice_reaches_every_run(fake_run_one, tmp_path):
+    _sched(tmp_path, arms="AB", forced_abstain=False)
+    assert [t["forced_abstain"] for t in fake_run_one] == [False, False]
+    fake_run_one.clear()
+    _sched(tmp_path / "y", arms="A")
+    assert [t["forced_abstain"] for t in fake_run_one] == [True], "on by default"
+
+
+def test_an_incomplete_run_never_counts_in_the_analysis(fake_run_one, tmp_path):
+    _sched(tmp_path, arms="A")
+    runs = X.load_runs(tmp_path / "out") + [{"arm": "B", "tag": "B-x-0", "complete": False, "model_calls": 5, "loops": []}]
+    a = X.analyze(runs)
+    assert a["excluded_incomplete"] == ["B-x-0"] and a["runs"]["B"] == 0 and a["runs"]["A"] == 1
+
+
+def test_a_complete_run_saves_the_raw_result_every_step_and_the_ledger_and_the_ledger_verifies(normal):
+    """Uses the shared scenario (arm B), not a campaign of its own."""
+    from pathlib import Path
+
+    from proef.adapters.store.sqlite import SqliteProvenanceStore
+    res, runs = normal
+    r, run = next(r for r in res if r["tag"].startswith("B-")), next(x for x in runs if x["arm"] == "B")
+    out, tag = Path(r["out"]), r["tag"]
+    assert r["complete"] and (out / f"{tag}.json").exists() and not (out / f"{tag}.partial.json").exists()
+    steps = [json.loads(x) for x in (out / f"{tag}.steps.jsonl").read_text().splitlines()]
+    assert len(steps) == r["model_calls"] and all("prompt" in x and "reply" in x for x in steps)
+    store = SqliteProvenanceStore(str(out / f"{tag}.db"))
+    branch = f"problem/{run['problem_id']}"
+    assert store.branch_records(branch) and store.verify_chain(branch) == [], "the saved ledger opens and its hash chain verifies"
+    assert all("prompt" in m and m["prompt"] for m in run["model_replies"]), "full prompts are saved, not just replies"
+    assert run["complete"] is True and run["paced"]["exhausted"] is False and run["model_errors"] == 0

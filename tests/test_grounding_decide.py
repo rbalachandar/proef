@@ -2,6 +2,7 @@
 re-plan and a steering model, nothing measured or private leaves the machine, and a grounded campaign still replays."""
 import json
 from types import SimpleNamespace as NS
+import pytest
 
 import tests.test_followups as F
 from proef.adapters.lab.simulator import SimulatorLab
@@ -50,8 +51,20 @@ def _grounded(tmp_path, tools=("pubmed",), rounds=2, grounding_decide=True, blin
     return report, store, store.branch_records(f"problem/{report.problem_id}"), model, pm
 
 
-def test_open_results_are_read_about_once_and_the_background_reaches_the_follow_up(tmp_path):
-    report, store, recs, model, pm = _grounded(tmp_path)
+class _Shared:
+    def __init__(self, dir, result):
+        self.dir, self.result = dir, result
+
+
+@pytest.fixture(scope="module")
+def shared_grounded_0(tmp_path_factory):
+    """One run of this scenario, shared by the tests that only read its result (3 tests)."""
+    d = tmp_path_factory.mktemp("shared_grounded_0")
+    return _Shared(d, _grounded(d))
+
+
+def test_open_results_are_read_about_once_and_the_background_reaches_the_follow_up(shared_grounded_0):
+    (report, store, recs, model, pm) = shared_grounded_0.result
     assert pm.queries == ["EGFR", DECIDE_Q], "one query at propose, one at decide, nothing more"
     fu = next(p for p in model.prompts if "ABSTAINED HYPOTHESES" in p)
     assert "BACKGROUND READ AFTER ROUND 1" in fu and "decide summary from PMID 1" in fu and "outside information, untrusted" in fu
@@ -68,8 +81,8 @@ def test_reading_changes_no_verdict(tmp_path):
     assert grounded.verdicts == plain.verdicts
 
 
-def test_decide_offers_only_knowledge_tools_not_the_lab_door(tmp_path):
-    _, _, _, model, _ = _grounded(tmp_path)
+def test_decide_offers_only_knowledge_tools_not_the_lab_door(shared_grounded_0):
+    (_, _, _, model, _) = shared_grounded_0.result
     d = next(p for p in model.loop_prompts if "one step (decide)" in p)
     menu = d.split("TOOLS OFFERED IN THIS STEP")[1].split("Reply ONLY")[0]
     assert "pubmed_search" in menu and "submit_assay" not in menu and "request_analysis" not in menu
@@ -187,12 +200,6 @@ def test_a_steering_model_reads_the_background_in_its_choice_prompt():
 
 # ---- replay ----
 
-def test_a_campaign_grounded_at_decide_replays_from_the_ledger_with_no_network(tmp_path):
-    from proef.reproduce import reproduce
-    report, store, recs, model, pm = _grounded(tmp_path)
-    out = reproduce(f"problem/{report.problem_id}", db_path=str(tmp_path / "prov.db"), inbox=str(tmp_path / "rin"))
-    assert out.get("status") == "match", out
-    assert pm.queries == ["EGFR", DECIDE_Q], "the replay called no adapter"
 
 
 def test_a_private_librarys_ids_are_protected_at_decide_too():
@@ -203,19 +210,13 @@ def test_a_private_librarys_ids_are_protected_at_decide_too():
     assert pm.queries == []
 
 
-def test_the_decide_switch_turns_only_the_decide_reading_off_and_a_replay_agrees(tmp_path):
-    from proef.reproduce import reproduce
-    (tmp_path / "a").mkdir()
-    (tmp_path / "b").mkdir()
-    report, store, recs, model, pm = _grounded(tmp_path / "a", grounding_decide=False)
+def test_the_decide_switch_turns_only_the_decide_reading_off(tmp_path):
+    """The replay side of this (the recorded switch is restored) is a unit test in test_replay_all_features; that the default still reads at decide is covered by
+    test_open_results_are_read_about_once_and_the_background_reaches_the_follow_up."""
+    report, store, recs, model, pm = _grounded(tmp_path, grounding_decide=False)
     assert pm.queries == ["EGFR"], "read at propose, not at decide"
     assert not [r for r in recs if (r.decision or {}).get("scope", "").startswith("decide")]
     fu = next(p for p in model.prompts if "ABSTAINED HYPOTHESES" in p)
     assert "BACKGROUND READ AFTER ROUND" not in fu and not any("one step (decide)" in p for p in model.loop_prompts)
     env = next(r.decision["environment"] for r in recs if (r.decision or {}).get("environment"))
     assert env["grounding_decide"] is False
-    out = reproduce(f"problem/{report.problem_id}", db_path=str(tmp_path / "a" / "prov.db"), inbox=str(tmp_path / "rin"))
-    assert out.get("status") == "match", out
-    assert pm.queries == ["EGFR"], "and the replay called no adapter"
-    on = _grounded(tmp_path / "b")
-    assert on[4].queries == ["EGFR", DECIDE_Q], "the default still reads at decide"

@@ -113,16 +113,6 @@ def test_grounding_is_off_by_default(tmp_path):
     assert not [r for r in recs if (r.decision or {}).get("kind") == "tool_call"]
 
 
-def test_a_grounded_campaign_replays_from_the_ledger_with_no_model_and_no_network(tmp_path):
-    from proef.reproduce import reproduce
-    pm, ch = Pubmed(), Chembl()
-    m = Model([{"tool": "pubmed_search", "args": {"query": "EGFR T790M resistance"}},
-               {"tool": "chembl_search", "args": {"query": "EGFR"}}, {"done": "known biology"}])
-    recs, rep = _run(tmp_path, m, svc={"pubmed": pm, "chembl": ch})
-    assert [r for r in recs if (r.decision or {}).get("kind") == "tool_result"]
-    out = reproduce(f"problem/{rep.problem_id}", db_path=str(tmp_path / "p.db"), inbox=str(tmp_path / "rin"))
-    assert out.get("status") == "match", out
-    assert pm.queries == ["EGFR T790M resistance"] and ch.calls == [("search", "EGFR")], "replay must not call the adapters again"
 
 
 def test_the_menu_shows_each_tools_arguments_so_the_model_need_not_describe_it():

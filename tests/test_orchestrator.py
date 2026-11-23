@@ -100,11 +100,13 @@ class OModel(F.Model):
 
 def _orch_run(tmp_path, script, **kw):
     import proef.autoloop as al
+    size = kw.pop("size", 3)          # compounds proposed: most of these tests are about the orchestrator, the halt or the clock, not about which compounds abstain
     store_model = OModel(F._answer, script)
+    store_model.n = size
     gate_fn = kw.pop("autonomy_gate", None)          # a plan approver: the campaign then runs under approvals
     store = F.SqliteProvenanceStore(str(tmp_path / "prov.db"))
     cfg = F.CampaignConfig(problem=F.ProblemStatement(objective="o", constraints=[F.Constraint(name="potency", description="IC50 <= 20 uM", kind="hard", limit=20.0, unit="uM")]),
-                           hypothesis_source="agent", model=store_model, autonomy="gate" if gate_fn else "act", plan_approver=gate_fn, k=8, max_families=8, rounds=kw.pop("rounds", 2), seed=1,
+                           hypothesis_source="agent", model=store_model, autonomy="gate" if gate_fn else "act", plan_approver=gate_fn, k=size, max_families=size, rounds=kw.pop("rounds", 2), seed=1,
                            followups=kw.pop("followups", True), replan=kw.pop("replan", False), orchestrator=kw.pop("orchestrator", "model"),
                            inbox=str(tmp_path / "inbox"), poll_secs=0.05, flywheel=F.Flywheel(":memory:"), **kw)
     report = run_campaign(cfg, kw.get("lab") or SimulatorLab(seed=3), store, approver=lambda t: True, notify=lambda m: None)
@@ -128,7 +130,7 @@ def test_a_model_that_chooses_next_round_skips_follow_ups_the_operator_only_perm
 
 
 def test_a_model_chooses_follow_up_then_next_round_and_is_asked_again_after_each_action(tmp_path):
-    report, recs, model = _orch_run(tmp_path, [{"action": "follow_up"}, {"action": "next_round"}])
+    report, recs, model = _orch_run(tmp_path, [{"action": "follow_up"}, {"action": "next_round"}], size=8)      # needs the abstentions of the full scenario
     assert [c[1] for c in choices(recs)][:2] == ["follow_up", "next_round"]
     assert "ALREADY DONE THIS ROUND: follow_up" in model.asked[1] and "follow_up" not in model.asked[1].split("YOU MAY CHOOSE")[1].split("Choose the")[0]
     assert [r for r in recs if (r.decision or {}).get("followup_of")], "the chosen follow-up ran"

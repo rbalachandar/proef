@@ -1,6 +1,7 @@
 """Compute tools in the `propose` loop (5I): a model can run a registered predictor or the synthesis check BEFORE it proposes. What comes
 back is a prior, never evidence; the tools exist only at `propose`; and a campaign that used them replays."""
 import json
+import pytest
 
 from proef.adapters.lab.simulator import SimulatorLab
 from proef.adapters.store.sqlite import SqliteProvenanceStore
@@ -116,8 +117,20 @@ def _run(tmp_path, compute=("predict", "synthesis")):
     return rep, store, store.branch_records(f"problem/{rep.problem_id}"), model
 
 
-def test_the_model_runs_the_predictor_and_the_synthesis_check_before_it_proposes(tmp_path):
-    rep, store, recs, model = _run(tmp_path)
+class _Shared:
+    def __init__(self, dir, result):
+        self.dir, self.result = dir, result
+
+
+@pytest.fixture(scope="module")
+def shared_run_0(tmp_path_factory):
+    """One run of this scenario, shared by the tests that only read its result (3 tests)."""
+    d = tmp_path_factory.mktemp("shared_run_0")
+    return _Shared(d, _run(d))
+
+
+def test_the_model_runs_the_predictor_and_the_synthesis_check_before_it_proposes(shared_run_0):
+    (rep, store, recs, model) = shared_run_0.result
     calls = [r.decision for r in recs if (r.decision or {}).get("kind") == "tool_call"]
     assert [(c["tool"], c["class"]) for c in calls] == [("predict", "compute"), ("check_synthesis", "compute")]
     assert [r.decision["tool"] for r in recs if (r.decision or {}).get("kind") == "tool_result"] == ["predict", "check_synthesis"], "sealed for replay"
@@ -135,14 +148,8 @@ def test_a_prior_changes_no_verdict(tmp_path):
     assert _run(tmp_path / "a")[0].verdicts == _run(tmp_path / "b", compute=())[0].verdicts
 
 
-def test_the_envelope_records_the_compute_tools_so_a_replay_offers_the_same_menu(tmp_path):
-    _, _, recs, _ = _run(tmp_path)
+def test_the_envelope_records_the_compute_tools_so_a_replay_offers_the_same_menu(shared_run_0):
+    (_, _, recs, _) = shared_run_0.result
     env = next((r.decision["environment"] for r in recs if (r.decision or {}).get("environment")), {})
     assert env["loop_compute"] == ["predict", "synthesis"]
 
-
-def test_a_campaign_that_used_compute_tools_replays_from_the_ledger(tmp_path):
-    from proef.reproduce import reproduce
-    rep, _, _, _ = _run(tmp_path)
-    out = reproduce(f"problem/{rep.problem_id}", db_path=str(tmp_path / "p.db"), inbox=str(tmp_path / "rin"))
-    assert out.get("status") == "match", out

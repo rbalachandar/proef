@@ -11,4 +11,4 @@ if [ ! -x "$VENV/bin/python" ]; then
   "$VENV/bin/pip" install -q pydantic pytest fastapi httpx python-multipart pytest-xdist   # keep in step with .github/workflows/ci.yml (job: core)
   "$VENV/bin/pip" install -q -e . --no-deps
 fi
-PROEF_SKIP_DOCKER=1 "$VENV/bin/python" -m pytest tests/ -q -p no:warnings -n "${CI_CORE_WORKERS:-8}" -rfE "$@"
+PROEF_SKIP_DOCKER=1 "$VENV/bin/python" -m pytest tests/ -q -p no:warnings -n "${CI_CORE_WORKERS:-8}" --dist loadscope -rfE "$@"

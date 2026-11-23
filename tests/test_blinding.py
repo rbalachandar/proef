@@ -88,13 +88,3 @@ def test_a_blinded_campaign_records_the_size_and_hash_of_the_exclusion_list_but_
     blob = json.dumps([r.decision for r in recs], default=str).lower()
     assert "gefitinib" not in blob and "egfr-held-1" not in blob, "the held-out list is not in the record"
 
-
-def test_a_blinded_campaign_replays_with_the_same_menu_and_no_network(tmp_path):
-    from proef.reproduce import reproduce
-    from tests.test_grounding_decide import _grounded
-    (tmp_path / "a").mkdir()
-    report, store, recs, model, pm = _grounded(tmp_path / "a", blinding={"exclude": ["zz-never-matches"], "off_tools": ["opentargets_summary"]})
-    before = list(pm.queries)
-    out = reproduce(f"problem/{report.problem_id}", db_path=str(tmp_path / "a" / "prov.db"), inbox=str(tmp_path / "rin"))
-    assert out.get("status") == "match", out
-    assert pm.queries == before

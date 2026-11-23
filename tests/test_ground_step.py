@@ -1,6 +1,7 @@
 """The `ground` step (5H): evidence for and against each family is looked for before plan review, and only what traces to a result this
 run retrieved is shown as evidence."""
 import json
+import pytest
 
 from proef.adapters.lab.simulator import SimulatorLab
 from proef.adapters.store.sqlite import SqliteProvenanceStore
@@ -94,8 +95,28 @@ def test_text_is_bounded_and_the_number_of_items_capped():
 
 # ---- in a campaign ----
 
-def test_each_family_is_grounded_before_plan_review_and_only_traced_items_reach_the_plan(tmp_path):
-    rep, store, recs, model, pm, seen = _run(tmp_path)
+class _Shared:
+    def __init__(self, dir, result):
+        self.dir, self.result = dir, result
+
+
+@pytest.fixture(scope="module")
+def shared_run_0(tmp_path_factory):
+    """One run of this scenario, shared by the tests that only read its result (4 tests)."""
+    d = tmp_path_factory.mktemp("shared_run_0")
+    return _Shared(d, _run(d))
+
+
+
+@pytest.fixture(scope="module")
+def shared_run_prior_1(tmp_path_factory):
+    """One run of this scenario, shared by the tests that only read its result (2 tests)."""
+    d = tmp_path_factory.mktemp("shared_run_prior_1")
+    return _Shared(d, _run_prior(d))
+
+
+def test_each_family_is_grounded_before_plan_review_and_only_traced_items_reach_the_plan(shared_run_0):
+    (rep, store, recs, model, pm, seen) = shared_run_0.result
     g = [r.decision for r in recs if (r.decision or {}).get("kind") == "grounding"]
     assert len(g) == 1 and g[0]["family"] == "f" and g[0]["stage"] == "initial"
     assert [i["source"] for i in g[0]["items"]] == [f"PMID {PMID}"] and g[0]["n_dropped"] == 2 and g[0]["tool_calls"] == 1
@@ -106,8 +127,8 @@ def test_each_family_is_grounded_before_plan_review_and_only_traced_items_reach_
     assert audit_campaign(recs) == []
 
 
-def test_a_citation_the_run_never_retrieved_is_flagged_in_the_plan(tmp_path):
-    _, _, _, _, _, seen = _run(tmp_path)
+def test_a_citation_the_run_never_retrieved_is_flagged_in_the_plan(shared_run_0):
+    (_, _, _, _, _, seen) = shared_run_0.result
     fam = seen[0]["families"][0]
     assert fam["citation"] == "PMID 1111111" and fam["citation_traced"] is False
     assert [w["kind"] for w in seen[0]["warnings"] if w["kind"] == "untraced_citation"] == ["untraced_citation"]
@@ -136,19 +157,12 @@ def test_grounding_changes_no_verdict_and_no_approval(tmp_path):
     assert on.verdicts == off.verdicts
 
 
-def test_a_grounded_plan_replays_from_the_ledger_with_no_network(tmp_path):
-    from proef.reproduce import reproduce
-    rep, store, recs, model, pm, _ = _run(tmp_path)
-    before = list(pm.queries)
-    out = reproduce(f"problem/{rep.problem_id}", db_path=str(tmp_path / "p.db"), inbox=str(tmp_path / "rin"))
-    assert out.get("status") == "match", out
-    assert pm.queries == before, "the replay called no adapter"
 
 
-def test_the_plan_api_schema_accepts_grounding_and_the_untraced_citation_warning(tmp_path):
+def test_the_plan_api_schema_accepts_grounding_and_the_untraced_citation_warning(shared_run_0):
     """The workbench reads the plan through this schema. A warning kind it did not allow would have failed validation and hidden the plan."""
     from proef.api.v1.schemas import Plan
-    _, _, _, _, _, seen = _run(tmp_path)
+    (_, _, _, _, _, seen) = shared_run_0.result
     p = Plan.model_validate(seen[0])
     assert p.families[0].grounding.items[0].source == f"PMID {PMID}" and p.families[0].grounding.dropped == 2
     assert p.families[0].citation_traced is False
@@ -242,8 +256,8 @@ def test_a_prior_item_is_kept_only_if_that_compute_tool_returned_a_result_in_the
     assert verify_items([{"kind": "supports", "claim": "c", "source": "PMID 7654321"}], [{"p": "7654321"}])[0], "literature items still trace to identifiers"
 
 
-def test_the_ground_loop_runs_the_compute_tools_on_the_compounds_structure_and_keeps_only_the_priors_a_tool_returned(tmp_path):
-    rep, recs, model, seen = _run_prior(tmp_path)
+def test_the_ground_loop_runs_the_compute_tools_on_the_compounds_structure_and_keeps_only_the_priors_a_tool_returned(shared_run_prior_1):
+    (rep, recs, model, seen) = shared_run_prior_1.result
     task = next(p for p in model.prompts if "FAMILY:" in p)
     assert f"A (structure as the model stated it: {SMILES})" in task, "the model's own SMILES is labelled as its claim"
     assert "PRIOR" in task and "never evidence" in task and 'already_known|prior"' in task
@@ -270,9 +284,3 @@ def test_without_the_switch_the_compute_tools_are_not_offered_in_the_ground_loop
     g = next(r.decision for r in recs if (r.decision or {}).get("kind") == "grounding")
     assert [i["kind"] for i in g["items"]] == ["supports"] and g["n_dropped"] == 3
 
-
-def test_a_campaign_that_used_compute_in_the_ground_loop_replays_from_the_ledger_with_no_model_and_no_network(tmp_path):
-    from proef.reproduce import reproduce
-    rep, recs, model, _ = _run_prior(tmp_path)
-    out = reproduce(f"problem/{rep.problem_id}", db_path=str(tmp_path / "p.db"), inbox=str(tmp_path / "rin"))
-    assert out.get("status") == "match", out

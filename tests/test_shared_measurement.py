@@ -2,6 +2,7 @@
 Before: each hypothesis submitted its own run (same sample name), the first plate judged both, and the second run was
 paid for and never read."""
 import json
+import pytest
 
 from proef.adapters.lab.simulator import SimulatorLab
 from proef.adapters.store.sqlite import SqliteProvenanceStore
@@ -46,8 +47,20 @@ def _run(tmp_path):
     return report, store, store.branch_records(f"problem/{report.problem_id}"), msgs
 
 
-def test_a_compound_proposed_twice_gets_one_lab_run(tmp_path):
-    report, store, recs, msgs = _run(tmp_path)
+class _Shared:
+    def __init__(self, dir, result):
+        self.dir, self.result = dir, result
+
+
+@pytest.fixture(scope="module")
+def shared_run_0(tmp_path_factory):
+    """One run of this scenario, shared by the tests that only read its result (3 tests)."""
+    d = tmp_path_factory.mktemp("shared_run_0")
+    return _Shared(d, _run(d))
+
+
+def test_a_compound_proposed_twice_gets_one_lab_run(shared_run_0):
+    (report, store, recs, msgs) = shared_run_0.result
     runs = [r for r in recs if r.event_type == EventType.lab_run]
     titles = [(r.decision or {}).get("title", "") for r in runs]
     assert sum(t == "test-H1" for t in titles) == 1, titles     # the test of H1 ran once, not twice
@@ -55,8 +68,8 @@ def test_a_compound_proposed_twice_gets_one_lab_run(tmp_path):
     assert any("sharing run" in m for m in msgs)
 
 
-def test_every_hypothesis_on_the_shared_compound_is_judged_from_that_one_run(tmp_path):
-    report, store, recs, _ = _run(tmp_path)
+def test_every_hypothesis_on_the_shared_compound_is_judged_from_that_one_run(shared_run_0):
+    (report, store, recs, _) = shared_run_0.result
     test_runs = {(r.decision or {}).get("run_id") for r in recs
                  if r.event_type == EventType.lab_run and (r.decision or {}).get("title") == "test-H1"}
     shared = [r for r in recs if (r.decision or {}).get("kind") == "shared_measurement"]
@@ -68,9 +81,9 @@ def test_every_hypothesis_on_the_shared_compound_is_judged_from_that_one_run(tmp
     assert len(h1_verdicts) >= 2, "each hypothesis on the compound got its own verdict record from that run"
 
 
-def test_the_run_budget_is_not_spent_on_the_duplicate(tmp_path):
+def test_the_run_budget_is_not_spent_on_the_duplicate(shared_run_0):
     from proef.autoloop import ResourceBudget
-    _, store, recs, _ = _run(tmp_path)
+    (_, store, recs, _) = shared_run_0.result
     used = ResourceBudget().lab_runs_used(store, recs[0].envelope.experiment_branch_id.split("/", 1)[-1])
     names = {(r.decision or {}).get("title", "") for r in recs if r.event_type == EventType.lab_run}
     assert used == len([r for r in recs if r.event_type == EventType.lab_run])

@@ -307,7 +307,7 @@ def run_one(arm: str, objective: dict, rep: int, model: Any, services: Callable[
     (done if data["complete"] else partial).write_text(json.dumps(data, indent=1, default=str))
     (partial if data["complete"] else done).unlink(missing_ok=True)       # a re-run replaces a stale file of the other kind
     return {"tag": tag, "complete": data["complete"], "reason": reason, "model_calls": view["model_calls"], "tool_calls": len(view["tool_calls"]),
-            "violations": len(data["audit_violations"]), "exhausted": paced.exhausted}
+            "violations": len(data["audit_violations"]), "exhausted": paced.exhausted, "out": str(out)}
 
 
 def run_suite(objectives: list[dict], arms: str, repeats: int, model_factory: Callable[[], Any], services: Callable[[str, dict], dict], out: Path,

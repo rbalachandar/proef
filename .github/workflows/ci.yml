@@ -23,10 +23,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install pydantic pytest fastapi httpx python-multipart && pip install -e . --no-deps
+      - run: pip install pydantic pytest pytest-xdist fastapi httpx python-multipart && pip install -e . --no-deps
       - name: Unit suite (offline — live docker contract has its own job)
         env: {PROEF_SKIP_DOCKER: "1"}
-        run: python -m pytest tests/ -q    # includes the anti-bloat import scan
+        # parallel workers; --dist loadscope keeps a module on one worker so its shared scenario fixtures are computed once. --durations shows where the time goes
+        run: python -m pytest tests/ -q -n auto --dist loadscope --durations=15    # includes the anti-bloat import scan
 
   api:  # web backend: endpoints + SSE over seeded stores
     runs-on: ubuntu-latest
@@ -58,7 +59,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.12" }
-      - run: pip install pydantic pytest pyyaml numpy fastapi httpx python-multipart rdkit labmcp-mettler-toledo labmcp-ika && pip install -e . --no-deps
+      - run: pip install pydantic pytest pytest-xdist pyyaml numpy fastapi httpx python-multipart rdkit labmcp-mettler-toledo labmcp-ika && pip install -e . --no-deps
       - name: Full flow (all layers)
         run: python examples/demo_full_flow.py
       - name: Provenance audit
@@ -69,7 +70,7 @@ jobs:
       #   run: python -m proef.cli prove demo-run --db proef.db
       - name: Test suite
         env: {PROEF_SKIP_DOCKER: "1"}
-        run: python -m pytest tests/ -q
+        run: python -m pytest tests/ -q -n auto --dist loadscope --durations=15
 
   eval:  # T1: the measurable claim — epistemics + model tiers, offline
     runs-on: ubuntu-latest

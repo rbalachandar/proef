@@ -289,13 +289,13 @@ def run_one(arm: str, objective: dict, rep: int, model: Any, services: Callable[
     model_errors = sum(1 for r in recs if (r.decision or {}).get("kind") == "model_error")
     degraded = rep_ is not None and rep_.degraded                     # the framework's own marker (campaign_degraded on the ledger)
     reason = (f"quota or rate limit exhausted ({paced.stats()['retries']} retries)" if paced.exhausted else f"the campaign crashed: {crashed}" if crashed
-              else f"{model_errors} model call(s) failed (the campaign reports itself degraded)" if (model_errors or degraded) else None)
+              else f"{model_errors} model call(s) failed, including one the campaign depends on (it reports itself degraded)" if degraded else None)
     data = {
         "arm": arm, "objective_id": objective["id"], "rep": rep, "tag": tag, "problem_id": prob.problem_id, "find": objective.get("find", []), "paper_pmid": objective.get("paper_pmid"),
         "model": getattr(model, "model", None), "arm_config": {"tools": list(spec["tools"]), "decide": spec["decide"], "hostile": spec["hostile"], "compute": list(spec.get("compute", ())),
                        "ground": bool(spec.get("ground")), "ground_compute": list(spec.get("ground_compute", ()))},
         "forced_abstain": forced_abstain, "borderline_compound": getattr(lab, "borderline", None),
-        "complete": reason is None, "incomplete_reason": reason, "model_errors": model_errors, "paced": paced.stats(),
+        "complete": reason is None, "incomplete_reason": reason, "model_errors": model_errors, "advisory_failures": (rep_.advisory_failures if rep_ else 0), "paced": paced.stats(),
         "planted_pmids": list(getattr(svc.get("pubmed"), "planted", []) or []),
         "loops": parse_loops(spy.log, view["tool_calls"]),
         "model_replies": [{"role": role_of(p), "prompt": p, "reply": t, "has_background": "BACKGROUND READ" in p, "after_round": "BACKGROUND READ AFTER ROUND" in p}

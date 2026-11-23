@@ -41,8 +41,14 @@ def audit_campaign(recs: list, store: Any = None, branch: str | None = None) -> 
     run_ids = {(r.decision or {}).get("run_id") for _, r in runs}
 
     # 0. a campaign with failed model calls says so (it ran on fallbacks, so it did not run as configured)
-    if env and any(_kind(r) == "model_error" for r in recs) and not any(_kind(r) == "campaign_degraded" for r in recs):
-        v.append(Violation("degradation_reported", "a model call failed and the campaign does not say it ran degraded"))
+    errs = [r.decision for r in recs if _kind(r) == "model_error"]
+    if env and errs:
+        from proef.model_guard import failure_effect
+        dep = [e for e in errs if failure_effect(str(e.get("purpose") or e.get("role")), env) == "dependency"]
+        if dep and not any(_kind(r) == "campaign_degraded" for r in recs):
+            v.append(Violation("degradation_reported", f"{len(dep)} model call(s) the campaign depends on failed and it does not say it ran degraded"))
+        if len(dep) < len(errs) and not any(_kind(r) in ("model_advisory_failures", "campaign_degraded") for r in recs):
+            v.append(Violation("degradation_reported", "an advisory model call failed and the campaign does not note it"))
 
     # 1. observe submits nothing
     if env.get("autonomy") == "observe" and runs:

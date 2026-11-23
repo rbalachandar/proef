@@ -22,6 +22,34 @@ MAX_RESPONSE_CHARS = 100_000
 # NOT sealed (it carries study data, and a replay does not need it): only its prompt hash is, and a replay answers with no flags.
 ROLE_BY_BRANCH = {"critic": "critic", "review": "reviewer", "orchestrator": "orchestrator", "followup": "followup"}
 UNSEALED_ROLES = frozenset({"reviewer"})
+# the generic "model" role covers several jobs; the prompt says which
+PURPOSE_MARKERS = (("TOOLS OFFERED IN THIS STEP", "grounding"), ("RESULTS SO FAR (re-plan", "replan"), ("hypothesis lead", "proposal"))
+
+
+def purpose_of(role: str, prompt: str) -> str:
+    """What a model call is FOR: its role when that already says (orchestrator, follow-up, critic, reviewer), else read from the prompt (a proposal, a re-plan, a
+    grounding loop)."""
+    if role != "model":
+        return role
+    return next((p for m, p in PURPOSE_MARKERS if m in prompt), "model")
+
+
+def failure_effect(purpose: str, env: dict) -> str:
+    """Whether a FAILED call of this purpose means the campaign did not run as configured ("dependency") or only an advisory output is missing ("advisory").
+    A critic or reviewer only advises; the others matter when the campaign was configured to use them (a model orchestrator, follow-ups, a re-plan, grounding).
+    A proposal, or anything this cannot classify, is a dependency: the conservative answer."""
+    env = env or {}
+    if purpose in ("critic", "reviewer"):
+        return "advisory"
+    if purpose == "orchestrator":
+        return "dependency" if env.get("orchestrator") == "model" else "advisory"
+    if purpose == "followup":
+        return "dependency" if env.get("followups") else "advisory"
+    if purpose == "replan":
+        return "dependency" if env.get("replan") else "advisory"
+    if purpose == "grounding":
+        return "dependency" if env.get("grounding_tools") else "advisory"
+    return "dependency"
 REVIEWER_STUB = '{"flags": []}'
 
 
@@ -106,7 +134,7 @@ class ModelGuard:
         self._n = n + 1
         phash = hashlib.sha256(prompt.encode()).hexdigest()[:12]
         self.store.append(record_for(self.env, EventType.tool_invocation, self.actor, decision={
-            "kind": "model_call", "role": role, "n": n + 1, "prompt_hash": phash}))
+            "kind": "model_call", "role": role, "purpose": purpose_of(role, prompt), "n": n + 1, "prompt_hash": phash}))
         return n + 1, phash
 
     def record_response(self, n: int, role: str, phash: str, result: Any, model: Any) -> None:
@@ -121,9 +149,9 @@ class ModelGuard:
             "truncated": sealed and len(text) > MAX_RESPONSE_CHARS, "status": getattr(result, "status", "succeeded"),
             "model": getattr(model, "model", None), "model_version": getattr(result, "model_version", None)}))
 
-    def record_error(self, n: int, role: str, phash: str, exc: Exception) -> None:
+    def record_error(self, n: int, role: str, phash: str, exc: Exception, purpose: str | None = None) -> None:
         self.store.append(record_for(self.env, EventType.tool_invocation, self.actor, decision={
-            "kind": "model_error", "n": n, "role": role, "prompt_hash": phash, "error": f"{type(exc).__name__}: {str(exc)[:200]}"}))
+            "kind": "model_error", "n": n, "role": role, "purpose": purpose or role, "prompt_hash": phash, "error": f"{type(exc).__name__}: {str(exc)[:200]}"}))
 
 
 class GovernedModel:
@@ -145,7 +173,7 @@ class GovernedModel:
         try:
             result = self._inner.generate(invocation, prompt, *a, **kw)
         except Exception as exc:  # noqa: BLE001 - recorded, then the caller decides what a failed call means
-            self._guard.record_error(n, role, phash, exc)
+            self._guard.record_error(n, role, phash, exc, purpose_of(role, prompt))
             raise
         self._guard.record_response(n, role, phash, result, self._inner)
         return result

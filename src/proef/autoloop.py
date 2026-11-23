@@ -139,8 +139,9 @@ class CampaignReport:
     rounds_run: int = 1
     history: list[dict] = field(default_factory=list)
     stopped: str | None = None            # why the campaign ended before its rounds did: halt, wall_clock or orchestrator
-    degraded: bool = False                # a model call failed and the engine carried on with a fallback: the campaign is not what it was configured to be
-    model_failures: int = 0
+    degraded: bool = False                # a call the campaign DEPENDS on failed and the engine carried on with a fallback: it did not run as configured
+    model_failures: int = 0               # every failed model call, advisory or not
+    advisory_failures: int = 0            # failed calls whose output was only advisory (a critic, the reviewer): the campaign is unaffected
 
 
 from proef.core.contracts.models import coerce_assay_type
@@ -847,24 +848,41 @@ def _blinding_summary(b: dict | None) -> dict | None:
 
 
 def _record_degradation(store, problem, actor, say) -> dict:
-    """If any model call in this campaign FAILED, say so on the ledger and to the caller. The engine treats a failed call as a recoverable fallback
-    (a fixed order instead of the model's choice, no follow-up suggestions, no re-plan), which is right for keeping a campaign alive and wrong for
-    letting it look like an ordinary one: a reader and every analysis must be able to tell a campaign that ran as configured from one that did not."""
+    """Say, on the ledger and to the caller, what failed model calls MEANT. The engine treats a failed call as a recoverable fallback (a fixed order instead of
+    the model's choice, no follow-up suggestions, no re-plan, an ungrounded proposal), which keeps a campaign alive, but a failure only makes the campaign DEGRADED
+    if the call was something the campaign was configured to depend on. A failed critic or reviewer is advisory: the goal and the verdicts are unaffected, so it is
+    a note, not an alarm."""
+    from proef.model_guard import failure_effect
     recs = store.branch_records(f"problem/{problem.problem_id}")
+    env = next(((r.decision or {}).get("environment") or {} for r in recs if r.event_type.value == "problem_defined"), {})
     errs = [r.decision for r in recs if (r.decision or {}).get("kind") == "model_error"]
-    fallbacks = [r.decision for r in recs if (r.decision or {}).get("kind") == "orchestrator_choice" and r.decision.get("source") == "fixed-fallback"]
     if not errs:
-        return {"degraded": False, "model_failures": 0}
-    by_role: dict[str, int] = {}
-    for e in errs:
-        by_role[str(e.get("role"))] = by_role.get(str(e.get("role")), 0) + 1
-    store.append(record_for(Envelope(experiment_branch_id=f"problem/{problem.problem_id}"), EventType.gate_decision, actor, decision={
-        "kind": "campaign_degraded", "model_failures": len(errs), "by_role": by_role, "fallback_choices": len(fallbacks),
-        "first_errors": [str(e.get("error"))[:160] for e in errs[:5]],
-        "meaning": "a model call failed and the engine carried on with a fallback; this campaign did not run as configured"}))
-    say(f"WARNING: this campaign ran DEGRADED: {len(errs)} model call(s) failed ({', '.join(f'{k}: {v}' for k, v in sorted(by_role.items()))}); "
-        "fallbacks were used, so it did not run as configured")
-    return {"degraded": True, "model_failures": len(errs)}
+        return {"degraded": False, "model_failures": 0, "advisory_failures": 0}
+    dep = [e for e in errs if failure_effect(str(e.get("purpose") or e.get("role")), env) == "dependency"]
+    adv = [e for e in errs if e not in dep]
+    branch = Envelope(experiment_branch_id=f"problem/{problem.problem_id}")
+
+    def by(es: list[dict]) -> dict[str, int]:
+        out: dict[str, int] = {}
+        for e in es:
+            k = str(e.get("purpose") or e.get("role"))
+            out[k] = out.get(k, 0) + 1
+        return out
+    if adv:
+        store.append(record_for(branch, EventType.gate_decision, actor, decision={
+            "kind": "model_advisory_failures", "count": len(adv), "by_purpose": by(adv), "first_errors": [str(e.get("error"))[:160] for e in adv[:3]],
+            "meaning": "a call whose output was only advisory failed; the campaign's goal and verdicts are unaffected"}))
+    if dep:
+        fallbacks = [r.decision for r in recs if (r.decision or {}).get("kind") == "orchestrator_choice" and r.decision.get("source") == "fixed-fallback"]
+        store.append(record_for(branch, EventType.gate_decision, actor, decision={
+            "kind": "campaign_degraded", "model_failures": len(dep), "by_role": by(dep), "by_purpose": by(dep), "fallback_choices": len(fallbacks),
+            "first_errors": [str(e.get("error"))[:160] for e in dep[:5]],
+            "meaning": "a call the campaign depends on failed and the engine carried on with a fallback; this campaign did not run as configured"}))
+        say(f"WARNING: this campaign ran DEGRADED: {len(dep)} model call(s) it depends on failed ({', '.join(f'{k}: {v}' for k, v in sorted(by(dep).items()))}); "
+            "fallbacks were used, so it did not run as configured")
+    elif adv:
+        say(f"note: {len(adv)} advisory model call(s) failed ({', '.join(f'{k}: {v}' for k, v in sorted(by(adv).items()))}); the campaign is unaffected")
+    return {"degraded": bool(dep), "model_failures": len(errs), "advisory_failures": len(adv)}
 
 
 def run_campaign(cfg: CampaignConfig, lab: Any,
@@ -1220,7 +1238,7 @@ def run_campaign(cfg: CampaignConfig, lab: Any,
     say(f"CAMPAIGN COMPLETE {problem.problem_id}: "
         + (", ".join(f"{c}={s}" for c, s in verdicts.items()) or "nothing tested"))
     _deg = _record_degradation(store, problem, actor, say)
-    return CampaignReport(problem_id=problem.problem_id, stopped=stopped, degraded=_deg["degraded"], model_failures=_deg["model_failures"],
+    return CampaignReport(problem_id=problem.problem_id, stopped=stopped, degraded=_deg["degraded"], model_failures=_deg["model_failures"], advisory_failures=_deg["advisory_failures"],
                           selected=[h.candidate for h in tested],
                           verdicts=verdicts,
                           recommendations=[m for m in messages

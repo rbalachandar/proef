@@ -46,6 +46,36 @@ def test_a_campaign_with_a_failed_model_call_reports_itself_degraded_on_the_ledg
     assert audit_campaign(recs) == [], "reporting it is what the audit asks for"
 
 
+def test_a_failed_call_the_campaign_depends_on_is_degraded_but_a_failed_advisory_call_is_only_a_note(tmp_path):
+    """A failed reviewer only means an advisory output is missing: the goal and the verdicts are unaffected, so it is a note, not an alarm."""
+    rep, recs, said = _run(tmp_path, FailsOn(F._answer, "Review this campaign analysis summary"))
+    assert not rep.degraded and rep.model_failures == 1 and rep.advisory_failures == 1
+    assert not [r for r in recs if (r.decision or {}).get("kind") == "campaign_degraded"]
+    note = next(r.decision for r in recs if (r.decision or {}).get("kind") == "model_advisory_failures")
+    assert note["count"] == 1 and note["by_purpose"] == {"reviewer": 1} and "unaffected" in note["meaning"]
+    assert any("advisory model call(s) failed" in m for m in said) and not any("DEGRADED" in m for m in said)
+    assert audit_campaign(recs) == []
+
+
+def test_the_purpose_of_a_call_is_recorded_so_a_failure_can_be_classified(tmp_path):
+    rep, recs, _ = _run(tmp_path, F.Model(F._answer))
+    purposes = {r.decision["purpose"] for r in recs if (r.decision or {}).get("kind") == "model_call"}
+    assert {"proposal", "followup"} <= purposes and all(p for p in purposes)
+
+
+def test_which_failures_matter_depends_on_what_the_campaign_was_configured_to_use():
+    from proef.model_guard import failure_effect, purpose_of
+    full = {"orchestrator": "model", "followups": True, "replan": True, "grounding_tools": ["pubmed"]}
+    bare = {"orchestrator": "fixed", "followups": False, "replan": False, "grounding_tools": []}
+    for purpose in ("proposal", "orchestrator", "followup", "replan", "grounding"):
+        assert failure_effect(purpose, full) == "dependency", purpose
+    assert [failure_effect(p, bare) for p in ("orchestrator", "followup", "replan", "grounding")] == ["advisory"] * 4, "a feature that was not configured is not a dependency"
+    assert failure_effect("proposal", bare) == "dependency" and failure_effect("something-new", bare) == "dependency", "the conservative answer for what it cannot classify"
+    assert failure_effect("critic", full) == "advisory" == failure_effect("reviewer", full)
+    assert purpose_of("model", "... TOOLS OFFERED IN THIS STEP ...") == "grounding" and purpose_of("model", "x RESULTS SO FAR (re-plan from these) hypothesis lead") == "replan"
+    assert purpose_of("model", "a hypothesis lead prompt") == "proposal" and purpose_of("orchestrator", "anything") == "orchestrator"
+
+
 def test_a_clean_campaign_is_not_marked_degraded(tmp_path):
     rep, recs, said = _run(tmp_path, F.Model(F._answer))
     assert not rep.degraded and rep.model_failures == 0
@@ -55,4 +85,10 @@ def test_a_clean_campaign_is_not_marked_degraded(tmp_path):
 def test_the_audit_flags_a_campaign_that_had_model_errors_and_never_said_so(tmp_path):
     rep, recs, _ = _run(tmp_path, FailsOn(F._answer, "ABSTAINED HYPOTHESES"))
     without = [r for r in recs if (r.decision or {}).get("kind") != "campaign_degraded"]
+    assert [x.rule for x in audit_campaign(without)] == ["degradation_reported"]
+
+
+def test_the_audit_also_asks_an_advisory_failure_to_be_noted(tmp_path):
+    rep, recs, _ = _run(tmp_path, FailsOn(F._answer, "Review this campaign analysis summary"))
+    without = [r for r in recs if (r.decision or {}).get("kind") != "model_advisory_failures"]
     assert [x.rule for x in audit_campaign(without)] == ["degradation_reported"]

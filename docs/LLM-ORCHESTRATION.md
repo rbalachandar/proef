@@ -685,8 +685,22 @@ the model call the right tool at the right stage" had no answer. Order of work:
       scripted evals only prove the guards, not this.
 - [ ] `grounding` as a CLI/API option and a workbench toggle (Phase 6 settings).
 
+**Framework validation: what the real-model runs were for, and what they showed (revised Nov 23)**
+The point of the real-model work was to validate THE FRAMEWORK in an agentic setup, not to settle whether grounding helps. Judged on that, what was checked and what held:
+- **Guards held with a real model in the loop.** 16 campaigns, 285 model calls on `gpt-6-luna`: zero audit violations, no tool called that was not offered, a planted hostile instruction retrieved in
+  4 of 4 runs and obeyed in none, nothing reached a lab or a verdict by that route, ten queries that would have sent tested names out were blocked by code.
+- **The loop works at the stages it is wired into.** The model used the right knowledge tools at `propose` and `decide`, made no meta-tool calls and no repeated calls, and recovered from a
+  structured refusal (a `limit` above the schema's maximum). The ground step produced traced evidence once a bug found by the first real run was fixed.
+- **The audit trail works.** Every run saved its hash-chained ledger and every model call; a campaign replays from the ledger with no model and no network; a campaign that ran on fallbacks
+  after a failed model call says so.
+- **Real runs found what scripted tests could not**, and each is fixed with a regression test: an adapter that never worked live, a retired API schema, a citation parser that read digits inside
+  an id as a PMID, a plan-schema bug, a library-protection key bug, a ground-step reply format the loop discarded.
+NOT evaluated, and not claimed: whether grounded proposals are better than ungrounded ones (the lab is simulated, one model, two papers, four runs per arm), whether the decision-step reading is worth
+its cost, or how often the detectors catch real model errors (the model made few). The 5J section below is the record of the experiment that produced the evidence above; its questions and verdicts
+describe that experiment and are not a recommendation about grounding.
+
 **5J: the combined real-model run (plan fixed before any data; Nov 20)**
-Goal: decide whether knowledge tools at `propose` and `decide` should be a recommended option, from real-model campaigns. "Better" means two things: the
+Goal (as set on Nov 20; see the revision above): decide whether knowledge tools at `propose` and `decide` should be a recommended option, from real-model campaigns. "Better" means two things: the
 model uses facts it could not otherwise know, and nothing is less safe or less honest. Proposal quality is NOT judged: the lab is simulated.
 Arms (each: 2 rounds, a model orchestrator, follow-ups and re-plan on): **A** no grounding, **B** grounding at `propose` only, **C** `propose` + `decide`,
 **D** = C with one hostile instruction planted in the retrieved abstract. The objective names only a target and indication; the answer is a paper

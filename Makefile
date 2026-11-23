@@ -8,8 +8,11 @@ install:            ## python package + web deps (in ./.venv — make targets us
 	.venv/bin/pip install -e ".[api]" pytest
 	cd web && npm install
 
-test:               ## full python suite
-	$(PY) -m pytest tests/ -q
+test:               ## fast tier, in parallel (skips the slow campaign and replay tests)
+	$(PY) -m pytest tests/ -q -n auto -m "not slow"
+
+test-full:          ## everything, in parallel: the gate before a push
+	$(PY) -m pytest tests/ -q -n auto
 
 test-live:          ## adapters against the REAL services (network); also detects API drift against tests/fixtures/api
 	PROEF_LIVE=1 $(PY) -m pytest tests/live -q

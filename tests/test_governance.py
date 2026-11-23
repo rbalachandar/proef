@@ -231,3 +231,13 @@ def test_watch_physical_read_short_circuits(tmp_path):
     out = agent.handle(LabEvent(kind="plate_ready", source="t", path=plate))
     assert out["failure_mode"]["kind"] == "physical"
     assert "do not retry" in out["failure_mode"]["action"]
+
+
+def test_clearing_a_halt_whose_history_lives_in_a_directory_that_does_not_exist_yet_does_not_crash(tmp_path, monkeypatch):
+    """Found when the fast test tier changed the order tests ran in: clear() wrote the history file without creating the history file's own directory, so it
+    only worked if an earlier test had happened to create it. The halt file and the history file are separate paths."""
+    from proef.governance import HaltSwitch
+    h = HaltSwitch(path=tmp_path / "somewhere" / "HALT", history_path=tmp_path / "elsewhere" / "deeper" / "HALT-history.json")
+    h.engage("stop")
+    assert h.clear("me") is True
+    assert h.history()[-1]["cleared_by"] == "me" and not (tmp_path / "somewhere" / "HALT").exists()

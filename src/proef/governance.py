@@ -96,7 +96,8 @@ class HaltSwitch:
             hist = json.loads(self.history_path.read_text())
         except Exception:
             pass
-        self.path.parent.mkdir(parents=True, exist_ok=True)
+        # the history file has its OWN parent directory (a custom halt path with the default history path puts them in different places); create the one we write to
+        self.history_path.parent.mkdir(parents=True, exist_ok=True)
         self.history_path.write_text(
             json.dumps(hist + [entry], indent=1))
         self.path.unlink()

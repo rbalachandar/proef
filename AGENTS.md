@@ -19,7 +19,9 @@ with a FastAPI + React workbench as the scientist surface.
 ```sh
 .venv/bin/python -m pytest -q          # all tests (352 green as of Oct 10 — trust
                                           # audits wave 1-2; see docs/ROADMAP S-T3/S-T4)
-make test                              # same suite via the Makefile
+make test                              # fast tier, in parallel (skips tests marked `slow`: campaigns and replays)
+make test-full                         # everything, in parallel: the gate before a push (about 5 min)
+make test-live                         # adapters against the REAL services (needs the network; PROEF_LIVE=1)
 make run                               # backend + built SPA on :8000
 make api-dev                           # backend only, auto-reload
 make web-dev                           # Vite SPA on :5173 (proxies /api)
@@ -58,4 +60,4 @@ python -m proef.cli campaign auto --template dose-response-screen \
 - Simulated data must be labeled simulated; verdicts must be honest about
   uncertainty — a CI straddling the gate abstains, and READING a verdict is
   as sacred as computing it (payload-driven, recency-wins; see the review)
-- Conventional commits; keep `pytest -q` green before pushing
+- Conventional commits; keep `make test-full` green before pushing. Tests are isolated per process (a unique scratch dir), so runs can overlap and parallelize

@@ -69,10 +69,10 @@ export const useProgram = (slug: string) =>
     refetchInterval: 6_000,
   })
 
-export const useInbox = (status: 'pending' | 'all' = 'pending') =>
+export const useInbox = (status: 'pending' | 'all' = 'pending', program?: string) =>
   useQuery({
-    queryKey: ['inbox', status],
-    queryFn: () => unwrap(api.GET('/api/v1/inbox', { params: { query: { status } } })),
+    queryKey: ['inbox', status, program ?? null],
+    queryFn: () => unwrap(api.GET('/api/v1/inbox', { params: { query: { status, program } } })),
     refetchInterval: 4_000,
   })
 
@@ -167,7 +167,7 @@ export const useCheckInstrument = () =>
   useMutation({ mutationFn: (id: string) => unwrap(api.POST('/api/v1/lab/instruments/{instrument_id}/check', { params: { path: { instrument_id: id } } })) })
 
 export const useDecompose = (slug: string) =>
-  useMutation({ mutationFn: () => unwrap(api.POST('/api/v1/programs/{slug}/decompose', { params: { path: { slug } } })) })
+  useMutation({ mutationFn: (objective?: string) => unwrap(api.POST('/api/v1/programs/{slug}/decompose', { params: { path: { slug } }, body: { objective: objective || null } })) })
 
 export const useLedger = () =>
   useQuery({ queryKey: ['ledger'], queryFn: () => unwrap(api.GET('/api/v1/evidence/ledger')) })

@@ -638,3 +638,50 @@ def test_a_tree_whose_leaves_would_exceed_the_model_call_cap_is_refused(client, 
     slug = _program(client, max_subproblems=6, max_model_calls=40)
     ok = client.post(f"/api/v1/programs/{slug}/trees", json={"objective": "x inhibitor", "nodes": nodes})
     assert ok.status_code == 201 and sum(d["budget"]["max_model_calls"] for d in launched) <= 40, "the leaves share, never exceed, the cap"
+
+
+def test_inbox_can_be_scoped_to_a_program(client, seeded):
+    """A decision belongs to a campaign; a program sees those of its campaigns only."""
+    _ensure_program(seeded)
+    everything = client.get("/api/v1/inbox?status=all").json()
+    mine = client.get("/api/v1/inbox?status=all&program=v1-prog").json()
+    assert mine and all(i["campaign_id"] == seeded["eid"] for i in mine)
+    assert all(i["program"]["slug"] == "v1-prog" for i in mine), "every item says which program it belongs to"
+    assert len(mine) <= len(everything)
+    assert client.get("/api/v1/inbox?status=all&program=no-such").json() == []
+
+
+def test_a_programs_lab_runs_are_shared_by_its_campaigns(client, seeded, monkeypatch):
+    """Parallel campaigns draw from ONE pool: what is used or reserved is not offered again."""
+    _ensure_program(seeded)
+    p = client.get("/api/v1/programs/v1-prog").json()
+    used = 20 - p["runs_left"]
+    assert used > 0, "the finished campaign's runs count against the program"
+    launched = []
+    monkeypatch.setattr("proef.api.v1.programs.spawn_campaign",
+                        lambda doc, name: launched.append(doc) or "cmp-b")
+    monkeypatch.setattr("proef.api.v1.programs.runs_committed", lambda slug, lim: 17)
+    assert client.post("/api/v1/programs/v1-prog/campaigns", json={"candidates": ["A-1"]}).status_code == 201
+    assert launched[-1]["budget"]["max_total_runs"] == 3          # only the remainder, not the whole cap
+    monkeypatch.setattr("proef.api.v1.programs.runs_committed", lambda slug, lim: 20)
+    r = client.post("/api/v1/programs/v1-prog/campaigns", json={"candidates": ["A-1"]})
+    assert r.status_code == 409 and r.json()["detail"]["type"] == "program-budget-exhausted"
+
+
+def test_a_split_divides_only_what_the_program_has_left(client, monkeypatch):
+    launched = []
+    monkeypatch.setattr("proef.api.v1.trees.spawn_campaign",
+                        lambda doc, name: launched.append(doc) or f"cmp-leaf-{len(launched)}")
+    slug = _program(client)
+    _model(monkeypatch, [SPLIT])
+    nodes = [{"id": "a", "objective": "Potent against the target", "metric": "ic50_um", "gate": 2},
+             {"id": "b", "objective": "Soluble enough to dose", "metric": "solubility_uM", "direction": "max", "gate": 50}]
+    monkeypatch.setattr("proef.api.v1.programs.runs_committed", lambda s, lim: 6)   # 6 of 12 left
+    r = client.post(f"/api/v1/programs/{slug}/trees", json={"objective": "x inhibitor", "nodes": nodes})
+    assert r.status_code == 201 and r.json()["run_budget"] == 6, r.text
+    assert sum(d["budget"]["max_total_runs"] for d in launched) <= 6
+    monkeypatch.setattr("proef.api.v1.programs.runs_committed", lambda s, lim: 9)   # 3 left: 2 leaves need 4
+    n = len(launched)
+    r = client.post(f"/api/v1/programs/{slug}/trees", json={"objective": "x inhibitor", "nodes": nodes})
+    assert r.status_code == 409 and r.json()["detail"]["type"] == "program-budget-exhausted"
+    assert len(launched) == n, "nothing starts when the budget cannot cover the tree"

@@ -2085,6 +2085,24 @@
     "title": "DecisionIn",
     "type": "object"
    },
+   "DecomposeIn": {
+    "properties": {
+     "objective": {
+      "anyOf": [
+       {
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "description": "split this instead of the program's own objective",
+      "title": "Objective"
+     }
+    },
+    "title": "DecomposeIn",
+    "type": "object"
+   },
    "Decomposition": {
     "properties": {
      "max_depth": {
@@ -2917,6 +2935,16 @@
       "anyOf": [
        {
         "$ref": "#/components/schemas/Plan"
+       },
+       {
+        "type": "null"
+       }
+      ]
+     },
+     "program": {
+      "anyOf": [
+       {
+        "$ref": "#/components/schemas/ProgramRef"
        },
        {
         "type": "null"
@@ -4283,6 +4311,12 @@
      },
      "running": {
       "title": "Running",
+      "type": "integer"
+     },
+     "runs_left": {
+      "default": 0,
+      "description": "lab runs not yet used or reserved by the program's campaigns",
+      "title": "Runs Left",
       "type": "integer"
      },
      "slug": {
@@ -6996,6 +7030,7 @@
   },
   "/api/v1/inbox": {
    "get": {
+    "description": "A decision belongs to a CAMPAIGN (its lab submission or its abstained\ncandidate); a program sees the decisions of all its campaigns.",
     "operationId": "list_inbox_api_v1_inbox_get",
     "parameters": [
      {
@@ -7007,6 +7042,24 @@
        "pattern": "^(pending|all)$",
        "title": "Status",
        "type": "string"
+      }
+     },
+     {
+      "description": "only this program's campaigns",
+      "in": "query",
+      "name": "program",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "description": "only this program's campaigns",
+       "title": "Program"
       }
      }
     ],
@@ -7426,6 +7479,23 @@
       }
      }
     ],
+    "requestBody": {
+     "content": {
+      "application/json": {
+       "schema": {
+        "anyOf": [
+         {
+          "$ref": "#/components/schemas/DecomposeIn"
+         },
+         {
+          "type": "null"
+         }
+        ],
+        "title": "Body"
+       }
+      }
+     }
+    },
     "responses": {
      "200": {
       "content": {

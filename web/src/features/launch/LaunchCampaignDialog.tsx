@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { FlaskConical, ListChecks, Sparkles } from 'lucide-react'
+import { FlaskConical, ListChecks, Sparkles, Split } from 'lucide-react'
 import { useLaunchCampaign, useProgram, useSystemStatus } from '../../api/hooks'
 import { Button } from '../../ui/Button'
 import { Dialog, DialogContent } from '../../ui/Dialog'
@@ -8,7 +8,7 @@ import { Field, Input, Select, Textarea } from '../../ui/Field'
 import { cn } from '../../ui/cn'
 import { useToast } from '../../app/toast'
 
-export type How = 'research' | 'list' | 'hand'
+export type How = 'research' | 'split' | 'list' | 'hand'
 
 /** "Autonomy" is only about approvals: how much happens without a person saying yes. It applies to both research and a candidate list. */
 export const AUTONOMY = {
@@ -18,10 +18,12 @@ export const AUTONOMY = {
 } as const
 
 /** Start work against a program's gate. Defaults to the safest setting. */
-export function LaunchCampaignDialog({ open, onOpenChange, slug, title = 'New campaign', defaults, initialHow, onLaunched }: {
+export function LaunchCampaignDialog({ open, onOpenChange, slug, title = 'New campaign', defaults, initialHow, onLaunched, onSplit }: {
   open: boolean; onOpenChange: (o: boolean) => void; slug: string; title?: string
   defaults?: { objective?: string; candidates?: string[] }; initialHow?: How
   onLaunched?: (campaignId: string) => Promise<unknown> | void
+  /** Hand the objective to the split flow; when absent the split choice is not offered. */
+  onSplit?: (objective: string) => void
 }) {
   const toast = useToast()
   const nav = useNavigate()
@@ -41,9 +43,10 @@ export function LaunchCampaignDialog({ open, onOpenChange, slug, title = 'New ca
   useEffect(() => { if (open) { setHow(start()); setObjective(defaults?.objective ?? ''); setCands((defaults?.candidates ?? []).join('\n')) } }, [open, model?.configured])  // eslint-disable-line
 
   const list = cands.split(/[\n,]+/).map((c) => c.trim()).filter(Boolean)
-  const needsList = how !== 'research'
-  const blocked = (needsList && !list.length) || (how === 'research' && !model?.configured)
-  const submit = () => launch.mutate(
+  const needsList = how !== 'research' && how !== 'split'
+  const blocked = (needsList && !list.length) || ((how === 'research' || how === 'split') && !model?.configured)
+  const submit = () => (how === 'split' ? (onOpenChange(false), onSplit?.(objective.trim())) : launchNow())
+  const launchNow = () => launch.mutate(
     { objective: objective || null, candidates: how === 'research' ? [] : list, mode: how === 'hand' ? 'hand' : 'agent', autonomy,
       rounds: cappedRounds, replan: how === 'research' && cappedRounds > 1 && replan, followups: how === 'research' && followups, orchestrator: how === 'research' && cappedRounds > 1 && orchestrate ? 'model' : 'fixed', ...(how === 'list' ? { k: Math.max(1, Math.min(list.length, 4)) } : {}) },
     {
@@ -64,6 +67,10 @@ export function LaunchCampaignDialog({ open, onOpenChange, slug, title = 'New ca
         <div role="radiogroup" aria-label="How should this run?" className="mb-3 grid gap-2">
           <Choice on={how === 'research'} disabled={!model?.configured} icon={Sparkles} onSelect={() => setHow('research')}
             title="Start research" sub={model?.configured ? `${model.model} proposes hypotheses, the plan is reviewed, then the agent runs it.` : 'A model proposes the hypotheses. Needs a configured model (see docs/MODELS.md).'} />
+          {onSplit && (
+            <Choice on={how === 'split'} disabled={!model?.configured} icon={Split} onSelect={() => setHow('split')}
+              title="Split into sub-problems first" sub={model?.configured ? 'The model proposes separate questions, each with its own gate. You review them, then each runs as its own campaign, in parallel, sharing the program’s lab runs.' : 'Needs a configured model (see docs/MODELS.md).'} />
+          )}
           <Choice on={how === 'list'} icon={ListChecks} onSelect={() => setHow('list')}
             title="Candidate list" sub="Candidates are listed manually and tested by the agent. No language model." />
           <Choice on={how === 'hand'} icon={FlaskConical} onSelect={() => setHow('hand')}
@@ -76,7 +83,7 @@ export function LaunchCampaignDialog({ open, onOpenChange, slug, title = 'New ca
             <Textarea value={cands} onChange={(e) => setCands(e.target.value)} placeholder="EG-02&#10;EG-03" />
           </Field>
         )}
-        {how !== 'hand' && (
+        {how !== 'hand' && how !== 'split' && (
           <div className="grid grid-cols-[1fr_90px] gap-3">
             <Field label="Approvals" hint={how === 'research' && autonomy === 'gate' ? 'The plan is approved once. Its lab submissions then proceed without further prompts.' : autonomy === 'act' ? 'Nothing is held for approval. The safety gate still applies.' : undefined}>
               <Select value={autonomy} onChange={(e) => setAutonomy(e.target.value as keyof typeof AUTONOMY)}>
@@ -114,7 +121,7 @@ export function LaunchCampaignDialog({ open, onOpenChange, slug, title = 'New ca
         <div className="flex justify-end gap-2">
           <Button variant="ghost" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button variant="primary" disabled={launch.isPending || blocked} onClick={submit}>
-            {launch.isPending ? 'Starting…' : how === 'research' ? 'Start research' : how === 'hand' ? 'Create campaign' : 'Start campaign'}
+            {launch.isPending ? 'Starting…' : how === 'split' ? 'Review the split' : how === 'research' ? 'Start research' : how === 'hand' ? 'Create campaign' : 'Start campaign'}
           </Button>
         </div>
       </DialogContent>

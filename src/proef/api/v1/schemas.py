@@ -503,7 +503,12 @@ class NextStep(BaseModel):
     campaign_id: str | None = None
 
 
+class DecomposeIn(BaseModel):
+    objective: str | None = Field(None, description="split this instead of the program's own objective")
+
+
 class ProgramDetail(ProgramSummary):
+    runs_left: int = Field(0, description="lab runs not yet used or reserved by the program's campaigns")
     campaign_list: list[CampaignDigest] = []
     results: list[ProgramResult] = []
     next_steps: list[NextStep] = []
@@ -558,6 +563,7 @@ class InboxItem(BaseModel):
     decided_by: str | None = None
     campaign_id: str | None = None
     campaign_title: str | None = None
+    program: ProgramRef | None = None
     hypothesis_id: str | None = None
     candidate: str | None = None
     decision: str | None = None

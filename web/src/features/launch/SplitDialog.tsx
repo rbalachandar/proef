@@ -12,7 +12,7 @@ type Node = { id: string; parent?: string | null; objective: string; metric?: st
 /** A model splits the objective into a TREE of sub-problems, within the program's depth and size limits. The person
  *  keeps the real ones and sets each gate. Starting seals their decision and runs one budgeted campaign per leaf;
  *  the results roll up the tree. Nothing is recorded or run until they press the button. */
-export function SplitDialog({ open, onOpenChange, slug }: { open: boolean; onOpenChange: (o: boolean) => void; slug: string }) {
+export function SplitDialog({ open, onOpenChange, slug, objective: seed }: { open: boolean; onOpenChange: (o: boolean) => void; slug: string; objective?: string }) {
   const model = useSystemStatus().data?.model
   const program = useProgram(slug).data
   const decompose = useDecompose(slug)
@@ -25,7 +25,7 @@ export function SplitDialog({ open, onOpenChange, slug }: { open: boolean; onOpe
 
   useEffect(() => {
     if (open && model?.configured && !nodes && !decompose.isPending && !decompose.isError)
-      decompose.mutate(undefined, { onSuccess: (d) => { setObjective(d.objective); setNodes(d.nodes.map((n) => ({ ...n, keep: true }))) } })
+      decompose.mutate(seed, { onSuccess: (d) => { setObjective(d.objective); setNodes(d.nodes.map((n) => ({ ...n, keep: true }))) } })
   }, [open, model?.configured])  // eslint-disable-line
 
   const byId = useMemo(() => new Map((nodes ?? []).map((n) => [n.id, n])), [nodes])
@@ -63,7 +63,7 @@ export function SplitDialog({ open, onOpenChange, slug }: { open: boolean; onOpe
         {nodes && !nodes.length && <p className="py-4 text-sm text-muted">The model found nothing worth splitting: this is one question. Use Start research.</p>}
         {nodes && nodes.length > 0 && (
           <>
-            <p className="mb-2 text-xs text-faint">Limits for this program: up to {lim?.max_depth} levels deep, {lim?.max_subproblems} sub-problems, {lim?.max_lab_runs} lab runs shared down the tree by priority. The server enforces them.</p>
+            <p className="mb-2 text-xs text-faint">Limits for this program: up to {lim?.max_depth} levels deep, {lim?.max_subproblems} sub-problems, {program?.runs_left ?? lim?.max_lab_runs} of {lim?.max_lab_runs} lab runs still free, shared down the tree by priority. The server enforces them.</p>
             <ul className="mb-3 max-h-[46vh] space-y-1.5 overflow-auto pr-1">
               {nodes.map((n) => (
                 <li key={n.id} style={{ marginLeft: (n.depth - 1) * 18 }} className={`rounded-lg border px-3 py-2 ${n.keep ? 'border-line' : 'border-line/50 opacity-55'}`}>

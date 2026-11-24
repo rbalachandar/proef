@@ -9,7 +9,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query, Request
 
 from proef.api.v1 import schemas as S
-from proef.api.v1.campaigns import _PID, campaign_for_problem, plan_of
+from proef.api.v1.campaigns import _PID, _program_index, campaign_for_problem, plan_of
 from proef.api.v1.deps import who
 from proef.api.v1.programs import collect
 
@@ -66,9 +66,17 @@ def _review_items() -> list[S.InboxItem]:
 
 
 @router.get("", response_model=list[S.InboxItem])
-def list_inbox(status: str = Query("pending", pattern="^(pending|all)$")
+def list_inbox(status: str = Query("pending", pattern="^(pending|all)$"),
+               program: str | None = Query(None, description="only this program's campaigns")
                ) -> list[S.InboxItem]:
+    """A decision belongs to a CAMPAIGN (its lab submission or its abstained
+    candidate); a program sees the decisions of all its campaigns."""
     items = _approval_items() + _review_items()
+    progs = _program_index()
+    for i in items:
+        i.program = progs.get(i.campaign_id) if i.campaign_id else None
+    if program:
+        items = [i for i in items if i.program and i.program.slug == program]
     if status == "pending":
         items = [i for i in items if i.status == "pending"]
     return sorted(items, key=lambda i: -(i.ts or 0))

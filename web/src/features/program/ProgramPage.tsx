@@ -16,6 +16,7 @@ import { goalLine } from './goal'
 import { LaunchCampaignDialog, type How } from '../launch/LaunchCampaignDialog'
 import { NewProgramDialog } from '../launch/NewProgramDialog'
 import { SplitDialog } from '../launch/SplitDialog'
+import { DecisionsPanel } from '../inbox/InboxPage'
 import { ResearchTrees } from './TreesCard'
 import { ContextStrip } from '../../ui/ContextStrip'
 import { Tabs } from '../../ui/Tabs'
@@ -29,9 +30,10 @@ export default function ProgramPage() {
   const [follow, setFollow] = useState<string[] | null>(null)
   const [np, setNp] = useState(false)
   const [split, setSplit] = useState(false)
+  const [splitObjective, setSplitObjective] = useState<string | undefined>()
   const pauseProgram = usePauseProgram(slug)
   const [qs, setQs] = useSearchParams()
-  const tab = (['overview', 'tree', 'campaigns'].includes(qs.get('tab') ?? '') ? qs.get('tab') : 'overview') as 'overview' | 'tree' | 'campaigns'
+  const tab = (['overview', 'tree', 'campaigns', 'decisions'].includes(qs.get('tab') ?? '') ? qs.get('tab') : 'overview') as 'overview' | 'tree' | 'campaigns' | 'decisions'
   const setTab = (t: typeof tab) => setQs((q) => { const n = new URLSearchParams(q); t === 'overview' ? n.delete('tab') : n.set('tab', t); return n }, { replace: true })
   if (isLoading) return <div className="mx-auto max-w-6xl space-y-4 p-6"><Skeleton className="h-10 w-1/2" /><Skeleton className="h-24" /><Skeleton className="h-64" /></div>
   if (error || !p) return <div className="mx-auto max-w-3xl p-10"><EmptyState title="Program not found" hint={(error as Error | null)?.message} /></div>
@@ -55,11 +57,12 @@ export default function ProgramPage() {
           <PauseControl scope="program" paused={!!p.pause} busy={pauseProgram.isPending}
             onSet={(paused, reason) => pauseProgram.mutateAsync({ paused, reason })} />
           <Button size="sm" onClick={() => { setHow('list'); setLaunch(true) }}><Plus size={14} /> Candidate list</Button>
-          <Button size="sm" onClick={() => setSplit(true)} title="A model proposes how to split the objective into separately testable sub-problems"><Split size={14} /> Split into sub-problems</Button>
+          <Button size="sm" onClick={() => { setSplitObjective(undefined); setSplit(true) }} title="A model proposes how to split the objective into separately testable sub-problems"><Split size={14} /> Split into sub-problems</Button>
           <Button variant="primary" size="sm" onClick={() => { setHow('research'); setLaunch(true) }}><Sparkles size={14} /> Start research</Button>
         </div>
-        {split && <SplitDialog open onOpenChange={setSplit} slug={p.slug} />}
-        <LaunchCampaignDialog open={launch} onOpenChange={setLaunch} slug={p.slug} initialHow={how} />
+        {split && <SplitDialog open onOpenChange={setSplit} slug={p.slug} objective={splitObjective} />}
+        <LaunchCampaignDialog open={launch} onOpenChange={setLaunch} slug={p.slug} initialHow={how}
+          onSplit={(o) => { setSplitObjective(o || undefined); setSplit(true) }} />
       </div>
       {p.objective && <p className="mb-3.5 max-w-3xl text-sm text-muted">{p.objective}</p>}
       {p.pause && <PausedBanner pause={p.pause} />}
@@ -72,7 +75,7 @@ export default function ProgramPage() {
         { k: 'Splitting', v: `depth ${p.limits.max_depth} · ${p.limits.max_subproblems} sub-problems`, s: 'caps on a research tree' },
         { k: 'Campaigns', v: `${p.campaigns}`, s: `${p.goal.claimed} claimed · ${p.goal.refuted} refuted · ${p.goal.abstained} abstained` },
       ]} />
-      <Tabs tabs={[{ id: 'overview', label: 'overview' }, { id: 'tree', label: 'research tree' }, { id: 'campaigns', label: 'campaigns' }]} value={tab} onChange={setTab} />
+      <Tabs tabs={[{ id: 'overview', label: 'overview' }, { id: 'tree', label: 'research tree' }, { id: 'campaigns', label: 'campaigns' }, { id: 'decisions', label: 'decisions' }]} value={tab} onChange={setTab} />
       <NewProgramDialog open={np} onOpenChange={setNp} />
       {follow && <LaunchCampaignDialog open onOpenChange={() => setFollow(null)} slug={p.slug} title="Follow up"
         defaults={{ objective: `Follow-up: resolve ${follow.join(', ')}`, candidates: follow }} />}
@@ -94,7 +97,7 @@ export default function ProgramPage() {
                     <Compass size={16} className="mt-0.5 shrink-0 text-accent" aria-hidden />
                     <div className="min-w-0 flex-1"><div className="text-sm font-medium">{n.title}</div><div className="text-xs text-muted">{n.detail}</div></div>
                     <Button size="sm" variant="secondary" onClick={() => {
-                      if (n.action === 'inbox') nav('/inbox')
+                      if (n.action === 'inbox') setQs({ tab: 'decisions' })
                       else if (n.action === 'open_campaign') nav(`/campaigns/${n.campaign_id}`)
                       else if (n.action === 'new_program') setNp(true)
                       else if (n.kind === 'follow_up') setFollow(n.candidates)
@@ -115,6 +118,7 @@ export default function ProgramPage() {
         </div>
       )}
 
+      {tab === 'decisions' && <DecisionsPanel program={p.slug} />}
       {tab === 'tree' && <ResearchTrees slug={p.slug} limits={p.limits} onSplit={() => setSplit(true)} />}
 
       {tab === 'campaigns' && (

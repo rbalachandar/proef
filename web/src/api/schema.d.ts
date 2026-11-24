@@ -470,7 +470,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Inbox */
+        /**
+         * List Inbox
+         * @description A decision belongs to a CAMPAIGN (its lab submission or its abstained
+         *     candidate); a program sees the decisions of all its campaigns.
+         */
         get: operations["list_inbox_api_v1_inbox_get"];
         put?: never;
         post?: never;
@@ -1519,6 +1523,14 @@ export interface components {
              */
             note: string;
         };
+        /** DecomposeIn */
+        DecomposeIn: {
+            /**
+             * Objective
+             * @description split this instead of the program's own objective
+             */
+            objective?: string | null;
+        };
         /** Decomposition */
         Decomposition: {
             /** Max Depth */
@@ -1839,6 +1851,7 @@ export interface components {
              */
             kind: "approval" | "review";
             plan?: components["schemas"]["Plan"] | null;
+            program?: components["schemas"]["ProgramRef"] | null;
             /**
              * Status
              * @default pending
@@ -2538,6 +2551,12 @@ export interface components {
             results: components["schemas"]["ProgramResult"][];
             /** Running */
             running: number;
+            /**
+             * Runs Left
+             * @description lab runs not yet used or reserved by the program's campaigns
+             * @default 0
+             */
+            runs_left: number;
             /** Slug */
             slug: string;
             /** Updated At */
@@ -3941,6 +3960,8 @@ export interface operations {
         parameters: {
             query?: {
                 status?: string;
+                /** @description only this program's campaigns */
+                program?: string | null;
             };
             header?: never;
             path?: never;
@@ -4253,7 +4274,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["DecomposeIn"] | null;
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

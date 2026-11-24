@@ -67,6 +67,36 @@ def _digest(eid: str):
         funnel=_funnel(hyps)), hyps
 
 
+def runs_committed(slug: str, lim: S.Limits) -> int:
+    """Lab runs the program's campaigns have used or still hold in reserve. A campaign in progress reserves its
+    whole budget (read from the config it was launched with; the program cap if that is gone), so parallel
+    campaigns cannot together promise more than `max_lab_runs`. A finished one counts only what it used."""
+    import json
+    from proef.paths import CAMPAIGN_DIR
+    total = 0
+    for link in program_cfg.links_for(slug):
+        if link["role"] != "leaf" or link["eid"].startswith("hand-"):
+            continue                      # a hand run never submits to a lab
+        try:
+            _, row, detail, _, recs = _load(link["eid"])
+        except HTTPException:
+            continue
+        used = sum(1 for r in recs if r.event_type.value == "lab_run" and (r.decision or {}).get("run_id"))
+        if _status(detail.get("status") or row_status(row), recs) not in _RUNNING:
+            total += used
+            continue
+        try:
+            held = int(json.loads((CAMPAIGN_DIR / f"{link['eid']}.json").read_text())["budget"]["max_total_runs"])
+        except Exception:  # noqa: BLE001 - no readable config: assume it may use the whole cap
+            held = lim.max_lab_runs
+        total += max(used, held)
+    return total
+
+
+def runs_left(slug: str, lim: S.Limits) -> int:
+    return max(0, lim.max_lab_runs - runs_committed(slug, lim))
+
+
 def _best(hyps, direction: str, cid: str, title: str) -> S.BestResult | None:
     claimed = [h for h in hyps if h.state in _CLAIMED
                and h.verdict and h.verdict.observed is not None]
@@ -177,7 +207,7 @@ def _program(p: dict, with_detail: bool):
         return S.ProgramSummary(**base)
     digests.sort(key=lambda d: -(d.updated_at or 0))
     return S.ProgramDetail(
-        **base, campaign_list=digests, results=results,
+        **base, runs_left=runs_left(p["slug"], base["limits"]), campaign_list=digests, results=results,
         next_steps=_next_steps(p, digests, goal, gate, unresolved))
 
 
@@ -322,7 +352,13 @@ def launch_campaign(slug: str, body: S.CampaignCreate, request: Request) -> S.Ca
                 detail="With no candidates, a model proposes the hypotheses. Name the candidates "
                        "yourself, or set PROEF_LLM_MODEL, PROEF_LLM_TOKEN and PROEF_LLM_BASE_URL "
                        "(PROEF_LLM_API=openai for OpenAI-compatible endpoints) and restart.").model_dump())
-    doc = campaign_doc(p, body)
+    left = runs_left(slug, _limits(p.get("program") or {}))
+    if left < 1:
+        raise HTTPException(409, S.Problem(
+            type="program-budget-exhausted", title="The program has no lab runs left",
+            detail="Its other campaigns have used or reserved all of its lab runs. Wait for one to finish, "
+                   "or raise the program's lab-run limit.").model_dump())
+    doc = campaign_doc(p, body, runs=left)
     cid = spawn_campaign(doc, p["name"])
     if cid is None:
         raise HTTPException(500, S.Problem(

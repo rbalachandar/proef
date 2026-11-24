@@ -17,7 +17,7 @@ from proef import program as program_cfg
 from proef.api.launch import spawn_campaign
 from proef.api.v1 import schemas as S
 from proef.api.v1.deps import who
-from proef.api.v1.programs import _digest, _gate, _limits, campaign_doc
+from proef.api.v1.programs import _digest, _gate, _limits, campaign_doc, runs_left
 from proef.problem_tree import ProblemTree, TreeLimits
 
 MIN_MODEL_CALLS_PER_LEAF = 3        # a proposal, a critic note and a review is the least a leaf campaign uses
@@ -53,10 +53,10 @@ def _nodes_of(tree: ProblemTree, alloc: dict[str, int] | None = None) -> list[S.
     return out
 
 
-def _build(objective: str, nodes: list[S.TreeNode], lim: S.Limits) -> ProblemTree:
+def _build(objective: str, nodes: list[S.TreeNode], lim: S.Limits, run_budget: int | None = None) -> ProblemTree:
     """Rebuild a tree from what the client sent, through the engine's own guardrails: whatever the browser
     claims, a tree deeper or wider than the program's limits is refused."""
-    tree = ProblemTree.create(objective, limits=_tree_limits(lim), run_budget=lim.max_lab_runs)
+    tree = ProblemTree.create(objective, limits=_tree_limits(lim), run_budget=lim.max_lab_runs if run_budget is None else run_budget)
     ids = {n.id for n in nodes}
     if len(ids) != len(nodes):
         raise HTTPException(422, S.Problem(type="bad-tree", title="Duplicate sub-problem ids").model_dump())
@@ -80,7 +80,7 @@ def _build(objective: str, nodes: list[S.TreeNode], lim: S.Limits) -> ProblemTre
 
 
 @router.post("/programs/{slug}/decompose", response_model=S.Decomposition)
-def decompose_program(slug: str) -> S.Decomposition:
+def decompose_program(slug: str, body: S.DecomposeIn | None = None) -> S.Decomposition:
     """A model proposes how to split the program's objective (recursively, within the program's depth and size
     limits). A proposal only: nothing is recorded or run until the person starts the tree."""
     p = _program_or_404(slug)
@@ -91,7 +91,7 @@ def decompose_program(slug: str) -> S.Decomposition:
     from proef.problem_tree import decompose_with_agent
     doc = p.get("program") or {}
     lim = _limits(doc)
-    objective = doc.get("objective") or p["name"]
+    objective = ((body and body.objective) or "").strip() or doc.get("objective") or p["name"]
     try:
         tree = decompose_with_agent(model_from_env(), objective, context=f"program gate: {_gate(doc).label}",
                                     limits=_tree_limits(lim))
@@ -107,9 +107,15 @@ def decompose_program(slug: str) -> S.Decomposition:
 def start_tree(slug: str, body: S.TreeCreate, request: Request) -> S.TreeView:
     p = _program_or_404(slug)
     lim = _limits(p.get("program") or {})
-    tree = _build(body.objective, body.nodes, lim)
+    left = runs_left(slug, lim)        # the program's other campaigns already hold part of its lab runs
+    tree = _build(body.objective, body.nodes, lim, run_budget=left)
     alloc = tree.allocation()
     leaves = tree.leaves() if len(tree.nodes) > 1 else []
+    if leaves and left < 2 * len(leaves):      # every leaf needs a floor of 2 runs to mean anything
+        raise HTTPException(409, S.Problem(
+            type="program-budget-exhausted", title="Not enough lab runs left for this many sub-problems",
+            detail=f"{left} of the program's {lim.max_lab_runs} lab runs are unspent and unreserved; "
+                   f"{len(leaves)} sub-problems need at least {2 * len(leaves)}.").model_dump())
     if not leaves:
         raise HTTPException(422, S.Problem(type="bad-tree", title="Keep at least one sub-problem").model_dump())
     from proef.adapters.models.from_env import model_status
@@ -145,7 +151,7 @@ def start_tree(slug: str, body: S.TreeCreate, request: Request) -> S.TreeView:
         Actor(kind=ActorKind.human, id=by),
         decision={"kind": "research_tree", "tree_id": tree_id, "objective": body.objective, "by": by,
                   "nodes": [n.model_dump() for n in _nodes_of(tree)], "campaigns": campaigns,
-                  "allocation": alloc, "run_budget": lim.max_lab_runs,
+                  "allocation": alloc, "run_budget": left,
                   "limits": {"max_depth": lim.max_depth, "max_subproblems": lim.max_subproblems}}))
     if failed:
         raise HTTPException(500, S.Problem(type="launch-failed", title="Some sub-problems did not start",

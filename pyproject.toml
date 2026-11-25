@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "proef"
-version = "0.1.0"
+version = "0.2.0"
 description = "Framework for agentic drug discovery — pluggable models, bio tools, labs, and sandboxes behind five core interfaces."
 readme = "README.md"
 requires-python = ">=3.10"

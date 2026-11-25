@@ -2,7 +2,7 @@
 
 Core is dependency-light (pydantic only). All integrations are adapters.
 """
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 # Legacy names: this project was called BioNexus. Environment variables set under the old
 # prefixes (BIONEXUS_*, BN_*) keep working; the new name wins when both are set.

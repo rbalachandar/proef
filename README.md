@@ -92,7 +92,8 @@ configuration. For the same flow with the enforcement column, see
 
 ```sh
 pip install proef                 # core (pydantic only) + the `proef` CLI
-pip install "proef[api]"          # + the web workbench (FastAPI)
+pip install "proef[api]"          # + the REST API (FastAPI). The web workbench UI is
+                                  # not in the wheel yet: run it from a checkout (`make run`)
 pip install "proef[dev]"          # + test dependencies
 ```
 

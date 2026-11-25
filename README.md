@@ -3,7 +3,7 @@
 </p>
 
 <h1 align="center">Proef</h1>
-<p align="center"><b>Agents propose. A scientist decides. The record proves it.</b></p>
+<p align="center"><b>Agents propose, run and review. A scientist decides. The record proves it.</b></p>
 
 [![ci](https://github.com/rbalachandar/proef/actions/workflows/ci.yml/badge.svg)](https://github.com/rbalachandar/proef/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/proef)](https://pypi.org/project/proef/)

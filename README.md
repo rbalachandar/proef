@@ -2,6 +2,9 @@
   <img src="assets/logo/proef-banner.png" alt="Proef: agentic science framework" width="640">
 </p>
 
+<h1 align="center">Proef</h1>
+<p align="center"><b>Agents propose. A scientist decides. The record proves it.</b></p>
+
 [![ci](https://github.com/rbalachandar/proef/actions/workflows/ci.yml/badge.svg)](https://github.com/rbalachandar/proef/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/proef)](https://pypi.org/project/proef/)
 [![Python](https://img.shields.io/pypi/pyversions/proef)](https://pypi.org/project/proef/)
